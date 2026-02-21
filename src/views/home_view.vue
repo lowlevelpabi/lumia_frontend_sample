@@ -42,12 +42,12 @@ const handleSearch = () => {
     <main class="hero">
       <div class="hero-content">
         <h1>Advanced Research Archiving</h1>
-        <p>Access studies, papers, and journals in one repository.</p>
+        <p>Access digitalized thesis books on the go with Lumia-BERT!</p>
 
         <div class="search-container">
           <div class="search-bar">
             <Search :size="20" class="search-icon" />
-            <input v-model="searchQuery" type="text" placeholder="Search for studies, authors, or topics..."
+            <input v-model="searchQuery" type="text" placeholder="Try searching using context, title, topics..."
               class="search-input" @keyup.enter="handleSearch" />
             <button class="search-btn" @click="handleSearch">
               <ArrowRight :size="20" />
@@ -170,7 +170,7 @@ const handleSearch = () => {
   align-items: center;
   background: #fff;
   border: 1px solid #ddd;
-  border-radius: 9999px;
+  border-radius: 23px;
   padding: 0.5rem 0.5rem 0.5rem 1.5rem;
   width: 100%;
   max-width: 700px;
