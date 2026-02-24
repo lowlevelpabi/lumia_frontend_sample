@@ -88,11 +88,11 @@ const startInitialExtraction = async (autoExtract: boolean = true) => {
 
     // Handle authors split
     if (preview.metadata.author) {
-      // Split by comma or semicolon and trim
+      // Split by pipe delimiter (names use 'SURNAME, FIRSTNAME' format with commas inside)
       const splitAuthors = preview.metadata.author
-        .split(/[,;]/)
-        .map(a => a.trim())
-        .filter(a => a.length > 0)
+        .split(/\s*\|\s*/)
+        .map((a: string) => a.trim())
+        .filter((a: string) => a.length > 0)
 
       if (splitAuthors.length > 0) {
         authors.value = splitAuthors
@@ -196,27 +196,32 @@ const goBack = () => {
 
 <template>
   <div class="upload-page">
-    <!-- Step Indicator Header -->
-    <div class="steps-header">
+    <!-- Vertical Step Indicator (Fixed Right) -->
+    <div class="steps-rail">
       <div class="step-item" :class="{ active: step >= 1, completed: step > 1 }">
-        <div class="step-num">
-          <Check v-if="step > 1" :size="16" />
+        <div class="step-num shadow-sm">
+          <Check v-if="step > 1" :size="14" />
           <span v-else>1</span>
+          <div v-if="step === 1" class="pulse-ring"></div>
         </div>
-        <span>Upload</span>
+        <span class="step-label">Upload</span>
       </div>
-      <div class="step-line"></div>
+      <div class="step-line-v"></div>
       <div class="step-item" :class="{ active: step >= 2, completed: step > 2 }">
-        <div class="step-num">
-          <Check v-if="step > 2" :size="16" />
+        <div class="step-num shadow-sm">
+          <Check v-if="step > 2" :size="14" />
           <span v-else>2</span>
+          <div v-if="step === 2" class="pulse-ring"></div>
         </div>
-        <span>Review</span>
+        <span class="step-label">Review</span>
       </div>
-      <div class="step-line"></div>
+      <div class="step-line-v"></div>
       <div class="step-item" :class="{ active: step >= 3, completed: step > 3 }">
-        <div class="step-num">3</div>
-        <span>Done</span>
+        <div class="step-num shadow-sm">
+          <span>3</span>
+          <div v-if="step === 3" class="pulse-ring"></div>
+        </div>
+        <span class="step-label">Done</span>
       </div>
     </div>
 
@@ -232,7 +237,7 @@ const goBack = () => {
             <div class="icon-circle">
               <FileUp :size="24" color="#10b981" />
             </div>
-            <h1>Upload Research</h1>
+            <h1>Upload Document</h1>
             <p>Start by uploading your PDF document. Our system will analyze the content for indexing.</p>
           </div>
 
@@ -481,14 +486,18 @@ const goBack = () => {
   padding: 2rem;
 }
 
-/* Step Indicator */
-.steps-header {
-  max-width: 600px;
-  margin: 0 auto 3rem;
+/* Vertical Step Rail */
+.steps-rail {
+  position: fixed;
+  right: 2.5rem;
+  top: 50%;
+  transform: translateY(-50%);
   display: flex;
-  justify-content: space-between;
+  flex-direction: column;
   align-items: center;
-  padding: 0 1rem;
+  gap: 0.25rem;
+  z-index: 100;
+  width: 60px;
 }
 
 .step-item {
@@ -498,15 +507,6 @@ const goBack = () => {
   gap: 0.5rem;
   color: #94a3b8;
   position: relative;
-  z-index: 2;
-}
-
-.step-item.active {
-  color: #10b981;
-}
-
-.step-item.completed {
-  color: #10b981;
 }
 
 .step-num {
@@ -520,13 +520,14 @@ const goBack = () => {
   justify-content: center;
   font-weight: 700;
   font-size: 0.85rem;
+  z-index: 2;
+  position: relative;
   transition: all 0.3s;
 }
 
 .active .step-num {
   border-color: #10b981;
   color: #10b981;
-  box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.1);
 }
 
 .completed .step-num {
@@ -535,16 +536,42 @@ const goBack = () => {
   color: white;
 }
 
-.step-line {
-  flex: 1;
-  height: 2px;
+.step-line-v {
+  width: 2px;
+  height: 32px;
   background: #e2e8f0;
-  margin: -1.75rem 1rem 0;
+  margin: 0.15rem 0;
 }
 
-.step-item span {
-  font-size: 0.8rem;
-  font-weight: 600;
+.step-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Pulse Effect */
+.pulse-ring {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 4px solid #10b981;
+  animation: pulse 2s infinite;
+  opacity: 0;
+  z-index: 1;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.5;
+  }
+
+  100% {
+    transform: scale(2);
+    opacity: 0;
+  }
 }
 
 .standard-container {
@@ -633,6 +660,8 @@ const goBack = () => {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
+  max-width: 400px;
+  overflow: hidden;
 }
 
 .file-label {
@@ -647,6 +676,11 @@ const goBack = () => {
   font-size: 0.9rem;
   font-weight: 600;
   color: #1e293b;
+  width: 100%;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .v-divider {
