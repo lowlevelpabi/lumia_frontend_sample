@@ -148,14 +148,17 @@ export const api = {
     return response.json()
   },
 
-  async getUploadPreview(file: File): Promise<{
+  async getUploadPreview(file: File, autoExtract: boolean = true): Promise<{
     session_id: string;
     metadata: PartialPaperMetadata;
     pages: { page_num: number; thumbnail: string; preview_text: string }[];
   }> {
     const formData = new FormData()
     formData.append('file', file)
-    const response = await fetch(`${BASE_URL}/papers/preview`, {
+    const url = new URL(`${BASE_URL}/papers/preview`)
+    url.searchParams.append('auto_extract', autoExtract.toString())
+
+    const response = await fetch(url.toString(), {
       method: 'POST',
       headers: getAuthHeaders(),
       body: formData,
