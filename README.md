@@ -1,73 +1,131 @@
-# lumia-frontend-sample
+# LUMIA: Smart Research Frontend
 
-This template should help get you started developing with Vue 3 in Vite.
+### (Vue 3 + TypeScript + Vite)
 
-## Recommended IDE Setup
+This is the frontend application for **LUMIA — Smart Research**, an AI-powered web-based research paper retrieval and recommendation system. It connects to the BERT-NLP backend API to provide semantic search, paper discovery, and an intelligent upload flow.
 
-[VS Code](https://code.visualstudio.com/) + [Vue (Official)](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
+---
 
-## Recommended Browser Setup
+## 🚀 Core Features
 
-- Chromium-based browsers (Chrome, Edge, Brave, etc.):
-  - [Vue.js devtools](https://chromewebstore.google.com/detail/vuejs-devtools/nhdogjmejiglipccpnnnanhbledajbpd)
-  - [Turn on Custom Object Formatter in Chrome DevTools](http://bit.ly/object-formatters)
-- Firefox:
-  - [Vue.js devtools](https://addons.mozilla.org/en-US/firefox/addon/vue-js-devtools/)
-  - [Turn on Custom Object Formatter in Firefox DevTools](https://fxdx.dev/firefox-devtools-custom-object-formatters/)
+- **Semantic Search UI**: Real-time query input with BERT-powered result ranking.
+- **Advanced Filter Sidebar**: Filter by Year Range, Department, Degree Program, and Project Type.
+- **3-Step Upload Flow**: Guided upload with Smart Extract (OCR) or Manual Review strategy selection.
+- **PDF Page Thumbnails**: Live page previews with zoom modal and extracted text side-by-side.
+- **Page-Level Vectorization Control**: Users choose which pages to include in the AI index.
+- **Role-Based Views**: Admin, Faculty, and User experiences — each with tailored UI.
+- **Paper Detail View**: Full metadata, abstract, citations, recommendations, and download access.
+- **Dark Mode Support**: Theme-aware design with accent-consistent dark mode.
+- **Mobile Responsiveness**: Adaptive layout across desktop and mobile viewports.
 
-## Type Support for `.vue` Imports in TS
+---
 
-TypeScript cannot handle type information for `.vue` imports by default, so we replace the `tsc` CLI with `vue-tsc` for type checking. In editors, we need [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) to make the TypeScript language service aware of `.vue` types.
+## 🛠 Tech Stack
 
-## Customize configuration
+- **Framework**: Vue 3 (Composition API + `<script setup>`)
+- **Language**: TypeScript
+- **Build Tool**: Vite
+- **Icons**: Lucide Vue Next
+- **HTTP Client**: Fetch API (via `src/services/api.ts`)
+- **Styling**: Vanilla CSS (component-scoped)
 
-See [Vite Configuration Reference](https://vite.dev/config/).
+---
 
-## Project Setup
+## ⚙️ Setup & Running
+
+### 1. Install Dependencies
 
 ```sh
 npm install
 ```
 
-### Compile and Hot-Reload for Development
+### 2. Start Development Server
 
 ```sh
 npm run dev
 ```
 
-### Type-Check, Compile and Minify for Production
+The app will be available at `http://localhost:5173`.
+Make sure the backend is running at `http://127.0.0.1:8000` (or update `src/services/api.ts`).
+
+### 3. Build for Production
 
 ```sh
 npm run build
 ```
 
-### Run Unit Tests with [Vitest](https://vitest.dev/)
-
-```sh
-npm run test:unit
-```
-
-### Run End-to-End Tests with [Playwright](https://playwright.dev)
-
-```sh
-# Install browsers for the first run
-npx playwright install
-
-# When testing on CI, must build the project first
-npm run build
-
-# Runs the end-to-end tests
-npm run test:e2e
-# Runs the tests only on Chromium
-npm run test:e2e -- --project=chromium
-# Runs the tests of a specific file
-npm run test:e2e -- tests/example.spec.ts
-# Runs the tests in debug mode
-npm run test:e2e -- --debug
-```
-
-### Lint with [ESLint](https://eslint.org/)
+### 4. Lint
 
 ```sh
 npm run lint
 ```
+
+---
+
+## 📁 Project Structure
+
+- `src/views/` — Page-level Vue components (search, upload, admin, detail, etc.)
+- `src/components/` — Reusable UI components
+- `src/services/api.ts` — Centralized API service layer
+- `src/router/` — Vue Router configuration
+- `src/assets/` — Static assets and global styles
+
+---
+
+## 📋 Sprint History
+
+> Full sprint details are documented in the backend repository:
+> **[`Thesis Backend/history/sprint_history.txt`](../Thesis%20Backend/history/sprint_history.txt)**
+
+---
+
+## 📜 Changelog
+
+### Sprint 2 – Week C *(2026-02-25)*
+*OCR Result Display & Upload UX Polish*
+
+- **Author Split Fix**: Changed author delimiter from `,` to ` | ` so Filipino-format names (`SURNAME, FIRSTNAME M.I.`) display correctly in individual input boxes.
+- **Vertical Step Navigation**: Upload step indicator moved from top header to a fixed right-side vertical rail.
+- **Pulse Effect**: Active step displays a pulsing animation ring for clear visual feedback.
+- **Header Layout Fix**: Long research paper filenames now truncate with ellipsis instead of overlapping UI elements.
+- **Author & Abstract Fallbacks**: Both fields now display descriptive instructional messages when data cannot be auto-detected.
+
+---
+
+### Sprint 2 – Week B
+*Upload Flow UX Overhaul*
+
+- **Strategy Modal**: Users choose between Smart Auto-Scan (OCR) and Manual Review before upload.
+- **PDF Page Thumbnails**: Cover page and inner pages rendered as clickable thumbnails.
+- **Zoom Modal**: Click any thumbnail to see a full-page zoom with extracted text preview.
+- **Page Selection Grid**: Multi-select which pages to vectorize for AI indexing.
+- **Step Indicator**: 3-step progress indicator across the upload flow.
+- **Review Form**: Editable metadata fields (Title, Author(s), Year, Abstract, Department, etc.).
+- **Author Multi-Input**: Dynamic author input rows with add/remove controls.
+
+---
+
+### Sprint 2 – Week A
+*Advanced Filtering & Role-Based UI*
+
+- **Advanced Filter Sidebar**: Year range pickers, department dropdown, degree program tags.
+- **Project Type Filter**: Toggle between Capstone Project and Thesis result sets.
+- **Result Tags**: Color-coded degree and project type badges on search result cards.
+- **Admin Dashboard**: Full paper management, user management, and global control views.
+- **Faculty Upload**: Faculty-only upload button with role-gated access.
+- **Citation & View Metrics**: Papers display citation counts and view statistics.
+
+---
+
+### Sprint 1 – Foundational MVP
+
+- **Search Interface**: Basic semantic query input and result display.
+- **Paper Detail View**: Metadata, abstract, and related paper recommendations.
+- **Login / Auth Flow**: JWT-based authentication with role-aware redirect.
+- **Core Routing**: Vue Router setup for all primary views.
+
+---
+
+## 📝 License
+
+Proprietary Prototype for Undergrad Thesis research.
