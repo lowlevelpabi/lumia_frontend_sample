@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Search, BookOpen, ArrowLeft, Filter, Calendar, Building } from 'lucide-vue-next'
+import { Search, BookOpen, ArrowLeft, Filter, Calendar } from 'lucide-vue-next'
 import { api, type SearchResult, type SearchParams } from '../services/api'
 const route = useRoute()
 const router = useRouter()
@@ -10,9 +10,11 @@ const results = ref<SearchResult[]>([])
 const loading = ref(false)
 
 // Advanced Filters
-const selectedDept = ref('')
 const threshold = ref(0.2)
 const minYear = ref<number | undefined>(undefined)
+const maxYear = ref<number | undefined>(undefined)
+const selectedProjectType = ref('')
+const selectedDegree = ref('')
 
 const performSearch = async () => {
   if (!query.value) return
@@ -21,8 +23,10 @@ const performSearch = async () => {
     const params: SearchParams = {
       query: query.value,
       threshold: threshold.value,
-      department: selectedDept.value || undefined,
-      minYear: minYear.value
+      minYear: minYear.value,
+      maxYear: maxYear.value,
+      projectType: selectedProjectType.value || undefined,
+      degreeProgram: selectedDegree.value || undefined
     }
     results.value = await api.searchPapers(params)
   } catch {
@@ -37,7 +41,7 @@ onMounted(() => {
   performSearch()
 })
 
-watch([() => route.query.q, selectedDept, threshold, minYear], () => {
+watch([() => route.query.q, threshold, minYear, maxYear, selectedProjectType, selectedDegree], () => {
   query.value = (route.query.q as string) || query.value
   performSearch()
 })
@@ -70,15 +74,23 @@ const viewDetail = (id: number) => router.push({ name: 'detail', params: { id } 
           <Filter :size="16" /> Filters
         </h3>
 
+
         <div class="filter-group">
-          <label>
-            <Building :size="14" /> Departments
-          </label>
+          <label>Project Type</label>
           <div class="filter-options">
-            <span class="filter-tag" :class="{ active: selectedDept === '' }" @click="selectedDept = ''">All</span>
-            <span v-for="dept in ['Computer Science', 'Engineering', 'Psychology', 'Medicine']" :key="dept"
-              class="filter-tag" :class="{ active: selectedDept === dept }" @click="selectedDept = dept">{{ dept
-              }}</span>
+            <span class="filter-tag" :class="{ active: selectedProjectType === '' }"
+              @click="selectedProjectType = ''">All</span>
+            <span v-for="pt in ['Capstone Project', 'Thesis']" :key="pt" class="filter-tag"
+              :class="{ active: selectedProjectType === pt }" @click="selectedProjectType = pt">{{ pt }}</span>
+          </div>
+        </div>
+
+        <div class="filter-group">
+          <label>Degree Program</label>
+          <div class="filter-options">
+            <span class="filter-tag" :class="{ active: selectedDegree === '' }" @click="selectedDegree = ''">All</span>
+            <span v-for="deg in ['BSCS', 'BSIT', 'BSIS', 'BSCpE']" :key="deg" class="filter-tag"
+              :class="{ active: selectedDegree === deg }" @click="selectedDegree = deg">{{ deg }}</span>
           </div>
         </div>
 
@@ -98,11 +110,18 @@ const viewDetail = (id: number) => router.push({ name: 'detail', params: { id } 
         </div>
 
         <div class="filter-group">
-          <label>Min Year</label>
-          <select v-model="minYear" class="year-select">
-            <option :value="undefined">Any Year</option>
-            <option v-for="y in [2024, 2023, 2022, 2021, 2020]" :key="y" :value="y">{{ y }}</option>
-          </select>
+          <label>Year Range</label>
+          <div class="year-range">
+            <select v-model="minYear" class="year-select">
+              <option :value="undefined">From</option>
+              <option v-for="y in [2024, 2023, 2022, 2021, 2020]" :key="y" :value="y">{{ y }}</option>
+            </select>
+            <span class="year-to">to</span>
+            <select v-model="maxYear" class="year-select">
+              <option :value="undefined">To</option>
+              <option v-for="y in [2024, 2023, 2022, 2021, 2020]" :key="y" :value="y">{{ y }}</option>
+            </select>
+          </div>
         </div>
       </aside>
 
@@ -114,7 +133,10 @@ const viewDetail = (id: number) => router.push({ name: 'detail', params: { id } 
 
         <div v-for="res in results" :key="res.id" class="result-card" @click="viewDetail(res.id)">
           <div class="result-meta">
-            <span class="dept-tag">{{ res.payload.department }}</span>
+            <span class="type-tag">{{ res.payload.project_type }}</span>
+            <span v-if="res.payload.degree_program && res.payload.degree_program !== 'N/A'" class="degree-tag">
+              {{ res.payload.degree_program }}
+            </span>
             <span class="score-tag">Match: {{ (res.score * 100).toFixed(0) }}%</span>
           </div>
           <h2>{{ res.payload.title }}</h2>
@@ -276,6 +298,17 @@ const viewDetail = (id: number) => router.push({ name: 'detail', params: { id } 
   cursor: pointer;
 }
 
+.year-range {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.year-to {
+  font-size: 0.8rem;
+  color: #888;
+}
+
 .results-list {
   flex: 1;
   display: flex;
@@ -313,12 +346,31 @@ const viewDetail = (id: number) => router.push({ name: 'detail', params: { id } 
   text-transform: uppercase;
 }
 
+.type-tag {
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+}
+
+.degree-tag {
+  background: #fff7ed;
+  color: #c2410c;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+}
+
 .score-tag {
-  background: #f9fafb;
-  color: #666;
-  font-size: 0.7rem;
-  padding: 0.2rem 0.5rem;
-  border-radius: 4px;
+  background: #f3f4f6;
+  color: #4b5563;
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
 }
 
 .result-card h2 {
