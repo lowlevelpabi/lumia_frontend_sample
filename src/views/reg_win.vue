@@ -210,4 +210,38 @@ const handleRegister = async () => {
     transform: rotate(360deg);
   }
 }
+
+/* ── Tablet (≤768px) ─────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .auth-page {
+    padding: 1.5rem;
+  }
+
+  .auth-card {
+    padding: 2.25rem;
+    max-width: 100%;
+  }
+}
+
+/* ── Phone (≤480px) — Primary Android target 360–412px ───────── */
+@media (max-width: 480px) {
+  .auth-page {
+    padding: 1rem;
+    align-items: flex-start;
+    padding-top: 2rem;
+  }
+
+  .auth-card {
+    padding: 1.75rem 1.25rem;
+    border-radius: 8px;
+  }
+
+  .logo {
+    font-size: 1.25rem;
+  }
+
+  .auth-form {
+    gap: 1rem;
+  }
+}
 </style>

@@ -525,4 +525,64 @@ const abstractPreview = computed(() => {
   text-align: center;
   padding: 2rem;
 }
+
+/* ── Tablet (≤768px) ─────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .detail-layout {
+    flex-direction: column;
+    padding: 1.5rem 1.25rem;
+    gap: 2rem;
+  }
+
+  .recommendations-aside {
+    width: 100%;
+  }
+
+  .paper-header h1 {
+    font-size: 1.6rem;
+  }
+}
+
+/* ── Phone (≤480px) — Primary Android target 360–412px ───────── */
+@media (max-width: 480px) {
+  .detail-nav {
+    padding: 0.75rem 1rem;
+  }
+
+  .detail-layout {
+    padding: 1rem;
+    gap: 1.5rem;
+  }
+
+  .paper-header h1 {
+    font-size: 1.3rem;
+  }
+
+  .metadata-grid {
+    gap: 0.75rem 1rem;
+  }
+
+  .engagement-row {
+    gap: 0.5rem;
+  }
+
+  .recommendations-aside {
+    width: 100%;
+  }
+
+  .rec-list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+  }
+
+  .body-text {
+    font-size: 0.95rem;
+    line-height: 1.75;
+  }
+
+  .paper-section h3 {
+    font-size: 0.98rem;
+  }
+}
 </style>

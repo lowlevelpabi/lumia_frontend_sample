@@ -1437,4 +1437,205 @@ textarea.abstract-area {
   border-radius: 99px;
   text-transform: uppercase;
 }
+
+/* ── Tablet (≤768px) ─────────────────────────────────────────── */
+@media (max-width: 768px) {
+  /* Step rail: fixed vertical → static horizontal top bar */
+  .steps-rail {
+    position: static;
+    transform: none;
+    flex-direction: row;
+    justify-content: center;
+    width: 100%;
+    gap: 0;
+    padding: 0.75rem 1rem;
+    background: white;
+    border-bottom: 1px solid #eee;
+    margin-bottom: 1rem;
+  }
+
+  .step-item {
+    flex-direction: row;
+    gap: 0.5rem;
+    align-items: center;
+  }
+
+  .step-line-v {
+    width: 40px;
+    height: 2px;
+    margin: 0 0.5rem;
+  }
+
+  .upload-page {
+    padding: 0;
+  }
+
+  .standard-container {
+    padding: 1.25rem;
+  }
+
+  /* Review header wraps */
+  .review-container {
+    height: auto;
+    min-height: calc(100vh - 6rem);
+    padding: 0 0.75rem 1rem;
+  }
+
+  .review-header {
+    flex-wrap: wrap;
+    gap: 1rem;
+    padding: 1rem 1.25rem;
+    border-radius: 12px;
+  }
+
+  .header-right {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .confirm-btn {
+    flex: 1;
+    justify-content: center;
+  }
+
+  /* Review grid: 2 columns → 1 column */
+  .review-grid {
+    grid-template-columns: 1fr;
+    overflow: visible;
+  }
+
+  .metadata-form,
+  .page-selector {
+    overflow: visible;
+  }
+
+  .thumbnails-grid {
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  }
+
+  .upload-card {
+    padding: 2rem 1.5rem;
+  }
+
+  .drop-zone {
+    padding: 2rem;
+  }
+}
+
+/* ── Phone (≤480px) — Primary Android target 360–412px ───────── */
+@media (max-width: 480px) {
+  .steps-rail {
+    padding: 0.6rem 0.75rem;
+    gap: 0;
+  }
+
+  .step-num {
+    width: 26px;
+    height: 26px;
+    font-size: 0.75rem;
+  }
+
+  .step-label {
+    font-size: 0.6rem;
+  }
+
+  .step-line-v {
+    width: 24px;
+  }
+
+  .standard-container {
+    padding: 0.85rem;
+  }
+
+  .upload-card {
+    padding: 1.5rem 1.1rem;
+    border-radius: 14px;
+  }
+
+  .card-header h1 {
+    font-size: 1.4rem;
+  }
+
+  .drop-zone {
+    padding: 1.5rem 1rem;
+    border-radius: 10px;
+  }
+
+  .review-header {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 0.85rem 1rem;
+    border-radius: 10px;
+  }
+
+  .header-left h1 {
+    font-size: 1.15rem;
+  }
+
+  .file-info-header {
+    max-width: 100%;
+    align-items: flex-start;
+  }
+
+  .file-name {
+    text-align: left;
+  }
+
+  .v-divider {
+    display: none;
+  }
+
+  .header-right {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .confirm-btn {
+    padding: 0.65rem 1rem;
+    font-size: 0.9rem;
+  }
+
+  .review-container {
+    padding: 0 0.5rem 1rem;
+  }
+
+  .metadata-form,
+  .page-selector {
+    padding: 1.25rem 1rem;
+    border-radius: 12px;
+  }
+
+  .thumbnails-grid {
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 0.85rem;
+  }
+
+  .selector-title-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .strategy-modal {
+    width: 95%;
+    padding: 1.5rem;
+    border-radius: 16px;
+  }
+
+  .strategy-card {
+    gap: 0.85rem;
+    padding: 1rem;
+  }
+
+  .modal-overlay {
+    padding: 1rem;
+  }
+
+  .row {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+}
 </style>

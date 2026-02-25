@@ -269,4 +269,60 @@ const logout = () => {
   color: #888;
   font-size: 0.85rem;
 }
+
+/* ── Tablet (≤768px) ─────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .management-container {
+    padding: 2rem 1.25rem;
+  }
+
+  .section-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .add-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .papers-table-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .title-cell {
+    max-width: 220px;
+  }
+}
+
+/* ── Phone (≤480px) — Primary Android target 360–412px ───────── */
+@media (max-width: 480px) {
+  .management-nav {
+    padding: 0.65rem 1rem;
+  }
+
+  .nav-title {
+    font-size: 0.85rem;
+  }
+
+  .management-container {
+    padding: 1.25rem 0.85rem;
+  }
+
+  .header-info h1 {
+    font-size: 1.5rem;
+  }
+
+  .papers-table th,
+  .papers-table td {
+    padding: 0.85rem 1rem;
+    font-size: 0.85rem;
+  }
+
+  .title-cell {
+    max-width: 160px;
+  }
+}
 </style>

@@ -231,4 +231,79 @@ const handleSearch = () => {
   color: #666;
   font-weight: 600;
 }
+
+/* ── Tablet (≤768px) ─────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .navbar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 1rem 1.25rem;
+  }
+
+  .hero {
+    padding: 5rem 1.25rem;
+  }
+
+  .hero-content h1 {
+    font-size: 2.5rem;
+  }
+
+  .search-bar {
+    max-width: 100%;
+  }
+}
+
+/* ── Phone (≤480px) — Primary Android target 360–412px ───────── */
+@media (max-width: 480px) {
+  .navbar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+    padding: 0.85rem 1rem;
+  }
+
+  .logo span {
+    font-size: 1rem;
+  }
+
+  .nav-links {
+    gap: 0.75rem;
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .nav-link {
+    display: none; /* hide Explore / About on phones */
+  }
+
+  .hero {
+    padding: 3.5rem 1rem 2.5rem;
+  }
+
+  .hero-content h1 {
+    font-size: 1.8rem;
+    letter-spacing: -0.01rem;
+  }
+
+  .hero-content p {
+    font-size: 1rem;
+    margin-bottom: 2rem;
+  }
+
+  .search-bar {
+    max-width: 100%;
+    padding: 0.4rem 0.4rem 0.4rem 1rem;
+    border-radius: 16px;
+  }
+
+  .search-input {
+    font-size: 0.95rem;
+    padding: 0.6rem 0.75rem;
+  }
+
+  .search-btn {
+    padding: 0.65rem;
+  }
+}
 </style>

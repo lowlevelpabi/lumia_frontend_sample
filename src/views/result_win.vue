@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Search, BookOpen, ArrowLeft, Filter, Calendar } from 'lucide-vue-next'
 import { api, type SearchResult, type SearchParams } from '../services/api'
@@ -8,6 +8,9 @@ const router = useRouter()
 const query = ref('')
 const results = ref<SearchResult[]>([])
 const loading = ref(false)
+const showFilters = ref(false)
+const windowWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1024)
+const isDesktop = computed(() => windowWidth.value > 768)
 
 // Advanced Filters
 const threshold = ref(0.2)
@@ -39,6 +42,8 @@ const performSearch = async () => {
 onMounted(() => {
   query.value = (route.query.q as string) || ''
   performSearch()
+  const onResize = () => { windowWidth.value = window.innerWidth }
+  window.addEventListener('resize', onResize)
 })
 
 watch([() => route.query.q, threshold, minYear, maxYear, selectedProjectType, selectedDegree], () => {
@@ -61,6 +66,10 @@ const viewDetail = (id: number) => router.push({ name: 'detail', params: { id } 
           <Search class="search-icon" :size="18" />
           <input v-model="query" @keyup.enter="performSearch" placeholder="Search research..." />
         </div>
+        <!-- Mobile filter toggle -->
+        <button class="filter-toggle-btn" @click="showFilters = !showFilters" :class="{ active: showFilters }">
+          <Filter :size="16" />
+        </button>
       </div>
       <div class="logo-small">
         <BookOpen :size="20" color="#10b981" />
@@ -69,7 +78,7 @@ const viewDetail = (id: number) => router.push({ name: 'detail', params: { id } 
     </header>
 
     <main class="results-layout">
-      <aside class="filters-sidebar">
+      <aside class="filters-sidebar" v-show="showFilters || isDesktop">
         <h3>
           <Filter :size="16" /> Filters
         </h3>
@@ -396,5 +405,105 @@ const viewDetail = (id: number) => router.push({ name: 'detail', params: { id } 
   text-align: center;
   padding: 4rem;
   color: #888;
+}
+
+/* ── Mobile Filter Toggle Button ────────────────────────────── */
+.filter-toggle-btn {
+  display: none;
+  background: #f3f4f6;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 0.45rem 0.6rem;
+  cursor: pointer;
+  color: #555;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.filter-toggle-btn.active {
+  background: #ecfdf5;
+  border-color: #10b981;
+  color: #10b981;
+}
+
+/* ── Tablet (≤768px) ─────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .results-layout {
+    flex-direction: column;
+    padding: 1.25rem;
+    gap: 1.25rem;
+  }
+
+  .filters-sidebar {
+    width: 100%;
+  }
+
+  .filter-options {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 0.25rem;
+  }
+
+  .filter-tag {
+    flex-shrink: 0;
+  }
+
+  .filter-toggle-btn {
+    display: flex;
+  }
+
+  .results-header {
+    padding: 0.65rem 1rem;
+  }
+
+  .header-search {
+    flex: 1;
+  }
+
+  .logo-small span {
+    display: none;
+  }
+}
+
+/* ── Phone (≤480px) — Primary Android target 360–412px ───────── */
+@media (max-width: 480px) {
+  .results-layout {
+    padding: 0.85rem;
+    gap: 1rem;
+  }
+
+  .filters-sidebar {
+    padding: 0.75rem;
+    background: #f9fafb;
+    border: 1px solid #eee;
+    border-radius: 10px;
+  }
+
+  .results-header {
+    padding: 0.5rem 0.75rem;
+  }
+
+  .header-search {
+    padding: 0.4rem 0.75rem;
+  }
+
+  .result-card {
+    padding: 1rem;
+  }
+
+  .result-card h2 {
+    font-size: 1.1rem;
+  }
+
+  .result-meta {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .loading-state,
+  .empty-state {
+    padding: 2rem 1rem;
+  }
 }
 </style>
