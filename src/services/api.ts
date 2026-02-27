@@ -57,6 +57,25 @@ export interface UserData {
   role: string
 }
 
+export interface UserResponse extends UserData {
+  id: number
+}
+
+export interface HealthStatus {
+  status: 'online' | 'offline'
+  details: {
+    message?: string
+    latency_ms?: number
+    points_count?: number
+    model?: string
+    engine?: string
+    collection?: string
+    error?: string
+  }
+}
+
+export type SystemHealth = Record<string, HealthStatus>
+
 export interface SearchParams {
   query: string
   threshold?: number
@@ -67,6 +86,34 @@ export interface SearchParams {
   department?: string
   projectType?: string
   degreeProgram?: string
+}
+
+export interface BorrowRecord {
+  id: number
+  paper_id: number
+  user_id: number
+  borrow_date: string
+  due_date: string
+  return_date?: string
+  status: 'Borrowed' | 'Returned' | 'Overdue'
+}
+
+export interface Penalty {
+  id: number
+  user_id: number
+  borrow_record_id: number
+  amount: number
+  reason: string
+  status: 'Unpaid' | 'Paid'
+  created_at: string
+}
+
+export interface DashboardStats {
+  total_papers: number
+  total_theses: number
+  total_capstone: number
+  active_borrows: number
+  total_penalties: number
 }
 
 export const api = {
@@ -227,6 +274,75 @@ export const api = {
       headers: getAuthHeaders(),
     })
     if (!response.ok) throw new Error('Citation failed')
+    return response.json()
+  },
+
+  async listUsers(): Promise<UserResponse[]> {
+    const response = await fetch(`${BASE_URL}/users/`, {
+      headers: getAuthHeaders(),
+    })
+    if (!response.ok) throw new Error('Failed to list users')
+    return response.json()
+  },
+
+  async getSystemHealth(): Promise<SystemHealth> {
+    const response = await fetch(`${BASE_URL}/system/health`, {
+      headers: getAuthHeaders(),
+    })
+    if (!response.ok) throw new Error('Failed to fetch system health')
+    return response.json()
+  },
+
+  // Borrowing & Penalties
+  async listBorrowRecords(): Promise<BorrowRecord[]> {
+    const response = await fetch(`${BASE_URL}/borrowing/`, {
+      headers: getAuthHeaders(),
+    })
+    if (!response.ok) throw new Error('Failed to list borrow records')
+    return response.json()
+  },
+
+  async createBorrowRecord(data: { paper_id: number; user_id: number; due_date: string }) {
+    const response = await fetch(`${BASE_URL}/borrowing/`, {
+      method: 'POST',
+      headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+    if (!response.ok) throw new Error('Failed to create borrow record')
+    return response.json()
+  },
+
+  async returnBook(recordId: number) {
+    const response = await fetch(`${BASE_URL}/borrowing/${recordId}/return`, {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+    })
+    if (!response.ok) throw new Error('Failed to return book')
+    return response.json()
+  },
+
+  async listPenalties(): Promise<Penalty[]> {
+    const response = await fetch(`${BASE_URL}/borrowing/penalties`, {
+      headers: getAuthHeaders(),
+    })
+    if (!response.ok) throw new Error('Failed to list penalties')
+    return response.json()
+  },
+
+  async payPenalty(penaltyId: number) {
+    const response = await fetch(`${BASE_URL}/borrowing/penalties/${penaltyId}/pay`, {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+    })
+    if (!response.ok) throw new Error('Failed to pay penalty')
+    return response.json()
+  },
+
+  async getDashboardStats(): Promise<DashboardStats> {
+    const response = await fetch(`${BASE_URL}/borrowing/dashboard/stats`, {
+      headers: getAuthHeaders(),
+    })
+    if (!response.ok) throw new Error('Failed to fetch dashboard stats')
     return response.json()
   },
 }
