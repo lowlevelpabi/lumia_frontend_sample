@@ -37,9 +37,9 @@ const handleSearch = () => {
     <!-- Hero Section -->
     <header class="home-hero">
       <div class="hero-inner">
-        <h1 class="hero-title">Advance your research with LUMIA</h1>
-        <p class="hero-subtitle">Access 1.2M+ digitalized thesis books and research papers using BERT-powered context
-          retrieval.</p>
+        <h1 class="hero-title">SMART RESEARCH</h1>
+        <p class="hero-subtitle">Test subtitle
+          </p>
 
         <div class="hero-search">
           <div class="search-box">
