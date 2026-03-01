@@ -19,7 +19,7 @@ const toggleSidebar = () => { sidebarCollapsed.value = !sidebarCollapsed.value }
 
 // ── Sidebar ─────────────────────────────────────────────────────
 type Section = 'dashboard' | 'repository' | 'users' | 'upload'
-const activeSection = r ef<Section>('dashboard')
+const activeSection = ref<Section>('dashboard')
 
 const navItems: { id: Section; label: string; icon: Component; description: string }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: Home, description: 'Overview of repository' },
