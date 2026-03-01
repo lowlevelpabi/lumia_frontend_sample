@@ -273,7 +273,7 @@ const goBack = () => {
                   </div>
                   <div class="header-text">
                     <h3>Upload Strategy</h3>
-                    <p>How should we process <strong>{{ file?.name }}</strong>?</p>
+                    <p>Title: <strong>{{ file?.name }}</strong>?</p>
                   </div>
                   <button @click="showStrategyModal = false" class="close-modal">
                     <X :size="20" />
@@ -481,7 +481,7 @@ const goBack = () => {
 <style scoped>
 /* Base Styles */
 .upload-page {
-  min-height: 100vh;
+  min-height: calc(100vh - 64px);
   background: #f8fafc;
   padding: 2rem;
 }
@@ -1440,6 +1440,7 @@ textarea.abstract-area {
 
 /* ── Tablet (≤768px) ─────────────────────────────────────────── */
 @media (max-width: 768px) {
+
   /* Step rail: fixed vertical → static horizontal top bar */
   .steps-rail {
     position: static;

@@ -1,28 +1,31 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed, watch, type Component } from 'vue'
-import { useRouter, RouterLink } from 'vue-router'
+import { ref, onMounted, computed, watch, reactive, type Component } from 'vue'
+import { useRouter } from 'vue-router'
 import {
-  BookOpen, Library, LogOut, Trash2, Edit3,
+  Library, LogOut, Trash2, Edit3,
   Search, Plus, FolderOpen, Home, Loader2,
-  ShieldAlert, FileText, Users, Calendar, ChevronRight,
-  Settings, ArrowLeft, Save, Hash, Activity,
-  UserCheck, Server, Database, Brain
+  FileText, Users, Calendar, ChevronRight,
+  Settings, ArrowLeft, Save, Hash, BookOpen,
+  UserCheck, Menu, X, Clock, TrendingUp,
+  FileUp, Sparkles, Eye, Settings2, ZoomIn, CheckCircle, AlertCircle, Check
 } from 'lucide-vue-next'
-import { api, type Paper, type UserResponse, type SystemHealth, type DashboardStats, type BorrowRecord, type Penalty } from '../services/api'
+import { api, type Paper, type UserResponse, type PartialPaperMetadata } from '../services/api'
 
 const router = useRouter()
 
+// ── Sidebar collapse ────────────────────────────────────────────
+const sidebarCollapsed = ref(false)
+const toggleSidebar = () => { sidebarCollapsed.value = !sidebarCollapsed.value }
+
 // ── Sidebar ─────────────────────────────────────────────────────
-type Section = 'dashboard' | 'repository' | 'borrowing' | 'penalties' | 'users' | 'system'
-const activeSection = ref<Section>('dashboard')
+type Section = 'dashboard' | 'repository' | 'users' | 'upload'
+const activeSection = r ef<Section>('dashboard')
 
 const navItems: { id: Section; label: string; icon: Component; description: string }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: Home, description: 'Overview of repository' },
-  { id: 'repository', label: 'Research Books', icon: Library, description: 'Browse & manage indexed works' },
-  { id: 'borrowing', label: 'Borrow Records', icon: BookOpen, description: 'Track book loans & returns' },
-  { id: 'penalties', label: 'Penalties', icon: ShieldAlert, description: 'Manage fines & violations' },
+  { id: 'upload', label: 'Upload Research', icon: FileUp, description: 'Index new PDF documents' },
+  { id: 'repository', label: 'Thesis & Research', icon: Library, description: 'Browse & manage indexed works' },
   { id: 'users', label: 'User Manager', icon: Users, description: 'Manage students & faculty' },
-  { id: 'system', label: 'System Health', icon: Activity, description: 'Monitor engine performance' },
 ]
 
 const activeLabel = computed(() => {
@@ -32,6 +35,8 @@ const activeLabel = computed(() => {
 const setSection = (s: Section) => {
   activeSection.value = s
   router.push({ query: { ...router.currentRoute.value.query, tab: s } })
+  // Auto-collapse on mobile after selecting
+  if (window.innerWidth < 768) sidebarCollapsed.value = true
 }
 
 // Browser History Sync
@@ -144,136 +149,174 @@ const studentCount = computed(() => users.value.filter(u => u.role === 'User').l
 
 const logout = () => { api.logout(); router.push({ name: 'login' }) }
 
-// ── System Health ──────────────────────────────────────────────
-const healthData = ref<SystemHealth | null>(null)
-const loadingHealth = ref(false)
-let healthInterval: ReturnType<typeof setInterval> | null = null
+// (Announcements UI removed)
+// ── Upload ──
+const step = ref(1) // 1: Select, 2: Review, 3: Success
+const uploadingPaper = ref(false)
+const processingDoc = ref(false)
+const showStrategyModal = ref(false)
+const uploadError = ref('')
+const file = ref<File | null>(null)
+const fileInput = ref<HTMLInputElement | null>(null)
+const sessionId = ref('')
 
-const fetchHealth = async (showLoading = true) => {
-  if (showLoading) loadingHealth.value = true
+interface PageData {
+  page_num: number;
+  thumbnail: string;
+  preview_text: string;
+}
+
+const pages = ref<PageData[]>([])
+const uploadMetadata = reactive<PartialPaperMetadata>({
+  title: '',
+  author: '',
+  year: '',
+  abstract: '',
+  department: 'N/A',
+  keywords: '',
+  project_type: 'Thesis',
+  degree_program: 'N/A'
+})
+
+const authors = ref<string[]>([''])
+const selectedPages = ref<number[]>([])
+const showZoomModal = ref(false)
+const zoomedPage = ref<PageData | null>(null)
+
+const openZoom = (page: PageData) => {
+  zoomedPage.value = page
+  showZoomModal.value = true
+}
+
+const closeZoom = () => {
+  showZoomModal.value = false
+  zoomedPage.value = null
+}
+
+const handleFileChange = (e: Event) => {
+  const target = e.target as HTMLInputElement
+  if (target.files && target.files[0]) {
+    file.value = target.files[0]
+    showStrategyModal.value = true
+  }
+}
+
+const selectStrategy = async (auto: boolean) => {
+  showStrategyModal.value = false
+  // Small delay to let modal close animation finish and loading state show
+  setTimeout(() => {
+    startInitialExtraction(auto)
+  }, 100)
+}
+
+const startInitialExtraction = async (autoExtract: boolean = true) => {
+  if (!file.value) return
+  processingDoc.value = true
+  uploadError.value = ''
+
   try {
-    healthData.value = await api.getSystemHealth()
-  } catch (e) {
-    console.error('Failed to fetch system health:', e)
+    const preview = await api.getUploadPreview(file.value, autoExtract)
+    sessionId.value = preview.session_id
+    Object.assign(uploadMetadata, preview.metadata)
+
+    if (preview.metadata.author) {
+      const splitAuthors = preview.metadata.author
+        .split(/\s*\|\s*/)
+        .map((a: string) => a.trim())
+        .filter((a: string) => a.length > 0)
+      authors.value = splitAuthors.length > 0 ? splitAuthors : ['']
+    } else {
+      authors.value = ['']
+    }
+
+    pages.value = preview.pages
+    selectedPages.value = preview.pages
+      .filter(p => (p.preview_text || '').length > 10)
+      .map(p => p.page_num)
+
+    // Smooth transition to step 2 after data is ready
+    setTimeout(() => {
+      step.value = 2
+      processingDoc.value = false
+    }, 400)
+  } catch (err) {
+    uploadError.value = (err as Error).message || 'Failed to parse PDF.'
+    processingDoc.value = false
+  }
+}
+
+const togglePage = (pageNum: number, event: Event) => {
+  if ((event.target as HTMLElement).closest('.zoom-trigger')) return
+  const index = selectedPages.value.indexOf(pageNum)
+  if (index > -1) selectedPages.value.splice(index, 1)
+  else selectedPages.value.push(pageNum)
+}
+
+const selectAll = () => { selectedPages.value = pages.value.map(p => p.page_num) }
+const deselectAll = () => { selectedPages.value = [] }
+const addAuthor = () => { authors.value.push('') }
+const removeAuthor = (index: number) => {
+  if (authors.value.length > 1) authors.value.splice(index, 1)
+  else authors.value[0] = ''
+}
+
+const handleFinalConfirm = async () => {
+  if (selectedPages.value.length === 0) {
+    uploadError.value = 'Please select at least one page to index.'
+    return
+  }
+  uploadingPaper.value = true
+  uploadError.value = ''
+  try {
+    const finalAuthorString = authors.value.map(a => a.trim()).filter(a => a.length > 0).join(', ')
+    await api.confirmUpload({
+      session_id: sessionId.value,
+      metadata: { ...uploadMetadata, author: finalAuthorString || 'Unknown' },
+      selected_pages: selectedPages.value
+    })
+    step.value = 3
+    setTimeout(() => {
+      setSection('repository')
+      // Reset upload state
+      step.value = 1
+      file.value = null
+    }, 2000)
+  } catch (err) {
+    uploadError.value = (err as Error).message || 'Failed to finalize upload.'
   } finally {
-    loadingHealth.value = false
+    uploadingPaper.value = false
   }
 }
 
-// ── Dashboard Stats ──────────────────────────────────────────────
-const dashboardStats = ref<DashboardStats | null>(null)
-const loadingStats = ref(false)
-
-const fetchDashboardStats = async () => {
-  loadingStats.value = true
-  try {
-    dashboardStats.value = await api.getDashboardStats()
-  } catch (e) {
-    console.error('Failed to fetch dashboard stats:', e)
-  } finally {
-    loadingStats.value = false
-  }
+const goBackToStep1 = () => {
+  step.value = 1
+  file.value = null
+  showStrategyModal.value = false
 }
 
-// ── Borrowing ────────────────────────────────────────────────────
-const borrowRecords = ref<BorrowRecord[]>([])
-const loadingBorrows = ref(false)
-
-const fetchBorrows = async () => {
-  loadingBorrows.value = true
-  try {
-    borrowRecords.value = await api.listBorrowRecords()
-  } catch (e) {
-    console.error('Failed to fetch borrow records:', e)
-  } finally {
-    loadingBorrows.value = false
-  }
-}
-
-const handleReturn = async (id: number) => {
-  try {
-    await api.returnBook(id)
-    fetchBorrows()
-    fetchDashboardStats()
-  } catch {
-    alert('Failed to process return')
-  }
-}
-
-// ── Penalties ────────────────────────────────────────────────────
-const penalties = ref<Penalty[]>([])
-const loadingPenalties = ref(false)
-
-const fetchPenalties = async () => {
-  loadingPenalties.value = true
-  try {
-    penalties.value = await api.listPenalties()
-  } catch (e) {
-    console.error('Failed to fetch penalties:', e)
-  } finally {
-    loadingPenalties.value = false
-  }
-}
-
-const handlePayPenalty = async (id: number) => {
-  try {
-    await api.payPenalty(id)
-    fetchPenalties()
-    fetchDashboardStats()
-  } catch {
-    alert('Failed to process payment')
-  }
-}
-
-const startHealthPolling = () => {
-  if (healthInterval) clearInterval(healthInterval)
-  fetchHealth()
-  healthInterval = setInterval(() => fetchHealth(false), 5000)
-}
-
-const stopHealthPolling = () => {
-  if (healthInterval) {
-    clearInterval(healthInterval)
-    healthInterval = null
-  }
-}
-
-onUnmounted(stopHealthPolling)
+// ── Recent papers (for dashboard panel) ─────────────────────────
+const recentPapers = computed(() => papers.value.slice().sort((a, b) => b.id - a.id).slice(0, 6))
 
 // ── Watchers ─────────────────────────────────────────────────────
 watch(activeSection, (newSection) => {
-  if (newSection === 'dashboard') {
-    fetchDashboardStats()
-  }
   if (newSection === 'repository') {
     fetchPapers()
   }
-  if (newSection === 'borrowing') {
-    fetchBorrows()
-  }
-  if (newSection === 'penalties') {
-    fetchPenalties()
-  }
   if (newSection === 'users' && users.value.length === 0) {
     fetchUsers()
-  }
-  if (newSection === 'system') {
-    startHealthPolling()
-  } else {
-    stopHealthPolling()
   }
 }, { immediate: true })
 </script>
 
 <template>
-  <div class="dashboard">
+  <div class="dashboard" :class="{ 'sidebar-is-collapsed': sidebarCollapsed }">
 
     <!-- ══════════════ SIDEBAR ══════════════ -->
-    <aside class="sidebar">
+    <aside class="sidebar" :class="{ collapsed: sidebarCollapsed }">
       <!-- Brand -->
       <div class="sidebar-brand">
         <div class="brand-icon">
-          <BookOpen :size="16" color="#10b981" />
+          <BookOpen :size="18" color="#ffffff" stroke-width="2.5" />
         </div>
         <div class="brand-text">
           <span class="brand-name">Lumia</span>
@@ -287,20 +330,25 @@ watch(activeSection, (newSection) => {
       <!-- Nav items -->
       <nav class="sidebar-nav">
         <button v-for="item in navItems" :key="item.id" class="sidebar-item"
-          :class="{ active: activeSection === item.id }" @click="setSection(item.id)">
-          <component :is="item.icon" :size="16" class="sidebar-item-icon" />
+          :class="{ active: activeSection === item.id }" @click="setSection(item.id)"
+          :title="sidebarCollapsed ? item.label : undefined">
+          <div class="icon-wrap" :aria-hidden="sidebarCollapsed" :class="{ active: activeSection === item.id }">
+            <component :is="item.icon" :size="18" class="sidebar-item-icon" stroke-width="2.2" />
+          </div>
           <div class="sidebar-item-text">
             <span class="sidebar-item-label">{{ item.label }}</span>
             <span class="sidebar-item-desc">{{ item.description }}</span>
           </div>
-          <ChevronRight :size="13" class="sidebar-item-arrow" />
+          <ChevronRight v-if="!sidebarCollapsed" :size="13" class="sidebar-item-arrow" />
         </button>
       </nav>
 
       <!-- Sidebar footer -->
       <div class="sidebar-footer">
-        <button class="sidebar-logout" @click="logout">
-          <LogOut :size="14" />
+        <button class="sidebar-logout" @click="logout" :title="sidebarCollapsed ? 'Logout' : undefined">
+          <div class="icon-wrap logout-wrap">
+            <LogOut :size="18" stroke-width="2.2" />
+          </div>
           <span>Logout</span>
         </button>
       </div>
@@ -312,23 +360,17 @@ watch(activeSection, (newSection) => {
       <!-- ── Topbar ────────────────────────────────────────────── -->
       <header class="topbar">
         <div class="topbar-left">
+          <!-- Hamburger toggle -->
+          <button class="sidebar-toggle" @click="toggleSidebar"
+            :title="sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'">
+            <X v-if="!sidebarCollapsed" :size="20" stroke-width="2.2" />
+            <Menu v-else :size="20" stroke-width="2.2" />
+          </button>
           <!-- Breadcrumb -->
           <span class="breadcrumb-root">Management</span>
           <ChevronRight :size="13" class="breadcrumb-sep" />
           <span class="breadcrumb-active">{{ activeLabel }}</span>
         </div>
-        <!-- Nav links -->
-        <nav class="topbar-nav">
-          <RouterLink :to="{ name: 'home' }" class="topbar-link">
-            <Home :size="14" /> Home
-          </RouterLink>
-          <RouterLink :to="{ name: 'results', query: { q: '' } }" class="topbar-link">
-            <Search :size="14" /> Search
-          </RouterLink>
-          <button @click="router.push({ name: 'upload' })" class="topbar-cta">
-            <Plus :size="14" /> Add Thesis Book
-          </button>
-        </nav>
       </header>
 
       <!-- ── Content ───────────────────────────────────────────── -->
@@ -339,157 +381,318 @@ watch(activeSection, (newSection) => {
           <div class="content-header">
             <div>
               <h1 class="content-title">Management Dashboard</h1>
-              <p class="content-sub">Real-time overview of repository and library activity.</p>
+              <p class="content-sub">Overview of repository.</p>
             </div>
           </div>
 
-          <div class="stats-row" v-if="dashboardStats">
-            <div class="stat-card">
-              <div class="stat-icon green">
-                <Library :size="16" />
+
+
+          <!-- ══ Dashboard 2-column layout ══ -->
+          <div class="dash-grid">
+
+            <!-- LEFT: Recent Uploads -->
+            <div class="dash-panel">
+              <div class="dash-panel-header">
+                <div class="dash-panel-title">
+                  <Clock :size="14" />
+                  <span>Recent uploaded thesis/research</span>
+                </div>
+                <button class="dash-panel-link" @click="setSection('repository')">View all →</button>
               </div>
-              <div><span class="stat-val">{{ dashboardStats.total_papers }}</span><span class="stat-lbl">Total
-                  Books</span></div>
+              <div class="dash-panel-body">
+                <div v-if="loading" class="dash-loading">
+                  <Loader2 :size="16" class="spin" />
+                  <span>Loading papers...</span>
+                </div>
+                <template v-else-if="recentPapers.length > 0">
+                  <div v-for="paper in recentPapers" :key="paper.id" class="dash-paper-row">
+                    <div class="dash-paper-av" :data-t="paper.project_type === 'Thesis' ? 'blue' : 'orange'">
+                      {{paper.title.trim().split(' ').slice(0, 2).map(w => w[0]?.toUpperCase() ?? '').join('')}}
+                    </div>
+                    <div class="dash-paper-info">
+                      <span class="dash-paper-title">{{ paper.title }}</span>
+                      <span class="dash-paper-meta">{{ paper.author }} &bull; {{ paper.year }}</span>
+                    </div>
+                    <span class="dash-type-chip" :class="paper.project_type === 'Thesis' ? 'blue' : 'orange'">
+                      {{ paper.project_type === 'Thesis' ? 'TH' : 'CP' }}
+                    </span>
+                  </div>
+                </template>
+                <div v-else class="dash-empty">
+                  <FolderOpen :size="32" color="#d1d5db" />
+                  <p>No papers uploaded yet.</p>
+                </div>
+              </div>
             </div>
-            <div class="stat-card">
-              <div class="stat-icon blue">
-                <FileText :size="16" />
+
+            <!-- RIGHT: Placeholder panel -->
+            <div class="dash-panel">
+              <div class="dash-panel-header">
+                <div class="dash-panel-title">
+                  <TrendingUp :size="14" />
+                  <span>Quick Overview of the Repository</span>
+                </div>
               </div>
-              <div><span class="stat-val">{{ dashboardStats.total_theses }}</span><span class="stat-lbl">Theses</span>
+              <div class="dash-panel-body">
+                <!-- Dashboard Statistics Inline -->
+                <div class="dash-panel-stats">
+                  <div class="dash-pstat-card">
+                    <div class="dash-ov-icon green">
+                      <Library :size="16" />
+                    </div>
+                    <div class="dash-pstat-info">
+                      <span class="stat-val">{{ totalPapers }}</span>
+                      <span class="stat-lbl">Total Books</span>
+                    </div>
+                  </div>
+                  <div class="dash-pstat-card">
+                    <div class="dash-ov-icon blue">
+                      <FileText :size="16" />
+                    </div>
+                    <div class="dash-pstat-info">
+                      <div class="pstat-multi">
+                        <div><span class="stat-val">{{ thesisCount }}</span><span class="stat-lbl">Thesis</span></div>
+                        <div class="stat-divider"></div>
+                        <div><span class="stat-val">{{ capstoneCount }}</span><span class="stat-lbl">Capstone</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="dash-pstat-card">
+                    <div class="dash-ov-icon purple">
+                      <UserCheck :size="16" />
+                    </div>
+                    <div class="dash-pstat-info">
+                      <div class="pstat-multi">
+                        <div><span class="stat-val">{{ adminCount + facultyCount }}</span><span
+                            class="stat-lbl">Staff</span></div>
+                        <div class="stat-divider"></div>
+                        <div><span class="stat-val">{{ studentCount }}</span><span class="stat-lbl">Students</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
-            <div class="stat-card">
-              <div class="stat-icon orange">
-                <BookOpen :size="16" />
-              </div>
-              <div><span class="stat-val">{{ dashboardStats.active_borrows }}</span><span class="stat-lbl">Active
-                  Borrows</span></div>
-            </div>
-            <div class="stat-card">
-              <div class="stat-icon red">
-                <ShieldAlert :size="16" />
-              </div>
-              <div><span class="stat-val">{{ dashboardStats.total_penalties }}</span><span class="stat-lbl">Unpaid
-                  Fines</span></div>
-            </div>
-          </div>
-          <div v-else-if="loadingStats" class="loading-stats">
-            <Loader2 class="animate-spin" /> Fetching stats...
+
           </div>
         </template>
 
-        <!-- ══ SECTION: BORROW RECORDS ══════════════════════════════ -->
-        <template v-else-if="activeSection === 'borrowing'">
-          <div class="content-header">
-            <div>
-              <h1 class="content-title">Borrow Records</h1>
-              <p class="content-sub">Monitor book loans and manage returns.</p>
+        <!-- ══ SECTION: UPLOAD ══════════════════════════════════════ -->
+        <template v-else-if="activeSection === 'upload'">
+          <div class="upload-section">
+            <div class="steps-rail">
+              <div class="step-item" :class="{ active: step >= 1, completed: step > 1 }">
+                <div class="step-num shadow-sm">
+                  <Check v-if="step > 1" :size="14" />
+                  <span v-else>1</span>
+                  <div v-if="step === 1" class="pulse-ring"></div>
+                </div>
+                <span class="step-label">Upload</span>
+              </div>
+              <div class="step-line-v"></div>
+              <div class="step-item" :class="{ active: step >= 2, completed: step > 2 }">
+                <div class="step-num shadow-sm">
+                  <Check v-if="step > 2" :size="14" />
+                  <span v-else>2</span>
+                  <div v-if="step === 2" class="pulse-ring"></div>
+                </div>
+                <span class="step-label">Review</span>
+              </div>
+              <div class="step-line-v"></div>
+              <div class="step-item" :class="{ active: step >= 3, completed: step > 3 }">
+                <div class="step-num shadow-sm">
+                  <span>3</span>
+                  <div v-if="step === 3" class="pulse-ring"></div>
+                </div>
+                <span class="step-label">Done</span>
+              </div>
             </div>
-          </div>
 
-          <div class="table-card">
-            <div class="table-scroll">
-              <table class="tbl">
-                <thead>
-                  <tr>
-                    <th>Loan ID</th>
-                    <th>Book Title</th>
-                    <th>Borrow Date</th>
-                    <th>Due Date</th>
-                    <th>Status</th>
-                    <th class="th-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <template v-if="loadingBorrows">
-                    <tr v-for="i in 3" :key="'b-sk' + i" class="skel-row">
-                      <td colspan="6">
-                        <div class="skel skel-t1"></div>
-                      </td>
-                    </tr>
-                  </template>
-                  <tr v-else v-for="record in borrowRecords" :key="record.id" class="tbl-row">
-                    <td>#{{ record.id }}</td>
-                    <td>{{ record.paper_id }}</td> <!-- Replace with title if available -->
-                    <td>{{ record.borrow_date }}</td>
-                    <td>{{ record.due_date }}</td>
-                    <td>
-                      <span class="status-badge" :class="record.status.toLowerCase()">
-                        {{ record.status }}
-                      </span>
-                    </td>
-                    <td class="td-right">
-                      <button v-if="record.status === 'Borrowed' || record.status === 'Overdue'"
-                        @click="handleReturn(record.id)" class="action-btn-mini">
-                        Mark Returned
-                      </button>
-                    </td>
-                  </tr>
-                  <tr v-if="!loadingBorrows && borrowRecords.length === 0">
-                    <td colspan="6" class="empty-td">No active borrow records found.</td>
-                  </tr>
-                </tbody>
-              </table>
+            <div v-if="step !== 2" class="standard-container">
+              <div class="upload-card shadow-lg">
+                <div v-if="step === 1">
+                  <div class="card-header">
+                    <div class="icon-circle">
+                      <FileUp :size="24" color="#10b981" />
+                    </div>
+                    <h1 class="upload-title">Upload Document</h1>
+                    <p>Start by uploading your PDF document. Choose method to process your document.</p>
+                  </div>
+
+                  <div v-if="uploadError" class="error-banner">
+                    <AlertCircle :size="18" /> {{ uploadError }}
+                  </div>
+
+                  <div class="drop-zone" @click="fileInput?.click()" :class="{ 'is-processing': processingDoc }">
+                    <input type="file" ref="fileInput" @change="handleFileChange" style="display: none"
+                      accept="application/pdf" />
+
+                    <div v-if="processingDoc" class="loading-state">
+                      <Loader2 class="spinner" :size="48" color="#10b981" />
+                      <h3>Parsing PDF...</h3>
+                      <p>Running OCR and generating thumbnails</p>
+                    </div>
+                    <template v-else>
+                      <FileUp :size="48" color="#10b981" />
+                      <div class="drop-text">
+                        <strong>Click to upload</strong> or drag and drop
+                        <span>PDF files only</span>
+                      </div>
+                    </template>
+                  </div>
+                </div>
+
+                <div v-else-if="step === 3" class="success-state">
+                  <CheckCircle :size="64" color="#10b981" />
+                  <h2>Research Indexed!</h2>
+                  <p>Paper and selected vectors have been stored in the repository.</p>
+                </div>
+              </div>
+            </div>
+
+            <div v-else class="review-container">
+              <header class="review-header shadow-sm">
+                <div class="header-left">
+                  <div class="header-icon">
+                    <FileText :size="24" color="#10b981" />
+                  </div>
+                  <div class="header-titles">
+                    <h1 class="review-title">Review & Index Document</h1>
+                    <p class="header-subtext">Please check the extracted info and select
+                      indexable pages.</p>
+                  </div>
+                </div>
+                <div class="header-right">
+                  <div class="file-stack">
+                    <div class="file-info-row">
+                      <span class="file-label">ACTIVE FILE: </span>
+                      <span class="file-name">{{ file?.name }}</span>
+                    </div>
+                    <div class="selection-count">
+                      <strong>{{ selectedPages.length }}</strong>/{{ pages.length }} Pages
+                    </div>
+                  </div>
+                  <button @click="handleFinalConfirm" class="confirm-btn primary" :disabled="uploadingPaper">
+                    <Loader2 v-if="uploadingPaper" class="spinner" :size="18" />
+                    <Check v-else :size="18" />
+                    <span>Confirm Indexing</span>
+                  </button>
+                </div>
+              </header>
+
+              <main class="review-grid">
+                <section class="metadata-form shadow-sm">
+                  <div class="form-section">
+                    <div class="section-banner">
+                      <span class="step-badge">1</span>
+                      <h4>Verify Paper Information</h4>
+                    </div>
+
+                    <div class="input-group">
+                      <label>Title</label>
+                      <textarea v-model="uploadMetadata.title" placeholder="Research Title"></textarea>
+                    </div>
+
+                    <div class="input-group">
+                      <label>Author(s)</label>
+                      <div class="authors-list">
+                        <div v-for="(author, index) in authors" :key="index" class="author-input-row">
+                          <input v-model="authors[index]" type="text" placeholder="Full Name of Author" />
+                          <button @click="removeAuthor(index)" class="remove-btn" title="Remove Author">
+                            <Trash2 :size="16" />
+                          </button>
+                        </div>
+                        <button @click="addAuthor" class="add-author-btn">
+                          <Plus :size="14" /> Add Another Author
+                        </button>
+                      </div>
+                    </div>
+
+                    <div class="row">
+                      <div class="input-group">
+                        <label>Year</label>
+                        <input v-model="uploadMetadata.year" type="text" placeholder="e.g., 2025" />
+                      </div>
+                      <div class="input-group">
+                        <label>Type</label>
+                        <select v-model="uploadMetadata.project_type">
+                          <option>Thesis</option>
+                          <option>Capstone Project</option>
+                          <option>Technical Report</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div class="input-group">
+                      <label>Abstract</label>
+                      <textarea v-model="uploadMetadata.abstract" class="abstract-area"
+                        placeholder="Enter abstract..."></textarea>
+                    </div>
+
+                    <div class="input-group">
+                      <label>Department</label>
+                      <select v-model="uploadMetadata.department">
+                        <option>N/A</option>
+                        <option>Department of Computer Science</option>
+                        <option>Department of Information Technology</option>
+                        <option>Department of Information Systems</option>
+                        <option>Department of Computer Engineering</option>
+                        <option>College of Computer Science</option>
+                        <option>College of Engineering</option>
+                        <option>College of Information Technology</option>
+                      </select>
+                    </div>
+                  </div>
+                </section>
+
+                <section class="page-selector shadow-sm">
+                  <div class="selector-header">
+                    <div class="section-banner">
+                      <span class="step-badge">2</span>
+                      <div class="banner-title">
+                        <h4>Select Reference Pages</h4>
+                        <span class="required-badge">Required for AI Search</span>
+                      </div>
+                    </div>
+                    <div class="selector-title-row">
+                      <p class="selector-hint">Select only the relevant pages you want to index (e.g., Intro,
+                        Abstract, Context).</p>
+                      <div class="selector-actions">
+                        <button @click="selectAll" class="text-btn">Select All</button>
+                        <span class="dot"></span>
+                        <button @click="deselectAll" class="text-btn">Uncheck All</button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="thumbnails-grid">
+                    <div v-for="p in pages" :key="p.page_num" class="page-card"
+                      :class="{ 'is-selected': selectedPages.includes(p.page_num) }"
+                      @click="togglePage(p.page_num, $event)">
+                      <div class="thumbnail-wrapper">
+                        <img :src="`data:image/jpeg;base64,${p.thumbnail}`" loading="lazy" class="page-thumb-img" />
+                        <div class="page-num">P{{ p.page_num }}</div>
+                        <button class="zoom-trigger" @click.stop="openZoom(p)" title="Enlarge Page">
+                          <ZoomIn :size="20" />
+                        </button>
+                        <div class="selection-overlay">
+                          <div class="check-circle">
+                            <Check :size="16" />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              </main>
             </div>
           </div>
         </template>
 
-        <!-- ══ SECTION: PENALTIES ═══════════════════════════════════ -->
-        <template v-else-if="activeSection === 'penalties'">
-          <div class="content-header">
-            <div>
-              <h1 class="content-title">Penalty Management</h1>
-              <p class="content-sub">Manage fines for overdue or damaged books.</p>
-            </div>
-          </div>
 
-          <div class="table-card">
-            <div class="table-scroll">
-              <table class="tbl">
-                <thead>
-                  <tr>
-                    <th>Penalty ID</th>
-                    <th>Reason</th>
-                    <th>Amount</th>
-                    <th>Date</th>
-                    <th>Status</th>
-                    <th class="th-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <template v-if="loadingPenalties">
-                    <tr v-for="i in 3" :key="'p-sk' + i" class="skel-row">
-                      <td colspan="6">
-                        <div class="skel skel-t1"></div>
-                      </td>
-                    </tr>
-                  </template>
-                  <tr v-else v-for="penalty in penalties" :key="penalty.id" class="tbl-row">
-                    <td>#{{ penalty.id }}</td>
-                    <td>{{ penalty.reason }}</td>
-                    <td>₱{{ penalty.amount.toFixed(2) }}</td>
-                    <td>{{ penalty.created_at }}</td>
-                    <td>
-                      <span class="status-badge" :class="penalty.status.toLowerCase()">
-                        {{ penalty.status }}
-                      </span>
-                    </td>
-                    <td class="td-right">
-                      <button v-if="penalty.status === 'Unpaid'" @click="handlePayPenalty(penalty.id)"
-                        class="action-btn-mini">
-                        Pay Penalty
-                      </button>
-                    </td>
-                  </tr>
-                  <tr v-if="!loadingPenalties && penalties.length === 0">
-                    <td colspan="6" class="empty-td">No penalty records found.</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </template>
-        <template v-if="activeSection === 'repository'">
+        <template v-else-if="activeSection === 'repository'">
           <!-- Page title -->
           <div class="content-header">
             <div>
@@ -597,7 +800,7 @@ watch(activeSection, (newSection) => {
                         <h3>No papers found</h3>
                         <p>{{ searchQuery || activeFilter !== 'all' ? 'Try a different search or filter.' :
                           'Upload the first research paper to get started.' }}</p>
-                        <button v-if="!searchQuery && activeFilter === 'all'" @click="router.push({ name: 'upload' })"
+                        <button v-if="!searchQuery && activeFilter === 'all'" @click="setSection('upload')"
                           class="empty-btn">
                           <Plus :size="14" /> Upload Now
                         </button>
@@ -634,6 +837,8 @@ watch(activeSection, (newSection) => {
             </div>
           </div>
         </template>
+
+        <!-- Announcements tab removed -->
 
         <!-- ══ SECTION: USER MANAGEMENT ══════════════════════════════ -->
         <template v-else-if="activeSection === 'users'">
@@ -715,80 +920,7 @@ watch(activeSection, (newSection) => {
           </div>
         </template>
 
-        <!-- ══ SECTION: SYSTEM HEALTH ════════════════════════════════ -->
-        <template v-else-if="activeSection === 'system'">
-          <div class="content-header">
-            <div>
-              <h1 class="content-title">System Health</h1>
-              <p class="content-sub">Monitor the status of LUMIA AI engines and databases.</p>
-            </div>
-          </div>
 
-          <div class="system-grid">
-            <!-- BERT NLP -->
-            <div class="stat-card health-node">
-              <div class="node-status" :data-status="healthData?.bert?.status || 'offline'"></div>
-              <div class="stat-icon green">
-                <Brain :size="18" />
-              </div>
-              <div class="node-info">
-                <span class="node-name">BERT NLP Engine</span>
-                <span class="node-meta">Model: {{ healthData?.bert?.details?.model ||
-                  'multi-qa-MiniLM-L6-cos-v1' }}</span>
-                <div v-if="healthData?.bert?.details?.latency_ms" class="health-latency-pill">
-                  <Activity :size="10" />
-                  <span>{{ healthData.bert.details.latency_ms }}ms</span>
-                </div>
-              </div>
-              <span class="health-badge" :class="healthData?.bert?.status === 'online' ? '' : 'error'">
-                {{ healthData?.bert?.details?.message || (loadingHealth ? 'Checking...' : 'Offline') }}
-              </span>
-            </div>
-
-            <!-- Qdrant -->
-            <div class="stat-card health-node">
-              <div class="node-status" :data-status="healthData?.qdrant?.status || 'offline'"></div>
-              <div class="stat-icon blue">
-                <Database :size="18" />
-              </div>
-              <div class="node-info">
-                <span class="node-name">Qdrant Vector DB</span>
-                <span class="node-meta">Collection: {{ healthData?.qdrant?.details?.collection || 'Local Storage Mode'
-                  }}</span>
-                <span v-if="healthData?.qdrant?.details?.points_count !== undefined" class="node-meta"
-                  style="font-size: 0.6rem;">
-                  Entries: {{ healthData.qdrant.details.points_count }} indexed points
-                </span>
-              </div>
-              <span class="health-badge" :class="healthData?.qdrant?.status === 'online' ? '' : 'error'">
-                {{ healthData?.qdrant?.details?.message || (loadingHealth ? 'Checking...' : 'Disconnected') }}
-              </span>
-            </div>
-
-            <!-- OCR -->
-            <div class="stat-card health-node">
-              <div class="node-status" :data-status="healthData?.ocr?.status || 'offline'"></div>
-              <div class="stat-icon purple">
-                <Server :size="18" />
-              </div>
-              <div class="node-info">
-                <span class="node-name">OCR Service</span>
-                <span class="node-meta">{{ healthData?.ocr?.details?.engine || 'Tesseract + Poppler' }}</span>
-              </div>
-              <span class="health-badge" :class="healthData?.ocr?.status === 'online' ? '' : 'error'">
-                {{ healthData?.ocr?.details?.message || (loadingHealth ? 'Checking...' : 'Missing') }}
-              </span>
-            </div>
-          </div>
-
-          <div class="table-card placeholder-card" style="margin-top: 1rem;">
-            <div class="empty">
-              <Activity :size="44" color="#d1d5db" />
-              <h3>Real-time Monitoring</h3>
-              <p>Performance metrics and engine latency logs will appear here once the connection is established.</p>
-            </div>
-          </div>
-        </template>
 
         <!-- Edit Workspace Overlay -->
         <div v-if="showEditModal" class="workspace-overlay">
@@ -896,8 +1028,64 @@ watch(activeSection, (newSection) => {
 
         <!-- Footer notice -->
         <p class="notice">
-          <ShieldAlert :size="13" /> Only Faculty and Administrators can upload or modify papers.
+          <ShieldAlert :size="13" /> Note: Only Admin, Faculty, and Librarians can upload or modify papers.
+          If an unauthorized user accidentally access this page, please report it to the administrator for bug
+          inspection.
         </p>
+
+        <!-- Modals for Upload -->
+        <Teleport to="body">
+          <div v-if="showStrategyModal" class="modal-overlay">
+            <div class="strategy-modal">
+              <div class="modal-header">
+                <div class="header-icon">
+                  <Settings2 :size="24" color="#10b981" />
+                </div>
+                <div class="header-text">
+                  <h3>Upload method</h3>
+                  <p><strong>{{ file?.name }}</strong></p>
+                </div>
+                <button @click="goBackToStep1" class="close-modal">
+                  <X :size="20" />
+                </button>
+              </div>
+
+              <div class="strategy-options">
+                <button @click="selectStrategy(true)" class="strategy-card smart">
+                  <div class="strategy-icon">
+                    <Sparkles :size="28" />
+                  </div>
+                  <div class="strategy-info">
+                    <h4>Smart Scan</h4>
+                    <p>Automatically extract title, authors, and abstract using OCR.</p>
+                  </div>
+                  <div class="strategy-badge">Recommended</div>
+                </button>
+
+                <button @click="selectStrategy(false)" class="strategy-card manual">
+                  <div class="strategy-icon">
+                    <Eye :size="28" />
+                  </div>
+                  <div class="strategy-info">
+                    <h4>Manual Review</h4>
+                    <p>Just show me the pages. I'll enter the metadata manually.</p>
+                  </div>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="showZoomModal" class="modal-overlay" @click="closeZoom">
+            <div class="zoom-modal" @click.stop>
+              <button class="modal-close" @click="closeZoom">
+                <X :size="24" />
+              </button>
+              <div class="modal-content">
+                <img :src="`data:image/jpeg;base64,${zoomedPage?.thumbnail}`" class="full-page-img" />
+              </div>
+            </div>
+          </div>
+        </Teleport>
 
       </div><!-- /content -->
     </div><!-- /main -->
@@ -910,7 +1098,7 @@ watch(activeSection, (newSection) => {
 ══════════════════════════════════════════════════════════════ */
 .dashboard {
   display: flex;
-  min-height: 100vh;
+  min-height: calc(100vh - 64px);
   background: #f5f7fa;
   font-family: 'Inter', -apple-system, sans-serif;
 }
@@ -919,37 +1107,407 @@ watch(activeSection, (newSection) => {
    Sidebar
 ══════════════════════════════════════════════════════════════ */
 .sidebar {
-  width: 220px;
+  width: 210px;
   flex-shrink: 0;
   background: #00a651;
   display: flex;
   flex-direction: column;
   padding: 0;
   position: sticky;
-  top: 0;
-  height: 100vh;
+  top: 64px;
+  height: calc(100vh - 64px);
   overflow-y: auto;
+  overflow-x: hidden;
+  transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Brand */
 .sidebar-brand {
   display: flex;
   align-items: center;
-  gap: 0.65rem;
-  padding: 1.25rem 1.1rem 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+  gap: 0.6rem;
+  padding: 1rem 1rem 0.9rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+  white-space: nowrap;
 }
 
-.brand-icon {
+.sidebar.collapsed {
+  width: 56px;
+}
+
+/* Hide text labels when collapsed */
+.sidebar.collapsed .brand-text,
+.sidebar.collapsed .sidebar-section-label,
+.sidebar.collapsed .sidebar-item-text,
+.sidebar.collapsed .sidebar-item-arrow,
+.sidebar.collapsed .sidebar-logout span {
+  opacity: 0;
+  width: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* Center icons when collapsed */
+.sidebar.collapsed .sidebar-item {
+  justify-content: center;
+  padding: 0.6rem 0;
+  gap: 0;
+}
+
+/* When collapsed avoid showing full button backgrounds (prevents small rounded squares)
+   and provide a neat circular icon background instead. */
+.sidebar.collapsed .sidebar-item {
+  border-radius: 0;
+  /* remove rounded pill look when narrow */
+  background: transparent;
+}
+
+.sidebar.collapsed .sidebar-item:hover {
+  background: transparent;
+  color: #fff;
+}
+
+.sidebar.collapsed .icon-wrap {
+  width: 34px;
+  height: 34px;
+  margin-right: 0;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
+}
+
+.sidebar.collapsed .sidebar-logout {
+  justify-content: center;
+  padding: 0.55rem 0;
+  gap: 0;
+}
+
+.sidebar.collapsed .sidebar-brand {
+  justify-content: center;
+  padding: 1.5rem 0 1rem;
+  gap: 0;
+}
+
+/* Prevent layout shift of main area */
+.dashboard.sidebar-is-collapsed .dashboard-main {
+  /* inherits flex:1 — no explicit width needed */
+}
+
+/* Sidebar toggle button (hamburger) */
+.sidebar-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 32px;
   height: 32px;
-  background: rgba(255, 255, 255, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: #4b5563;
+  cursor: pointer;
+  flex-shrink: 0;
+  margin-right: 0.5rem;
+  transition: background 0.15s, color 0.15s;
+}
+
+.sidebar-toggle:hover {
+  background: #f3f4f6;
+  color: #111;
+}
+
+/* ── Dashboard 2-column grid ─────────────────────────────────── */
+.dash-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-top: 1.25rem;
+}
+
+.dash-panel {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.dash-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 1.25rem;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.dash-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #374151;
+}
+
+.dash-panel-link {
+  background: none;
+  border: none;
+  color: #10b981;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.15s;
+}
+
+.dash-panel-link:hover {
+  color: #059669;
+}
+
+.dash-panel-body {
+  flex: 1;
+  overflow-y: auto;
+  max-height: 360px;
+}
+
+/* Recent papers list */
+.dash-paper-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 1.25rem;
+  border-bottom: 1px solid #f9fafb;
+  transition: background 0.1s;
+}
+
+.dash-paper-row:last-child {
+  border-bottom: none;
+}
+
+.dash-paper-row:hover {
+  background: #fafff9;
+}
+
+.dash-paper-av {
+  width: 32px;
+  height: 32px;
   border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
+  font-weight: 800;
+  font-size: 0.65rem;
   flex-shrink: 0;
+  letter-spacing: 0.3px;
+}
+
+.dash-paper-av[data-t="blue"] {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.dash-paper-av[data-t="orange"] {
+  background: #fff7ed;
+  color: #d97706;
+}
+
+.dash-paper-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.dash-paper-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #111;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dash-paper-meta {
+  font-size: 0.68rem;
+  color: #9ca3af;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dash-type-chip {
+  font-size: 0.6rem;
+  font-weight: 800;
+  padding: 0.15rem 0.45rem;
+  border-radius: 99px;
+  flex-shrink: 0;
+  letter-spacing: 0.3px;
+}
+
+.dash-type-chip.blue {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.dash-type-chip.orange {
+  background: #fff7ed;
+  color: #d97706;
+}
+
+/* Quick overview grid */
+.dash-overview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+  padding: 1rem;
+}
+
+.dash-ov-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1rem 0.5rem;
+  border-radius: 12px;
+  border: 1px solid #f3f4f6;
+  background: #fafafa;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, transform 0.15s;
+  text-align: center;
+}
+
+.dash-ov-card:hover {
+  border-color: #10b981;
+  background: #f0fdf4;
+  transform: translateY(-2px);
+}
+
+.dash-ov-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dash-ov-icon.green {
+  background: #ecfdf5;
+  color: #10b981;
+}
+
+.dash-ov-icon.blue {
+  background: #eff6ff;
+  color: #3b82f6;
+}
+
+.dash-ov-icon.orange {
+  background: #fff7ed;
+  color: #f59e0b;
+}
+
+.dash-ov-icon.purple {
+  background: #faf5ff;
+  color: #8b5cf6;
+}
+
+.dash-ov-icon.gray {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.dash-ov-icon.teal {
+  background: #f0fdfa;
+  color: #0d9488;
+}
+
+.dash-ov-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #374151;
+  line-height: 1.2;
+}
+
+.dash-ov-hint {
+  font-size: 0.62rem;
+  color: #9ca3af;
+}
+
+/* Panel Stats Layout */
+.dash-panel-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1.25rem;
+  border-bottom: 1px solid #f3f4f6;
+  background: #fcfcfc;
+}
+
+.dash-pstat-card {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  background: #fff;
+  border: 1px solid #f3f4f6;
+  border-radius: 12px;
+}
+
+.dash-pstat-info {
+  flex: 1;
+}
+
+.pstat-multi {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+/* Loading & empty states */
+.dash-loading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1.5rem 1.25rem;
+  font-size: 0.8rem;
+  color: #9ca3af;
+}
+
+.dash-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 2.5rem 1rem;
+  color: #9ca3af;
+  font-size: 0.8rem;
+}
+
+/* Responsive: collapse grid on smaller screens */
+@media (max-width: 1024px) {
+  .dash-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dash-overview-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+
+
+.brand-icon {
+  width: 38px;
+  height: 38px;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .brand-text {
@@ -967,20 +1525,20 @@ watch(activeSection, (newSection) => {
 
 .brand-sub {
   font-size: 0.6rem;
-  color: rgba(255, 255, 255, 0.6);
-  font-weight: 500;
+  color: rgba(255, 255, 255, 0.55);
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.4px;
+  letter-spacing: 0.6px;
 }
 
 /* Section label */
 .sidebar-section-label {
-  font-size: 0.62rem;
+  font-size: 0.65rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.8px;
-  color: rgba(255, 255, 255, 0.55);
-  padding: 1.1rem 1.1rem 0.4rem;
+  letter-spacing: 1px;
+  color: rgba(255, 255, 255, 0.5);
+  padding: 1.5rem 1.25rem 0.6rem;
   margin: 0;
 }
 
@@ -988,23 +1546,24 @@ watch(activeSection, (newSection) => {
 .sidebar-nav {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 0 0.6rem;
+  gap: 4px;
+  padding: 0 0.5rem;
 }
 
 .sidebar-item {
   display: flex;
   align-items: center;
-  gap: 0.7rem;
-  padding: 0.6rem 0.75rem;
-  border-radius: 8px;
+  gap: 0.6rem;
+  padding: 0.6rem 0.6rem 0.6rem 0.7rem;
+  border-radius: 9px;
   border: none;
   background: none;
   cursor: pointer;
   width: 100%;
   text-align: left;
-  transition: background 0.15s;
-  color: rgba(255, 255, 255, 0.75);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  color: rgba(255, 255, 255, 0.7);
+  position: relative;
 }
 
 .sidebar-item:hover {
@@ -1013,8 +1572,20 @@ watch(activeSection, (newSection) => {
 }
 
 .sidebar-item.active {
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(255, 255, 255, 0.15);
   color: #fff;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.sidebar-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 20%;
+  height: 60%;
+  width: 3px;
+  background: #fff;
+  border-radius: 0 4px 4px 0;
 }
 
 .sidebar-item.active .sidebar-item-icon {
@@ -1025,6 +1596,32 @@ watch(activeSection, (newSection) => {
   flex-shrink: 0;
 }
 
+/* Icon wrapper gives a subtle circular surface for icons */
+.icon-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  margin-right: 0.6rem;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 10px;
+  transition: background 0.18s ease, transform 0.18s ease;
+}
+
+.icon-wrap.logout-wrap {
+  margin-right: 0.5rem
+}
+
+.sidebar-item:hover .icon-wrap {
+  background: rgba(255, 255, 255, 0.08);
+  transform: translateY(-1px)
+}
+
+.sidebar-item.active .icon-wrap {
+  background: rgba(255, 255, 255, 0.18);
+}
+
 .sidebar-item-text {
   flex: 1;
   display: flex;
@@ -1033,7 +1630,7 @@ watch(activeSection, (newSection) => {
 }
 
 .sidebar-item-label {
-  font-size: 0.82rem;
+  font-size: 0.85rem;
   font-weight: 600;
   line-height: 1.2;
 }
@@ -1110,7 +1707,7 @@ watch(activeSection, (newSection) => {
   align-items: center;
   justify-content: space-between;
   position: sticky;
-  top: 0;
+  top: 64px;
   z-index: 30;
   gap: 1rem;
 }
@@ -1221,6 +1818,20 @@ watch(activeSection, (newSection) => {
   display: flex;
   align-items: center;
   gap: 0.85rem;
+}
+
+.stat-split {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  flex: 1;
+}
+
+.stat-divider {
+  width: 1px;
+  height: 24px;
+  background: #e5e7eb;
+  flex-shrink: 0;
 }
 
 .stat-icon {
@@ -2100,6 +2711,318 @@ textarea {
   margin-top: 1.25rem;
 }
 
+/* ── Status Badges (Borrow / Penalty tables) ─────────────────── */
+.status-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.22rem 0.65rem;
+  border-radius: 99px;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.status-badge.borrowed {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.status-badge.returned {
+  background: #f0fdf4;
+  color: #16a34a;
+}
+
+.status-badge.overdue {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.status-badge.unpaid {
+  background: #fff7ed;
+  color: #d97706;
+}
+
+.status-badge.paid {
+  background: #f0fdf4;
+  color: #16a34a;
+}
+
+.health-badge.error {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.action-btn-mini {
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  color: #374151;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.3rem 0.7rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.action-btn-mini:hover {
+  background: #10b981;
+  border-color: #10b981;
+  color: #fff;
+}
+
+/* ── Search Lab ─────────────────────────────────────────────── */
+.lab-panel {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 14px;
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.lab-input-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.lab-controls {
+  display: flex;
+  gap: 2rem;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.lab-control-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-width: 200px;
+}
+
+.lab-control-item label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #6b7280;
+}
+
+.lab-slider {
+  width: 200px;
+  accent-color: #10b981;
+  cursor: pointer;
+}
+
+.lab-slider-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.65rem;
+  color: #9ca3af;
+  width: 200px;
+}
+
+.lab-log {
+  background: #0f172a;
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.lab-log-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.4rem;
+}
+
+.lab-log-icon {
+  color: #10b981;
+  font-size: 0.65rem;
+}
+
+.lab-log-method {
+  color: #10b981;
+  font-size: 0.72rem;
+  font-weight: 700;
+  background: rgba(16, 185, 129, 0.1);
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+}
+
+.lab-log-url {
+  color: #94a3b8;
+  font-size: 0.7rem;
+  word-break: break-all;
+}
+
+.lab-log-meta {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.lab-meta-chip {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+}
+
+.lab-meta-chip.green {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+}
+
+.lab-meta-chip.gray {
+  background: rgba(148, 163, 184, 0.15);
+  color: #94a3b8;
+}
+
+.lab-error {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  font-size: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+.lab-results {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.lab-result-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 1rem 1.25rem;
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  transition: border-color 0.15s;
+}
+
+.lab-result-card:hover {
+  border-color: #10b981;
+}
+
+.lab-result-rank {
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: #d1d5db;
+  min-width: 28px;
+  padding-top: 2px;
+}
+
+.lab-result-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.lab-result-top {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+}
+
+.lab-score-badge {
+  font-size: 0.7rem;
+  font-weight: 800;
+  padding: 0.2rem 0.6rem;
+  border-radius: 99px;
+}
+
+.lab-score-badge.high {
+  background: #f0fdf4;
+  color: #16a34a;
+}
+
+.lab-score-badge.mid {
+  background: #fffbeb;
+  color: #d97706;
+}
+
+.lab-score-badge.low {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.lab-result-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #111;
+  margin-bottom: 0.2rem;
+  line-height: 1.35;
+}
+
+.lab-result-meta {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  margin-bottom: 0.5rem;
+}
+
+.lab-result-abstract {
+  font-size: 0.82rem;
+  color: #6b7280;
+  line-height: 1.55;
+  margin-bottom: 0.5rem;
+}
+
+.lab-raw-score {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.68rem;
+  color: #9ca3af;
+}
+
+.lab-raw-score code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  background: #f3f4f6;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  color: #374151;
+  font-size: 0.7rem;
+}
+
+.lab-intro {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 3rem 2rem;
+  color: #9ca3af;
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+.lab-intro strong {
+  color: #374151;
+}
+
+/* Spin animation for loader */
+.spin,
+.spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* ── Role Preview ── */
 .role-preview {
   display: flex;
@@ -2331,5 +3254,908 @@ textarea {
 .node-status[data-status="offline"] {
   background: #ef4444;
   box-shadow: 0 0 8px rgba(239, 68, 68, 0.4);
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Upload Section Styles (Ported from up_win.vue)
+══════════════════════════════════════════════════════════════ */
+.upload-section {
+  padding: 1rem 0;
+  position: relative;
+}
+
+/* Vertical Step Rail */
+.steps-rail {
+  position: fixed;
+  right: 2rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  z-index: 100;
+  width: 60px;
+}
+
+.step-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  color: #94a3b8;
+  position: relative;
+}
+
+.step-num {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: white;
+  border: 2px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.85rem;
+  z-index: 2;
+  position: relative;
+  transition: all 0.3s;
+}
+
+.active .step-num {
+  border-color: #10b981;
+  color: #10b981;
+}
+
+.completed .step-num {
+  background: #10b981;
+  border-color: #10b981;
+  color: white;
+}
+
+.step-line-v {
+  width: 2px;
+  height: 32px;
+  background: #e2e8f0;
+  margin: 0.15rem 0;
+}
+
+.step-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Pulse Effect */
+.pulse-ring {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 4px solid #10b981;
+  animation: pulse 2s infinite;
+  opacity: 0;
+  z-index: 1;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.5;
+  }
+
+  100% {
+    transform: scale(2);
+    opacity: 0;
+  }
+}
+
+.standard-container {
+  max-width: 650px;
+  margin: 2rem auto;
+}
+
+.upload-card {
+  background: white;
+  padding: 3rem;
+  border-radius: 20px;
+  text-align: center;
+  border: 1px solid #eef2f6;
+}
+
+.card-header {
+  margin-bottom: 2.5rem;
+}
+
+.icon-circle {
+  width: 64px;
+  height: 64px;
+  background: #f0fdf4;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 1.5rem;
+}
+
+.upload-title {
+  font-size: 1.75rem;
+  margin-bottom: 0.75rem !important;
+  color: #0f172a;
+  font-weight: 800;
+}
+
+/* Review UI */
+.review-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.review-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: white;
+  padding: 1.25rem 2rem;
+  border-radius: 16px;
+  margin-bottom: 1.5rem;
+  border: 1px solid #eef2f6;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.header-icon {
+  background: #ecfdf5;
+  width: 50px;
+  height: 50px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.header-titles {
+  display: flex;
+  flex-direction: column;
+}
+
+.review-title {
+  font-size: 1.5rem;
+  margin: 0;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.header-subtext {
+  margin: 0.25rem 0 0;
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.file-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.2rem;
+}
+
+.file-info-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.file-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #94a3b8;
+  letter-spacing: 0.5px;
+}
+
+.file-name {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #1e293b;
+  max-width: 300px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.selection-count {
+  color: #10b981;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.review-grid {
+  display: grid;
+  grid-template-columns: 420px 1fr;
+  gap: 1.5rem;
+  flex: 1;
+  align-items: start;
+}
+
+.metadata-form {
+  background: white;
+  padding: 1.75rem;
+  border-radius: 16px;
+  border: 1px solid #eef2f6;
+}
+
+.section-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.step-badge {
+  background: #0f172a;
+  color: white;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.section-banner h4 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.required-badge {
+  background: #fef2f2;
+  color: #ef4444;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.15rem 0.5rem;
+  border-radius: 6px;
+}
+
+.input-group {
+  margin-bottom: 1.5rem;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.input-group label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #4b5563;
+  margin-bottom: 0.4rem;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.metadata-form textarea,
+.metadata-form input,
+.metadata-form select {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  font-size: 0.95rem;
+  background: #f9fafb;
+  box-sizing: border-box;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.metadata-form textarea:focus,
+.metadata-form input:focus,
+.metadata-form select:focus {
+  outline: none;
+  border-color: #10b981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+}
+
+.metadata-form textarea.abstract-area {
+  height: 280px;
+  resize: none;
+  font-family: inherit;
+  line-height: 1.5;
+}
+
+.row {
+  display: flex;
+  gap: 1.5rem;
+  width: 100%;
+  align-items: flex-start;
+}
+
+.row .input-group {
+  flex: 1;
+}
+
+.authors-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.author-input-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.remove-btn {
+  background: #fee2e2;
+  color: #ef4444;
+  border: none;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.remove-btn:hover {
+  background: #fecaca;
+  color: #dc2626;
+}
+
+.add-author-btn {
+  background: #f0fdf4;
+  color: #10b981;
+  border: 1px dashed #10b981;
+  padding: 0.5rem;
+  border-radius: 10px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  margin-top: 0.25rem;
+  transition: all 0.2s;
+}
+
+.add-author-btn:hover {
+  background: #dcfce7;
+}
+
+.text-btn {
+  background: none;
+  border: none;
+  color: #10b981;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+
+.text-btn:hover {
+  text-decoration: underline;
+}
+
+.dot {
+  width: 4px;
+  height: 4px;
+  background: #cbd5e1;
+  border-radius: 50%;
+}
+
+.page-selector {
+  background: white;
+  padding: 1.75rem;
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #eef2f6;
+}
+
+.selector-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.selector-hint {
+  font-size: 0.85rem;
+  color: #64748b;
+  margin: 0;
+}
+
+.selector-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.thumbnails-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 1.25rem;
+  overflow-y: auto;
+  padding: 0.25rem;
+}
+
+.page-card {
+  cursor: pointer;
+  border-radius: 10px;
+  border: 2px solid #f1f5f9;
+  background: #fff;
+  transition: all 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+
+.thumbnail-wrapper {
+  position: relative;
+  aspect-ratio: 1 / 1.41;
+  overflow: hidden;
+  background: #f8fafc;
+}
+
+.page-thumb-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  transition: transform 0.4s;
+}
+
+.page-card:hover .page-thumb-img {
+  transform: scale(1.08);
+}
+
+.page-card.is-selected {
+  border-color: #10b981;
+}
+
+.selection-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(16, 185, 129, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.is-selected .selection-overlay {
+  opacity: 1;
+}
+
+.page-num {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  background: rgba(15, 23, 42, 0.8);
+  color: white;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.65rem;
+  font-weight: 700;
+}
+
+.zoom-trigger {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  background: white;
+  color: #0f172a;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  opacity: 0;
+  transform: translateY(5px);
+  transition: all 0.2s;
+  border: none;
+  z-index: 10;
+}
+
+.page-card:hover .zoom-trigger {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.zoom-trigger:hover {
+  background: #10b981;
+  color: white;
+}
+
+.confirm-btn {
+  padding: 0.6rem 1.25rem;
+  border-radius: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s;
+  background: #10b981;
+  color: white;
+}
+
+.confirm-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+}
+
+.confirm-btn.primary {
+  background: #10b981;
+}
+
+.confirm-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  padding: 2rem;
+}
+
+.drop-zone {
+  border: 2px dashed #e2e8f0;
+  border-radius: 16px;
+  padding: 4rem 2rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.drop-zone:hover:not(.is-processing) {
+  border-color: #10b981;
+  background: #f0fdf4;
+}
+
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  text-align: center;
+}
+
+.loading-state h3 {
+  margin: 0.5rem 0 0.25rem;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.loading-state p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.page-card {
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+  border-radius: 10px;
+  border: 2px solid #f1f5f9;
+  background: #fff;
+  transition: all 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+
+.page-preview-text {
+  padding: 0.75rem;
+  font-size: 0.7rem;
+  color: #64748b;
+  height: 54px;
+  overflow: hidden;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  background: #fcfcfc;
+}
+
+.strategy-modal {
+  background: white;
+  width: 90%;
+  max-width: 500px;
+  border-radius: 24px;
+  padding: 2.5rem 2rem;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  position: relative;
+  animation: modalSlide 0.3s ease-out;
+}
+
+@keyframes modalSlide {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.modal-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  position: relative;
+}
+
+.header-icon {
+  background: #f0fdf4;
+  padding: 0.75rem;
+  border-radius: 12px;
+  flex-shrink: 0;
+}
+
+.header-text h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.header-text p {
+  margin: 0.25rem 0 0;
+  color: #64748b;
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.close-modal {
+  position: absolute;
+  top: -0.5rem;
+  right: -0.5rem;
+  background: #f1f5f9;
+  border: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: #64748b;
+  transition: all 0.2s;
+}
+
+.close-modal:hover {
+  background: #e2e8f0;
+  color: #0f172a;
+  transform: rotate(90deg);
+}
+
+.strategy-options {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.strategy-card {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 1.5rem;
+  border: 2px solid #f1f5f9;
+  border-radius: 18px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s;
+  width: 100%;
+  text-align: left;
+  position: relative;
+}
+
+.strategy-card:hover {
+  border-color: #10b981;
+  background: #f0fdf4;
+  transform: translateX(6px);
+}
+
+.strategy-icon {
+  width: 54px;
+  height: 54px;
+  background: #f8fafc;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #64748b;
+  transition: all 0.3s;
+}
+
+.smart .strategy-icon {
+  background: #ecfdf5;
+  color: #10b981;
+}
+
+.manual .strategy-icon {
+  background: #eff6ff;
+  color: #3b82f6;
+}
+
+.strategy-info h4 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.strategy-info p {
+  margin: 0.25rem 0 0;
+  font-size: 0.9rem;
+  color: #64748b;
+  line-height: 1.4;
+}
+
+.strategy-badge {
+  position: absolute;
+  top: -12px;
+  right: 24px;
+  background: #10b981;
+  color: white;
+  font-size: 0.65rem;
+  font-weight: 800;
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.2);
+}
+
+.success-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+/* Zoom Modal */
+.zoom-modal {
+  background: white;
+  width: 95%;
+  max-width: 700px;
+  max-height: 90vh;
+  border-radius: 24px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: modalSlide 0.3s ease-out;
+}
+
+.modal-content {
+  height: 100%;
+  overflow-y: auto;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  background: #f1f5f9;
+  padding: 1rem;
+}
+
+/* Custom Webkit Scrollbar for the zoom modal */
+.modal-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.modal-content::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+.modal-content::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.modal-content::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+.modal-close {
+  position: absolute;
+  top: 1.25rem;
+  right: 1.25rem;
+  background: white;
+  border: 1px solid #e2e8f0;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  cursor: pointer;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  transition: all 0.2s;
+}
+
+.modal-close:hover {
+  background: #f8fafc;
+  color: #ef4444;
+}
+
+.full-page-img {
+  width: 100%;
+  height: auto;
+  min-height: 100%;
+  object-fit: contain;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  background: white;
+}
+
+/* ── Responsive ── */
+@media (max-width: 1024px) {
+  .review-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .metadata-form {
+    max-height: 400px;
+  }
+
+  .steps-rail {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .review-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .header-right {
+    width: 100%;
+    justify-content: space-between;
+  }
 }
 </style>

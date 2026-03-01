@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Search, BookOpen, ArrowLeft, Filter, Calendar } from 'lucide-vue-next'
+import { Filter, Calendar } from 'lucide-vue-next'
 import { api, type SearchResult, type SearchParams } from '../services/api'
 const route = useRoute()
 const router = useRouter()
@@ -51,31 +51,26 @@ watch([() => route.query.q, threshold, minYear, maxYear, selectedProjectType, se
   performSearch()
 })
 
-const goToHome = () => router.push({ name: 'home' })
 const viewDetail = (id: number) => router.push({ name: 'detail', params: { id } })
 </script>
 
 <template>
   <div class="results-page">
-    <header class="results-header">
-      <div class="header-left">
-        <button @click="goToHome" class="back-btn">
-          <ArrowLeft :size="20" />
-        </button>
-        <div class="header-search">
-          <Search class="search-icon" :size="18" />
-          <input v-model="query" @keyup.enter="performSearch" placeholder="Search research..." />
-        </div>
-        <!-- Mobile filter toggle -->
-        <button class="filter-toggle-btn" @click="showFilters = !showFilters" :class="{ active: showFilters }">
-          <Filter :size="16" />
-        </button>
+    <!-- Slim results topbar: filter toggle (mobile) + result count -->
+    <div class="results-topbar">
+      <div class="results-topbar-left">
+        <span class="results-count-label" v-if="!loading">
+          <strong>{{ results.length }}</strong> result{{ results.length !== 1 ? 's' : '' }}
+          <span v-if="query"> for "{{ query }}"</span>
+        </span>
+        <span v-else class="results-count-label">Searching...</span>
       </div>
-      <div class="logo-small">
-        <BookOpen :size="20" color="#10b981" />
-        <span>Lumia</span>
-      </div>
-    </header>
+      <!-- Mobile filter toggle -->
+      <button class="filter-toggle-btn" @click="showFilters = !showFilters" :class="{ active: showFilters }">
+        <Filter :size="16" />
+        <span>Filters</span>
+      </button>
+    </div>
 
     <main class="results-layout">
       <aside class="filters-sidebar" v-show="showFilters || isDesktop">
@@ -163,16 +158,29 @@ const viewDetail = (id: number) => router.push({ name: 'detail', params: { id } 
   min-height: 100vh;
 }
 
-.results-header {
+/* Slim topbar inside results page */
+.results-topbar {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 0.75rem 2rem;
-  background: white;
+  justify-content: space-between;
+  padding: 0.65rem 2rem;
+  background: #fff;
   border-bottom: 1px solid #eee;
   position: sticky;
   top: 0;
   z-index: 10;
+  gap: 1rem;
+}
+
+.results-topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.results-count-label {
+  font-size: 0.875rem;
+  color: #6b7280;
 }
 
 .header-left {
@@ -209,13 +217,7 @@ const viewDetail = (id: number) => router.push({ name: 'detail', params: { id } 
   font-size: 0.95rem;
 }
 
-.logo-small {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-weight: 700;
-  color: #222;
-}
+/* .logo-small removed — using global comp_nav */
 
 .results-layout {
   display: flex;
@@ -427,8 +429,13 @@ const viewDetail = (id: number) => router.push({ name: 'detail', params: { id } 
   color: #10b981;
 }
 
-/* ── Tablet (≤768px) ─────────────────────────────────────────── */
+/* ── Tablet (≤768px) ────────────────────────────────────────── */
 @media (max-width: 768px) {
+  .results-topbar {
+    padding: 0.5rem 1rem;
+    top: 0;
+  }
+
   .results-layout {
     flex-direction: column;
     padding: 1.25rem;
@@ -452,21 +459,9 @@ const viewDetail = (id: number) => router.push({ name: 'detail', params: { id } 
   .filter-toggle-btn {
     display: flex;
   }
-
-  .results-header {
-    padding: 0.65rem 1rem;
-  }
-
-  .header-search {
-    flex: 1;
-  }
-
-  .logo-small span {
-    display: none;
-  }
 }
 
-/* ── Phone (≤480px) — Primary Android target 360–412px ───────── */
+/* ── Phone (≤480px) ────────────────────────────────────────── */
 @media (max-width: 480px) {
   .results-layout {
     padding: 0.85rem;
@@ -478,14 +473,6 @@ const viewDetail = (id: number) => router.push({ name: 'detail', params: { id } 
     background: #f9fafb;
     border: 1px solid #eee;
     border-radius: 10px;
-  }
-
-  .results-header {
-    padding: 0.5rem 0.75rem;
-  }
-
-  .header-search {
-    padding: 0.4rem 0.75rem;
   }
 
   .result-card {
@@ -507,3 +494,4 @@ const viewDetail = (id: number) => router.push({ name: 'detail', params: { id } 
   }
 }
 </style>
+
