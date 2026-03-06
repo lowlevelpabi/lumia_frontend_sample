@@ -37,9 +37,9 @@ const handleSearch = () => {
     <!-- Hero Section -->
     <header class="home-hero">
       <div class="hero-inner">
-        <h1 class="hero-title">SMART RESEARCH</h1>
-        <p class="hero-subtitle">Test subtitle
-          </p>
+        <h1 class="hero-title">Lumia: Smart Research</h1>
+        <p class="hero-subtitle">Search and discover research papers with ease.
+        </p>
 
         <div class="hero-search">
           <div class="search-box">
