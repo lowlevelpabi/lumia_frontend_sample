@@ -48,14 +48,16 @@ const logout = () => {
         <span class="logo-text">LUMIA</span>
       </RouterLink>
 
-      <!-- Center: Search Bar (Hidden on small mobile, shown on tablet/desktop) -->
-      <div class="nav-search-wrap">
-        <div class="nav-search">
-          <Search :size="16" class="search-icon" />
-          <input v-model="searchQuery" type="text" placeholder="Search publications, authors, topics..."
-            @keyup.enter="handleSearch" />
+      <!-- Center: Search Bar (Hidden on home and management pages to avoid redundancy) -->
+      <transition name="fade">
+        <div v-if="!['home', 'management'].includes(route.name as string)" class="nav-search-wrap">
+          <div class="nav-search">
+            <Search :size="16" class="search-icon" />
+            <input v-model="searchQuery" type="text" placeholder="Search publications, authors, topics..."
+              @keyup.enter="handleSearch" />
+          </div>
         </div>
-      </div>
+      </transition>
 
       <!-- Right: Links & Actions -->
       <div class="nav-actions" :class="{ 'mobile-open': showMobileMenu }">
@@ -268,5 +270,17 @@ const logout = () => {
   .nav-divider {
     display: none;
   }
+}
+
+/* Transitions */
+.fade-enter-active,
+.fade-leave-active {
+  transition: all 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+  transform: translateY(-10px);
 }
 </style>

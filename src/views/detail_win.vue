@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft, Calendar, User, FileText, Share2, BookOpen, Eye, Award, CheckCircle } from 'lucide-vue-next'
+import { ArrowLeft, Calendar, User, FileText, Share2, BookOpen, Eye, Award, CheckCircle, FileIcon, Sparkles, TrendingUp, MessageSquare, ImageIcon, Loader2 } from 'lucide-vue-next'
 import { api, type Paper, type SearchResult } from '../services/api'
 
 const route = useRoute()
@@ -16,6 +16,45 @@ const citationCount = ref(0)
 const hasCited = ref(false)
 const citeLoading = ref(false)
 const isLoggedIn = computed(() => !!localStorage.getItem('token'))
+
+// Document view state
+const activeTab = ref<'abstract' | 'introduction' | 'methods' | 'results' | 'discussion' | 'document'>('abstract')
+const pdfUrl = computed(() => {
+  const base = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api/v1'
+  return paper.value ? `${base}/papers/${paper.value.id}/pdf` : ''
+})
+
+// Section page viewer state
+// Cache so each section only fetches once per page load
+const sectionPageCache = ref<Record<string, { pages: { page_num: number; thumbnail: string }[], loading: boolean, shown: boolean }>>({
+  introduction: { pages: [], loading: false, shown: false },
+  methods: { pages: [], loading: false, shown: false },
+  results: { pages: [], loading: false, shown: false },
+  discussion: { pages: [], loading: false, shown: false },
+})
+
+const toggleSectionPages = async (section: string) => {
+  const s = sectionPageCache.value[section]
+  if (!s) return
+  if (s.shown) { s.shown = false; return }     // hide if already visible
+  if (s.pages.length > 0) { s.shown = true; return }  // already fetched, just show
+  if (!paper.value) return
+
+  s.loading = true
+  s.shown = true
+  try {
+    const base = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api/v1'
+    const res = await fetch(`${base}/papers/${paper.value.id}/section-pages/${section}`)
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const data = await res.json()
+    s.pages = data.pages ?? []
+  } catch (e) {
+    console.error('Failed to load section pages:', e)
+    s.pages = []
+  } finally {
+    s.loading = false
+  }
+}
 
 // Document preview toggle
 const showFullAbstract = ref(false)
@@ -147,38 +186,114 @@ const abstractPreview = computed(() => {
 
         <hr class="divider" />
 
-        <!-- Abstract Section -->
-        <section class="paper-section">
-          <h3>
-            <FileText :size="17" /> Abstract
-          </h3>
-          <p class="body-text">{{ abstractPreview }}</p>
-          <button v-if="paper.abstract && paper.abstract.length > ABSTRACT_PREVIEW_LIMIT" class="read-more-btn"
-            @click="showFullAbstract = !showFullAbstract">
-            {{ showFullAbstract ? 'Show less' : 'Read full abstract' }}
+        <!-- Tab Toggle -->
+        <div class="doc-tabs">
+          <button class="doc-tab" :class="{ active: activeTab === 'abstract' }" @click="activeTab = 'abstract'">
+            <FileText :size="15" /> Abstract
           </button>
-        </section>
+          <button v-if="paper.introduction" class="doc-tab" :class="{ active: activeTab === 'introduction' }"
+            @click="activeTab = 'introduction'">
+            <BookOpen :size="15" /> Introduction
+          </button>
+          <button v-if="paper.methods" class="doc-tab" :class="{ active: activeTab === 'methods' }"
+            @click="activeTab = 'methods'">
+            <Sparkles :size="15" /> Methods
+          </button>
+          <button v-if="paper.results" class="doc-tab" :class="{ active: activeTab === 'results' }"
+            @click="activeTab = 'results'">
+            <TrendingUp :size="15" /> Results
+          </button>
+          <button v-if="paper.discussion" class="doc-tab" :class="{ active: activeTab === 'discussion' }"
+            @click="activeTab = 'discussion'">
+            <MessageSquare :size="15" /> Discussion
+          </button>
+          <button class="doc-tab" :class="{ active: activeTab === 'document' }" @click="activeTab = 'document'">
+            <FileIcon :size="15" /> Full Document
+          </button>
+        </div>
 
-        <!-- Keywords -->
-        <section class="paper-section" v-if="paper.keywords">
-          <h3>
-            <BookOpen :size="17" /> Keywords
-          </h3>
-          <div class="tags">
-            <span v-for="tag in paper.keywords.split(',')" :key="tag" class="tag">
-              {{ tag.trim() }}
-            </span>
+        <!-- Abstract Tab -->
+        <div v-if="activeTab === 'abstract'">
+          <!-- Abstract Section -->
+          <section class="paper-section">
+            <h3>
+              <FileText :size="17" /> Abstract
+            </h3>
+            <p class="body-text">{{ abstractPreview }}</p>
+            <button v-if="paper.abstract && paper.abstract.length > ABSTRACT_PREVIEW_LIMIT" class="read-more-btn"
+              @click="showFullAbstract = !showFullAbstract">
+              {{ showFullAbstract ? 'Show less' : 'Read full abstract' }}
+            </button>
+          </section>
+
+          <!-- Keywords -->
+          <section class="paper-section" v-if="paper.keywords">
+            <h3>
+              <BookOpen :size="17" /> Keywords
+            </h3>
+            <div class="tags">
+              <span v-for="tag in paper.keywords.split(',')" :key="tag" class="tag">
+                {{ tag.trim() }}
+              </span>
+            </div>
+          </section>
+        </div>
+
+        <!-- IMRAD Sections — Hybrid: readable text + on-demand page images -->
+        <template v-for="(cfg, key) in {
+          introduction: { label: 'Introduction', icon: 'BookOpen', content: paper.introduction },
+          methods: { label: 'Methodology', icon: 'Sparkles', content: paper.methods },
+          results: { label: 'Results & Findings', icon: 'TrendingUp', content: paper.results },
+          discussion: { label: 'Discussion', icon: 'MessageSquare', content: paper.discussion },
+        }" :key="key">
+          <div v-if="activeTab === key" class="paper-section imrad-hybrid">
+
+            <!-- Section header + View Pages toggle -->
+            <div class="imrad-section-header">
+              <h3>
+                <BookOpen v-if="key === 'introduction'" :size="17" />
+                <Sparkles v-else-if="key === 'methods'" :size="17" />
+                <TrendingUp v-else-if="key === 'results'" :size="17" />
+                <MessageSquare v-else :size="17" />
+                {{ cfg.label }}
+              </h3>
+              <button class="view-pages-btn" :class="{ active: sectionPageCache[key]?.shown }"
+                @click="toggleSectionPages(key)" title="Toggle original PDF pages for this section">
+                <Loader2 v-if="sectionPageCache[key]?.loading" :size="14" class="spin" />
+                <ImageIcon v-else :size="14" />
+                {{ sectionPageCache[key]?.shown ? 'Hide Page(s)' : 'View Page(s)' }}
+              </button>
+            </div>
+
+            <!-- Extracted text (always visible, selectable, copyable) -->
+            <div v-if="cfg.content" class="section-text-wrap">
+              <pre class="section-text">{{ cfg.content }}</pre>
+            </div>
+            <p v-else class="no-content-note">No extracted text available for this section.</p>
+
+            <!-- On-demand PDF page thumbnails -->
+            <div v-if="sectionPageCache[key]?.shown" class="section-pages-viewer">
+              <div v-if="sectionPageCache[key]?.loading" class="pages-loading">
+                <Loader2 :size="22" class="spin" /> Loading pages...
+              </div>
+              <div v-else-if="sectionPageCache[key]?.pages.length === 0" class="pages-empty">
+                No page images available for this section.
+              </div>
+              <div v-else class="pages-stack">
+                <div v-for="pg in sectionPageCache[key].pages" :key="pg.page_num" class="page-card">
+                  <div class="page-label">Page {{ pg.page_num }}</div>
+                  <img :src="'data:image/jpeg;base64,' + pg.thumbnail" :alt="'Page ' + pg.page_num" class="page-img" />
+                </div>
+              </div>
+            </div>
+
           </div>
-        </section>
+        </template>
 
-        <!-- Document Preview Note -->
-        <section class="paper-section preview-notice">
-          <p>
-            <FileText :size="14" style="display:inline;margin-right:4px;vertical-align:middle" />
-            <strong>Preview Only</strong> — This page shows the abstract and keywords as provided by the researchers.
-            The full manuscript is available in the institutional repository upon authorized access.
-          </p>
-        </section>
+        <!-- Full Document Tab -->
+        <div v-if="activeTab === 'document'" class="pdf-viewer-wrap">
+          <iframe :src="pdfUrl" class="pdf-iframe" title="Full Research Document" allowfullscreen />
+        </div>
       </main>
 
       <!-- Sidebar: Related Studies -->
@@ -428,6 +543,56 @@ const abstractPreview = computed(() => {
   color: #555;
 }
 
+/* Document Tabs */
+.doc-tabs {
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: 2px solid #e5e7eb;
+  margin-bottom: 1.75rem;
+}
+
+.doc-tab {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.65rem 1.1rem;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #6b7280;
+  transition: color 0.15s, border-color 0.15s;
+  border-radius: 6px 6px 0 0;
+}
+
+.doc-tab:hover {
+  color: #111;
+}
+
+.doc-tab.active {
+  color: #10b981;
+  border-bottom-color: #10b981;
+  background: #f0fdf4;
+}
+
+/* PDF Iframe */
+.pdf-viewer-wrap {
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #f3f4f6;
+}
+
+.pdf-iframe {
+  width: 100%;
+  height: 80vh;
+  border: none;
+  display: block;
+}
+
 .preview-notice {
   background: #fafafa;
   border: 1px dashed #ddd;
@@ -524,6 +689,137 @@ const abstractPreview = computed(() => {
   color: #999;
   text-align: center;
   padding: 2rem;
+}
+
+/* ── Hybrid IMRAD section ──────────────────────────────────────── */
+.imrad-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.85rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.imrad-section-header h3 {
+  margin: 0;
+}
+
+.view-pages-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.35rem 0.85rem;
+  border-radius: 6px;
+  border: 1.5px solid #d1d5db;
+  background: white;
+  color: #555;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.view-pages-btn:hover {
+  border-color: #10b981;
+  color: #10b981;
+}
+
+.view-pages-btn.active {
+  background: #f0fdf4;
+  border-color: #10b981;
+  color: #059669;
+}
+
+/* Extracted text wrapper */
+.section-text-wrap {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1rem;
+  max-height: 480px;
+  overflow-y: auto;
+}
+
+/* Extracted text — pre preserves paragraphs, wraps long lines */
+.section-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: inherit;
+  font-size: 0.97rem;
+  line-height: 1.9;
+  color: #374151;
+  margin: 0;
+  padding: 0;
+  background: none;
+  border: none;
+}
+
+.no-content-note {
+  color: #aaa;
+  font-style: italic;
+  font-size: 0.9rem;
+}
+
+/* Page viewer */
+.section-pages-viewer {
+  margin-top: 1.25rem;
+  border-top: 2px dashed #e5e7eb;
+  padding-top: 1.25rem;
+}
+
+.pages-loading,
+.pages-empty {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #888;
+  font-size: 0.9rem;
+  padding: 1rem 0;
+}
+
+.pages-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.page-card {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #f9fafb;
+}
+
+.page-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #6b7280;
+  padding: 0.4rem 0.75rem;
+  background: #f3f4f6;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.page-img {
+  width: 100%;
+  display: block;
+}
+
+/* Spinner animation */
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* ── Tablet (≤768px) ─────────────────────────────────────────── */

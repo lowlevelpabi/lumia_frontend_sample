@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter, RouterLink } from 'vue-router'
-import { Search, User, ChevronRight } from 'lucide-vue-next'
+import { Search, User, ChevronRight, Sparkles, Filter, Lightbulb, BookOpen } from 'lucide-vue-next'
 import { api, type Paper } from '../services/api'
 
 const router = useRouter()
@@ -34,46 +34,36 @@ const handleSearch = () => {
 
 <template>
   <div class="home-container">
-    <!-- Top Navigation (ScienceDirect-like blended) -->
-    <nav class="site-nav">
-      <div class="nav-inner">
-        <div class="logo">Lumia</div>
-        <div class="nav-links">
-          <RouterLink to="/" class="nav-link">Explore</RouterLink>
-          <RouterLink :to="{ name: 'results', query: { q: '' } }" class="nav-link">Articles</RouterLink>
-          <RouterLink :to="{ name: 'register' }" class="nav-link">Authors</RouterLink>
-        </div>
-        <div class="nav-actions">
-          <RouterLink :to="{ name: 'login' }" class="login-btn">Sign in</RouterLink>
-        </div>
-      </div>
-    </nav>
+    <!-- Hero / Search Panel -->
+    <header class="home-hero">
+      <div class="hero-inner">
+        <div class="hero-content">
+          <h1 class="hero-title">Lumia: Smart Research</h1>
+          <p class="hero-subtitle">Search across titles, abstracts, and full-text — powered by Lumia's smart retrieval.
+          </p>
 
-    <!-- Hero/Search Panel (blended look) -->
-    <header class="home-hero sd-hero">
-      <div class="hero-inner sd-hero-inner">
-        <div class="hero-left">
-          <h1 class="hero-title">Discover trusted research faster</h1>
-          <p class="hero-subtitle">Search across titles, abstracts, and full-text — powered by Lumia's search.</p>
           <div class="search-panel">
-            <div class="search-card">
-              <div class="search-left">
+            <div class="search-box">
+              <div class="search-input-wrap">
                 <Search :size="20" class="search-icon" />
-                <input v-model="searchQuery" type="text" placeholder="Search by topic, title, author, or DOI"
+                <input v-model="searchQuery" type="text" placeholder="Search by title, abstract content, or keywords"
                   @keyup.enter="handleSearch" />
               </div>
-              <div class="search-right">
-                <button class="search-btn" @click="handleSearch">Search</button>
-              </div>
+              <button class="search-btn" @click="handleSearch">Search</button>
             </div>
-            <div class="search-hint">Try: "deep learning for healthcare" or "renewable energy policy"</div>
+            <div class="search-hint">Try: "deep learning for healthcare" or "machine learning"</div>
           </div>
         </div>
-        <div class="hero-right">
+
+        <div class="hero-featured">
           <div class="featured-card">
-            <h4>Featured thesis</h4>
-            <p class="feat-title">A compact overview of modern retrieval techniques</p>
-            <RouterLink :to="{ name: 'results', query: { q: '' } }" class="cta-link">Browse related papers</RouterLink>
+            <span class="feat-badge">Featured Thesis</span>
+            <h4 class="feat-title">A compact overview of modern retrieval techniques</h4>
+            <p class="feat-desc">Exploring how neural search is transforming academic discovery.</p>
+            <RouterLink :to="{ name: 'results', query: { q: '' } }" class="cta-link">
+              Browse Related
+              <ChevronRight :size="16" />
+            </RouterLink>
           </div>
         </div>
       </div>
@@ -81,31 +71,62 @@ const handleSearch = () => {
 
     <!-- Main Content Area -->
     <main class="home-main">
-      <div class="content-layout">
-        <!-- Sidebar / Stats -->
-        <aside class="left-aside">
-          <div class="card promo-card">
-            <h3>Join our researcher community</h3>
-            <p>Share your publications, get stats, and stay up to date with the latest research in your field.</p>
-            <RouterLink :to="{ name: 'register' }" class="promo-btn">Join for free</RouterLink>
+      <!-- Feature Highlights: Grid -->
+      <section class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">
+            <Sparkles :size="24" color="#00a651" />
           </div>
+          <div class="feature-info">
+            <h3>Smart Section Retrieval</h3>
+            <p>Target specific sections like <strong>Methods</strong> or <strong>Results</strong> for surgical precision
+              in your research discovery.</p>
+          </div>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">
+            <BookOpen :size="24" color="#00a651" />
+          </div>
+          <div class="feature-info">
+            <h3>BERT Semantic Search</h3>
+            <p>Our NLP engine understands context, not just keywords, helping you find relevant papers even with
+              different terminology.</p>
+          </div>
+        </div>
+      </section>
 
-          <div class="card stats-card">
-            <div class="stat-item">
-              <span class="stat-num">250+</span>
-              <span class="stat-label">Departments</span>
+      <div class="content-layout">
+        <!-- Left Sidebar: Quick Refine -->
+        <aside class="left-aside">
+          <div class="utility-card">
+            <div class="card-header-row">
+              <Filter :size="16" />
+              <h4>Refine Discovery</h4>
             </div>
-            <div class="stat-divider"></div>
-            <div class="stat-item">
-              <span class="stat-num">50k+</span>
-              <span class="stat-label">Authors</span>
+            <div class="filter-group">
+              <span class="group-label">Program Type</span>
+              <RouterLink :to="{ name: 'results', query: { q: 'Thesis' } }" class="filter-link">Thesis</RouterLink>
+              <RouterLink :to="{ name: 'results', query: { q: 'Capstone' } }" class="filter-link">Capstone Projects
+              </RouterLink>
+            </div>
+            <div class="filter-group">
+              <span class="group-label">Departments</span>
+              <RouterLink :to="{ name: 'results', query: { q: 'Computer Science' } }" class="filter-link">Computer
+                Science</RouterLink>
+              <RouterLink :to="{ name: 'results', query: { q: 'Information Technology' } }" class="filter-link">
+                Information Tech</RouterLink>
+              <RouterLink :to="{ name: 'results', query: { q: 'Engineering' } }" class="filter-link">Engineering
+              </RouterLink>
             </div>
           </div>
         </aside>
 
         <!-- Feed / Recent Uploads -->
         <section class="main-feed">
-          <h2 class="section-title">Recently added research</h2>
+          <div class="feed-header">
+            <h2 class="section-title">Recently Added Research</h2>
+            <RouterLink :to="{ name: 'results', query: { q: '' } }" class="text-link">View all</RouterLink>
+          </div>
 
           <div v-if="loading" class="loading-feed">
             <div v-for="i in 3" :key="i" class="paper-card skeleton">
@@ -117,12 +138,12 @@ const handleSearch = () => {
 
           <div v-else class="papers-feed">
             <div v-for="paper in recentPapers" :key="paper.id" class="paper-card">
-              <div class="paper-type">Thesis</div>
+              <div class="paper-type">{{ paper.project_type || 'Research' }}</div>
               <RouterLink :to="{ name: 'detail', params: { id: paper.id } }" class="paper-title">
                 {{ paper.title }}
               </RouterLink>
               <div class="paper-authors">
-                <User :size="14" />
+                <User :size="14" class="inline-icon" />
                 <span>{{ paper.author }}</span>
               </div>
               <p class="paper-abstract-preview">
@@ -130,29 +151,35 @@ const handleSearch = () => {
               </p>
               <div class="paper-actions">
                 <RouterLink :to="{ name: 'detail', params: { id: paper.id } }" class="view-btn">
-                  View full-text
+                  View Full-text
                   <ChevronRight :size="14" />
                 </RouterLink>
               </div>
             </div>
 
             <RouterLink :to="{ name: 'results', query: { q: '' } }" class="see-more-btn">
-              Explore more research
+              Explore More Research
             </RouterLink>
           </div>
         </section>
 
-        <!-- Rights Aside -->
+        <!-- Right Sidebar: Search Assistant -->
         <aside class="right-aside">
-          <div class="card network-card">
-            <h3>Network with experts</h3>
-            <p>Connect with authors and collaborators from various programs.</p>
-            <div class="author-avatars">
-              <div v-for="i in 5" :key="i" class="mini-avatar"
-                :style="{ backgroundColor: ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6'][i - 1] }">
-                {{ 'ABCDE'[i - 1] }}
-              </div>
+          <div class="guide-card">
+            <div class="card-header-row">
+              <Lightbulb :size="16" color="#f59e0b" />
+              <h4>Search Assistant</h4>
             </div>
+            <p class="guide-intro">Get better results by targeting specific paper sections:</p>
+            <div class="tip-box">
+              <code class="tip-cmd">methods: RNN</code>
+              <p class="tip-desc">Search only within the Methodology section.</p>
+            </div>
+            <div class="tip-box">
+              <code class="tip-cmd">results: accuracy</code>
+              <p class="tip-desc">Look for specific findings in the Results section.</p>
+            </div>
+            <RouterLink to="/results" class="guide-link">View Search Guide →</RouterLink>
           </div>
         </aside>
       </div>
@@ -162,248 +189,459 @@ const handleSearch = () => {
 
 <style scoped>
 .home-container {
-  min-height: 100vh;
-  background-color: #f3f5f7;
-  font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
-  color: #111827;
+  min-height: calc(100vh - 64px);
+  background-color: #f8fafc;
 }
 
-/* Top navigation (clean, white) */
-.site-nav {
-  background: #ffffff;
-  border-bottom: 1px solid #e6e9ee;
-  position: sticky;
-  top: 0;
-  z-index: 20;
+/* ── Hero Section ────────────────────────────────────────── */
+.home-hero {
+  background: linear-gradient(135deg, #001a0d 0%, #004d26 100%);
+  padding: 4rem 1.5rem 5rem;
+  color: #fff;
 }
 
-.nav-inner {
+.hero-inner {
   max-width: 1200px;
   margin: 0 auto;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0.75rem 1.5rem;
+  gap: 3rem;
 }
 
-.logo {
-  font-weight: 800;
-  font-size: 1.25rem;
-  color: #0b2330;
-}
-
-.nav-links {
-  display: flex;
-  gap: 1.25rem;
-  align-items: center;
-}
-
-.nav-link {
-  color: #475569;
-  text-decoration: none;
-  font-weight: 600;
-}
-
-.nav-link:hover {
-  color: #0b6b5a;
-}
-
-.nav-actions .login-btn {
-  background: transparent;
-  border: 1px solid #d1d5db;
-  padding: 0.45rem 0.85rem;
-  border-radius: 6px;
-  color: #0b2330;
-  text-decoration: none;
-}
-
-/* Hero area resembling ScienceDirect: spacious, white cards on pale background */
-.sd-hero {
-  padding: 3.5rem 1rem 2.5rem;
-}
-
-.sd-hero-inner {
-  max-width: 1200px;
-  margin: 0 auto;
-  display: grid;
-  grid-template-columns: 1fr 340px;
-  gap: 1.5rem;
-  align-items: start;
-}
-
-.hero-left {
-  padding: 1.25rem 1.5rem;
+.hero-content {
+  flex: 1;
 }
 
 .hero-title {
-  font-size: 2.25rem;
+  font-size: 2.75rem;
   font-weight: 800;
-  color: #0b2330;
-  margin-bottom: 0.5rem;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.75rem;
+  line-height: 1.1;
 }
 
 .hero-subtitle {
-  color: #475569;
-  margin-bottom: 1.25rem;
+  font-size: 1.125rem;
+  color: rgba(255, 255, 255, 0.85);
+  margin-bottom: 2rem;
+  line-height: 1.5;
+  max-width: 600px;
 }
 
+/* Search Box */
 .search-panel {
-  margin-top: 0.75rem;
+  max-width: 650px;
 }
 
-.search-card {
+.search-box {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: #ffffff;
-  border: 1px solid #e6e9ee;
-  padding: 0.5rem 0.75rem;
-  border-radius: 8px;
-  box-shadow: 0 6px 18px rgba(11, 35, 48, 0.06);
+  background: #fff;
+  border-radius: 12px;
+  padding: 0.4rem;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
 }
 
-.search-left {
-  display: flex;
-  gap: 0.75rem;
-  align-items: center;
+.search-input-wrap {
   flex: 1;
+  display: flex;
+  align-items: center;
+  padding: 0 0.75rem;
+}
+
+.search-input-wrap input {
+  width: 100%;
+  border: none;
+  padding: 0.75rem 0.5rem;
+  font-size: 1rem;
+  outline: none;
+  color: #1a1a1a;
 }
 
 .search-icon {
   color: #94a3b8;
-  margin-left: 0.5rem;
-}
-
-.search-card input {
-  border: none;
-  outline: none;
-  padding: 0.6rem 0.5rem;
-  font-size: 1rem;
-  color: #0b2330;
-  width: 100%;
-}
-
-.search-right {
-  margin-left: 1rem;
 }
 
 .search-btn {
-  background: #0b6b5a;
+  background: #00a651;
   color: #fff;
   border: none;
-  padding: 0.6rem 1rem;
-  border-radius: 6px;
+  padding: 0.75rem 2rem;
+  border-radius: 8px;
   font-weight: 700;
+  font-size: 1rem;
   cursor: pointer;
+  transition: all 0.2s;
+}
+
+.search-btn:hover {
+  background: #008c44;
+  transform: translateY(-1px);
 }
 
 .search-hint {
-  margin-top: 0.5rem;
-  color: #94a3b8;
+  margin-top: 0.75rem;
   font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.6);
 }
 
-.hero-right .featured-card {
-  background: linear-gradient(180deg, #ffffff 0%, #fbfdfe 100%);
-  border: 1px solid #e6e9ee;
-  padding: 1rem;
-  border-radius: 8px;
+/* Hero Featured Card */
+.hero-featured {
+  width: 340px;
 }
 
-.featured-card h4 {
-  margin: 0 0 0.25rem 0;
-  color: #0b2330;
-  font-size: 0.95rem;
+.featured-card {
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 1.5rem;
+  border-radius: 16px;
+  color: #fff;
+}
+
+.feat-badge {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  background: #00a651;
+  padding: 0.25rem 0.6rem;
+  border-radius: 4px;
+  margin-bottom: 1rem;
 }
 
 .feat-title {
+  font-size: 1.125rem;
   font-weight: 700;
-  color: #0b6b5a;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.5rem;
+  line-height: 1.4;
+}
+
+.feat-desc {
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.7);
+  margin-bottom: 1.5rem;
 }
 
 .cta-link {
-  color: #0b6b5a;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #00a651;
   text-decoration: none;
   font-weight: 700;
+  font-size: 0.95rem;
 }
 
-/* Main content area */
+.cta-link:hover {
+  text-decoration: underline;
+}
+
+/* ── Main Layout (3-Column Utility) ─────────────────────── */
 .home-main {
   max-width: 1200px;
-  margin: 1.5rem auto 4rem;
+  margin: 0 auto 5rem;
   padding: 0 1.5rem;
+}
+
+.features-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  margin: -2.5rem auto 3rem;
+  position: relative;
+  z-index: 10;
+}
+
+.feature-card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e2e8f0;
+}
+
+.feature-icon {
+  width: 48px;
+  height: 48px;
+  background: #f0fdf4;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.feature-info h3 {
+  font-size: 1rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin-bottom: 0.15rem;
+}
+
+.feature-info p {
+  font-size: 0.875rem;
+  color: #64748b;
+  line-height: 1.4;
 }
 
 .content-layout {
   display: grid;
-  grid-template-columns: 280px 1fr 260px;
-  gap: 1.5rem;
+  grid-template-columns: 260px 1fr 260px;
+  gap: 2rem;
+  align-items: start;
 }
 
-.card {
-  background: #ffffff;
-  border: 1px solid #e6e9ee;
+/* Sidebar Cards */
+.utility-card,
+.guide-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1.25rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.card-header-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+  color: #0f172a;
+}
+
+.card-header-row h4 {
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.filter-group {
+  margin-bottom: 1.5rem;
+}
+
+.group-label {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.75rem;
+}
+
+.filter-link {
+  display: block;
+  font-size: 0.9rem;
+  color: #475569;
+  text-decoration: none;
+  padding: 0.4rem 0;
+  transition: all 0.2s;
+}
+
+.filter-link:hover {
+  color: #00a651;
+  padding-left: 4px;
+}
+
+/* Guide Card */
+.guide-intro {
+  font-size: 0.85rem;
+  color: #64748b;
+  margin-bottom: 1rem;
+  line-height: 1.4;
+}
+
+.tip-box {
+  background: #f8fafc;
+  border: 1px solid #f1f5f9;
   border-radius: 8px;
-  padding: 1rem;
+  padding: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.tip-cmd {
+  display: block;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.75rem;
+  color: #00a651;
+  font-weight: 700;
+  margin-bottom: 0.25rem;
+}
+
+.tip-desc {
+  font-size: 0.75rem;
+  color: #64748b;
+  line-height: 1.3;
+}
+
+.guide-link {
+  display: block;
+  margin-top: 1rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #00a651;
+  text-decoration: none;
+}
+
+.guide-link:hover {
+  text-decoration: underline;
+}
+
+/* Main Feed */
+.feed-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
 }
 
 .section-title {
   font-size: 1.25rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.text-link {
+  color: #00a651;
+  text-decoration: none;
   font-weight: 700;
-  color: #0b2330;
-  margin-bottom: 1rem;
 }
 
 .paper-card {
-  background: #ffffff;
-  border: 1px solid #eef2f6;
-  border-radius: 8px;
-  padding: 1.25rem;
-  margin-bottom: 1rem;
-  transition: box-shadow 0.15s, transform 0.12s;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 1.25rem;
+  transition: all 0.2s;
 }
 
 .paper-card:hover {
-  box-shadow: 0 8px 20px rgba(11, 35, 48, 0.06);
-  transform: translateY(-3px);
+  border-color: #00a651;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
+  transform: translateY(-2px);
 }
 
 .paper-type {
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: #0b6b5a;
-  margin-bottom: 0.4rem;
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: #059669;
+  text-transform: uppercase;
+  margin-bottom: 0.5rem;
 }
 
 .paper-title {
-  font-size: 1.05rem;
-  color: #0b2330;
+  text-decoration: none;
+  font-size: 1.125rem;
   font-weight: 700;
+  color: #1e293b;
+  line-height: 1.4;
+  margin-bottom: 0.75rem;
+  display: block;
+}
+
+.paper-title:hover {
+  color: #00a651;
 }
 
 .paper-authors {
-  color: #475569;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: #64748b;
+  margin-bottom: 1rem;
+}
+
+.inline-icon {
+  color: #94a3b8;
 }
 
 .paper-abstract-preview {
+  font-size: 0.9rem;
   color: #475569;
+  line-height: 1.6;
+  margin-bottom: 1.25rem;
+}
+
+.view-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: #00a651;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 0.875rem;
 }
 
 .see-more-btn {
   display: block;
   text-align: center;
-  padding: 0.85rem;
-  background: #ffffff;
-  border: 1px solid #e6e9ee;
-  border-radius: 8px;
-  color: #475569;
+  padding: 1rem;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  color: #64748b;
   font-weight: 700;
   text-decoration: none;
+  margin-top: 2rem;
+  transition: all 0.2s;
 }
 
-/* Responsive adjustments */
-@media (max-width: 1024px) {
+.see-more-btn:hover {
+  border-color: #00a651;
+  color: #00a651;
+}
+
+/* ── Skeletons ─────────────────────────────────────────── */
+.skeleton .skel {
+  background: #f1f5f9;
+  border-radius: 6px;
+}
+
+.skel-line {
+  height: 1.2rem;
+  margin-bottom: 0.75rem;
+}
+
+.skel-line.short {
+  width: 60%;
+}
+
+.skel-abstract {
+  height: 4rem;
+}
+
+/* ── Responsive ────────────────────────────────────────── */
+@media (max-width: 1200px) {
+  .hero-inner {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .hero-subtitle {
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .search-panel {
+    margin: 0 auto;
+  }
+
+  .hero-featured {
+    width: 100%;
+    max-width: 500px;
+    margin: 0 auto;
+  }
+}
+
+@media (max-width: 1100px) {
+  .home-main {
+    max-width: 800px;
+  }
+
   .content-layout {
     grid-template-columns: 1fr;
   }
@@ -412,31 +650,28 @@ const handleSearch = () => {
   .right-aside {
     display: none;
   }
+}
 
-  .sd-hero-inner {
+@media (max-width: 768px) {
+  .features-grid {
     grid-template-columns: 1fr;
+    margin-top: -1.5rem;
   }
 }
 
 @media (max-width: 640px) {
-  .nav-links {
-    display: none;
-  }
-
-  .nav-actions .login-btn {
-    display: none;
-  }
-
   .hero-title {
-    font-size: 1.5rem;
+    font-size: 2rem;
   }
 
-  .search-card {
-    padding: 0.4rem;
+  .search-box {
+    flex-direction: column;
+    padding: 0.5rem;
   }
 
   .search-btn {
-    padding: 0.5rem 0.7rem;
+    width: 100%;
+    margin-top: 0.5rem;
   }
 }
 </style>

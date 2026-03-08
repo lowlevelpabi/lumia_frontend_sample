@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Filter, Calendar } from 'lucide-vue-next'
+import { Filter, Calendar, Sparkles } from 'lucide-vue-next'
 import { api, type SearchResult, type SearchParams } from '../services/api'
 const route = useRoute()
 const router = useRouter()
@@ -18,6 +18,7 @@ const minYear = ref<number | undefined>(undefined)
 const maxYear = ref<number | undefined>(undefined)
 const selectedProjectType = ref('')
 const selectedDegree = ref('')
+const selectedSection = ref('')
 
 const performSearch = async () => {
   if (!query.value) return
@@ -29,7 +30,8 @@ const performSearch = async () => {
       minYear: minYear.value,
       maxYear: maxYear.value,
       projectType: selectedProjectType.value || undefined,
-      degreeProgram: selectedDegree.value || undefined
+      degreeProgram: selectedDegree.value || undefined,
+      section: selectedSection.value || undefined
     }
     results.value = await api.searchPapers(params)
   } catch {
@@ -46,7 +48,7 @@ onMounted(() => {
   window.addEventListener('resize', onResize)
 })
 
-watch([() => route.query.q, threshold, minYear, maxYear, selectedProjectType, selectedDegree], () => {
+watch([() => route.query.q, threshold, minYear, maxYear, selectedProjectType, selectedDegree, selectedSection], () => {
   query.value = (route.query.q as string) || query.value
   performSearch()
 })
@@ -88,13 +90,26 @@ const viewDetail = (id: number) => router.push({ name: 'detail', params: { id } 
               :class="{ active: selectedProjectType === pt }" @click="selectedProjectType = pt">{{ pt }}</span>
           </div>
         </div>
-
         <div class="filter-group">
           <label>Degree Program</label>
           <div class="filter-options">
             <span class="filter-tag" :class="{ active: selectedDegree === '' }" @click="selectedDegree = ''">All</span>
             <span v-for="deg in ['BSCS', 'BSIT', 'BSIS', 'BSCpE']" :key="deg" class="filter-tag"
               :class="{ active: selectedDegree === deg }" @click="selectedDegree = deg">{{ deg }}</span>
+          </div>
+        </div>
+
+        <div class="filter-group">
+          <label>
+            <Sparkles :size="14" /> Search Target
+          </label>
+          <div class="filter-options">
+            <span class="filter-tag" :class="{ active: selectedSection === '' }" @click="selectedSection = ''">Full
+              Text</span>
+            <span v-for="s in ['introduction', 'methods', 'results', 'discussion']" :key="s" class="filter-tag"
+              :class="{ active: selectedSection === s }" @click="selectedSection = s">
+              {{ s.charAt(0).toUpperCase() + s.slice(1) }}
+            </span>
           </div>
         </div>
 

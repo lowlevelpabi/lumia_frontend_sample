@@ -12,6 +12,13 @@ export interface Paper {
   degree_program: string
   citation_count: number
   view_count: number
+  introduction?: string
+  methods?: string
+  results?: string
+  discussion?: string
+  sections?: Record<string, string>
+  section_pages?: Record<string, number[]>
+  detected_subheadings?: string[]
 }
 
 export type PaperMetadata = Omit<Paper, 'id' | 'view_count' | 'citation_count'>
@@ -35,7 +42,7 @@ export interface SearchResult {
 // Token helper
 const getAuthHeaders = (): Record<string, string> => {
   const token = localStorage.getItem('token')
-  return token ? { 'Authorization': `Bearer ${token}` } : {}
+  return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
 export interface PaperUpdate {
@@ -48,6 +55,9 @@ export interface PaperUpdate {
   project_type?: string
   degree_program?: string
   citation_count?: number
+  sections?: Record<string, string>
+  section_pages?: Record<string, number[]>
+  detected_subheadings?: string[]
 }
 
 export interface UserData {
@@ -86,6 +96,7 @@ export interface SearchParams {
   department?: string
   projectType?: string
   degreeProgram?: string
+  section?: string
 }
 
 export interface BorrowRecord {
@@ -158,6 +169,7 @@ export const api = {
     if (params.department) url.searchParams.append('department', params.department)
     if (params.projectType) url.searchParams.append('project_type', params.projectType)
     if (params.degreeProgram) url.searchParams.append('degree_program', params.degreeProgram)
+    if (params.section) url.searchParams.append('section', params.section)
 
     const response = await fetch(url.toString())
     if (!response.ok) throw new Error('Search failed')
@@ -195,10 +207,15 @@ export const api = {
     return response.json()
   },
 
-  async getUploadPreview(file: File, autoExtract: boolean = true): Promise<{
-    session_id: string;
-    metadata: PartialPaperMetadata;
-    pages: { page_num: number; thumbnail: string; preview_text: string }[];
+  async getUploadPreview(
+    file: File,
+    autoExtract: boolean = true,
+  ): Promise<{
+    session_id: string
+    metadata: PartialPaperMetadata
+    pages: { page_num: number; thumbnail: string; preview_text: string }[]
+    sections?: Record<string, string>
+    section_pages?: Record<string, number[]>
   }> {
     const formData = new FormData()
     formData.append('file', file)
@@ -215,15 +232,19 @@ export const api = {
   },
 
   async confirmUpload(data: {
-    session_id: string;
-    metadata: PartialPaperMetadata;
-    selected_pages: number[];
+    session_id: string
+    metadata: PartialPaperMetadata
+    selected_pages: number[]
+    introduction?: string
+    methods?: string
+    results?: string
+    discussion?: string
   }) {
     const response = await fetch(`${BASE_URL}/papers/confirm-upload`, {
       method: 'POST',
       headers: {
         ...getAuthHeaders(),
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
       },
       body: JSON.stringify(data),
     })
@@ -236,7 +257,7 @@ export const api = {
       method: 'PUT',
       headers: {
         ...getAuthHeaders(),
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
       },
       body: JSON.stringify(updates),
     })

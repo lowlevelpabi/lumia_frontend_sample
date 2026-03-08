@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { RouterView } from 'vue-router'
 import comp_nav from './components/comp_nav.vue'
+import TheFooter from './components/TheFooter.vue'
 </script>
 
 <template>
@@ -9,6 +10,7 @@ import comp_nav from './components/comp_nav.vue'
     <main class="main-content">
       <RouterView />
     </main>
+    <TheFooter />
   </div>
 </template>
 

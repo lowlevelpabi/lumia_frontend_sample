@@ -2,12 +2,13 @@
 import { ref, onMounted, computed, watch, reactive, type Component } from 'vue'
 import { useRouter } from 'vue-router'
 import {
-  Library, LogOut, Trash2, Edit3,
+  Library, Trash2, Edit3,
   Search, Plus, FolderOpen, Home, Loader2,
   FileText, Users, Calendar, ChevronRight,
   Settings, ArrowLeft, Save, Hash, BookOpen,
   UserCheck, Menu, X, Clock, TrendingUp,
-  FileUp, Sparkles, Eye, Settings2, ZoomIn, CheckCircle, AlertCircle, Check
+  FileUp, Sparkles, Eye, Settings2, ZoomIn, CheckCircle, AlertCircle, Check,
+  AlertTriangle, RefreshCw
 } from 'lucide-vue-next'
 import { api, type Paper, type UserResponse, type PartialPaperMetadata } from '../services/api'
 
@@ -147,7 +148,6 @@ const adminCount = computed(() => users.value.filter(u => u.role === 'Admin').le
 const facultyCount = computed(() => users.value.filter(u => u.role === 'Faculty').length)
 const studentCount = computed(() => users.value.filter(u => u.role === 'User').length) // Based on models/user.py UserRole.USER = "User"
 
-const logout = () => { api.logout(); router.push({ name: 'login' }) }
 
 // (Announcements UI removed)
 // ── Upload ──
@@ -164,6 +164,7 @@ interface PageData {
   page_num: number;
   thumbnail: string;
   preview_text: string;
+  label?: string;
 }
 
 const pages = ref<PageData[]>([])
@@ -175,11 +176,67 @@ const uploadMetadata = reactive<PartialPaperMetadata>({
   department: 'N/A',
   keywords: '',
   project_type: 'Thesis',
-  degree_program: 'N/A'
+  degree_program: 'N/A',
+  detected_subheadings: []
+})
+
+const imradSections = reactive({
+  introduction: '',
+  methods: '',
+  results: '',
+  discussion: ''
 })
 
 const authors = ref<string[]>([''])
 const selectedPages = ref<number[]>([])
+const sectionPages = ref<Record<string, number[]>>({})
+const isManuscript = ref(false)
+
+// IMRAD Validation
+const REQUIRED_SECTIONS = ['abstract', 'introduction', 'methods', 'results', 'discussion']
+const missingSections = computed(() => {
+  const present = Object.keys(uploadMetadata.section_pages || {})
+  return REQUIRED_SECTIONS.filter(s => !present.includes(s))
+})
+
+const triggerFallback = async () => {
+  if (!file.value) return
+  processingDoc.value = true
+  const prevStep = step.value
+  step.value = 1 // Go back to show loading state
+
+  try {
+    // Calling with autoExtract=false disables IMRAD filtering and returns ALL pages
+    const preview = await api.getUploadPreview(file.value, false)
+    sessionId.value = preview.session_id
+    Object.assign(uploadMetadata, preview.metadata)
+    pages.value = preview.pages
+
+    // Select all pages by default in fallback mode
+    selectedPages.value = preview.pages.map(p => p.page_num)
+
+    // Fallback mode always shows full doc — clear manuscript flag
+    isManuscript.value = false
+
+    setTimeout(() => {
+      step.value = 2
+      processingDoc.value = false
+    }, 400)
+  } catch (err) {
+    uploadError.value = (err as Error).message || 'Failed to trigger fallback.'
+    step.value = prevStep
+    processingDoc.value = false
+  }
+}
+
+const cancelUpload = () => {
+  step.value = 1
+  file.value = null
+  pages.value = []
+  selectedPages.value = []
+  uploadMetadata.title = ''
+}
+
 const showZoomModal = ref(false)
 const zoomedPage = ref<PageData | null>(null)
 
@@ -230,9 +287,19 @@ const startInitialExtraction = async (autoExtract: boolean = true) => {
     }
 
     pages.value = preview.pages
-    selectedPages.value = preview.pages
-      .filter(p => (p.preview_text || '').length > 10)
-      .map(p => p.page_num)
+
+    // Fill IMRAD sections
+    if (preview.sections) {
+      Object.assign(imradSections, preview.sections)
+    }
+
+    // Store section→pages mapping for badge display
+    sectionPages.value = preview.section_pages || {}
+
+
+    // Backend already filtered pages to IMRAD-only.
+    // Auto-select ALL returned pages — user can deselect manually.
+    selectedPages.value = preview.pages.map(p => p.page_num)
 
     // Smooth transition to step 2 after data is ready
     setTimeout(() => {
@@ -250,6 +317,16 @@ const togglePage = (pageNum: number, event: Event) => {
   const index = selectedPages.value.indexOf(pageNum)
   if (index > -1) selectedPages.value.splice(index, 1)
   else selectedPages.value.push(pageNum)
+}
+
+const getSectionsForPage = (pageNum: number) => {
+  const found: string[] = []
+  for (const [section, pNums] of Object.entries(sectionPages.value)) {
+    if (pNums.includes(pageNum)) {
+      found.push(section)
+    }
+  }
+  return found
 }
 
 const selectAll = () => { selectedPages.value = pages.value.map(p => p.page_num) }
@@ -272,7 +349,12 @@ const handleFinalConfirm = async () => {
     await api.confirmUpload({
       session_id: sessionId.value,
       metadata: { ...uploadMetadata, author: finalAuthorString || 'Unknown' },
-      selected_pages: selectedPages.value
+      selected_pages: selectedPages.value,
+      // Pass IMRAD sections
+      introduction: imradSections.introduction,
+      methods: imradSections.methods,
+      results: imradSections.results,
+      discussion: imradSections.discussion
     })
     step.value = 3
     setTimeout(() => {
@@ -343,15 +425,6 @@ watch(activeSection, (newSection) => {
         </button>
       </nav>
 
-      <!-- Sidebar footer -->
-      <div class="sidebar-footer">
-        <button class="sidebar-logout" @click="logout" :title="sidebarCollapsed ? 'Logout' : undefined">
-          <div class="icon-wrap logout-wrap">
-            <LogOut :size="18" stroke-width="2.2" />
-          </div>
-          <span>Logout</span>
-        </button>
-      </div>
     </aside>
 
     <!-- ══════════════ MAIN ══════════════ -->
@@ -582,12 +655,62 @@ watch(activeSection, (newSection) => {
                 </div>
               </header>
 
+              <!-- Manuscript / In-Progress Notice -->
+              <div v-if="isManuscript" class="manuscript-banner shadow-sm">
+                <div class="warning-main">
+                  <div class="warning-icon-wrap" style="background:#eff6ff">
+                    <AlertCircle :size="20" color="#3b82f6" />
+                  </div>
+                  <div class="warning-body">
+                    <p class="warning-title" style="color:#1e40af">Manuscript / In-Progress Document</p>
+                    <p class="warning-desc" style="color:#3b82f6">
+                      No IMRAD section headings were detected. This document may be incomplete or still
+                      in draft form. The first 10 pages are shown for preview. You can still index it —
+                      fill in the sections manually below, or trigger fallback to browse all pages.
+                    </p>
+                  </div>
+                </div>
+                <div class="warning-buttons">
+                  <button @click="triggerFallback" class="warning-action fallback" style="background:#1d4ed8"
+                    title="Load all document pages">
+                    <RefreshCw :size="14" />
+                    <span>Browse All Pages</span>
+                  </button>
+                  <button @click="cancelUpload" class="warning-action decline">
+                    <span>Decline &amp; Reset</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- IMRAD Validation Warning -->
+              <div v-if="missingSections.length > 0" class="imrad-warning-banner shadow-sm">
+                <div class="warning-main">
+                  <div class="warning-icon-wrap">
+                    <AlertTriangle :size="20" color="#f59e0b" />
+                  </div>
+                  <div class="warning-body">
+                    <p class="warning-title">One or more sections of IMRAD (Introduction, Methods, Results, Discussion)
+                      is missing.</p>
+                    <p class="warning-desc">
+                      The IMRAD service couldn't find: <span class="sections-badge-list">
+                        <span v-for="s in missingSections" :key="s" class="missing-s-badge">{{ s }}</span>
+                      </span>
+                    </p>
+                  </div>
+                </div>
+                <div class="warning-buttons">
+                  <button @click="cancelUpload" class="warning-action decline">
+                    <span>Cancel Indexing</span>
+                  </button>
+                </div>
+              </div>
+
               <main class="review-grid">
                 <section class="metadata-form shadow-sm">
                   <div class="form-section">
                     <div class="section-banner">
                       <span class="step-badge">1</span>
-                      <h4>Verify Paper Information</h4>
+                      <h4>Verify Metadata</h4>
                     </div>
 
                     <div class="input-group">
@@ -652,13 +775,13 @@ watch(activeSection, (newSection) => {
                     <div class="section-banner">
                       <span class="step-badge">2</span>
                       <div class="banner-title">
-                        <h4>Select Reference Pages</h4>
+                        <h4>Select Pages to Index</h4>
                         <span class="required-badge">Required for AI Search</span>
                       </div>
                     </div>
                     <div class="selector-title-row">
-                      <p class="selector-hint">Select only the relevant pages you want to index (e.g., Intro,
-                        Abstract, Context).</p>
+                      <p class="selector-hint">Select and unselect the pages you want to index, IMRAD pages are
+                        pre-selected.</p>
                       <div class="selector-actions">
                         <button @click="selectAll" class="text-btn">Select All</button>
                         <span class="dot"></span>
@@ -668,12 +791,19 @@ watch(activeSection, (newSection) => {
                   </div>
 
                   <div class="thumbnails-grid">
-                    <div v-for="p in pages" :key="p.page_num" class="page-card"
+                    <div v-for="(p, idx) in pages" :key="p.label || p.page_num + '-' + idx" class="page-card"
                       :class="{ 'is-selected': selectedPages.includes(p.page_num) }"
                       @click="togglePage(p.page_num, $event)">
                       <div class="thumbnail-wrapper">
                         <img :src="`data:image/jpeg;base64,${p.thumbnail}`" loading="lazy" class="page-thumb-img" />
-                        <div class="page-num">P{{ p.page_num }}</div>
+                        <div class="page-num">{{ p.label || 'P' + p.page_num }}</div>
+
+                        <!-- Section Badges -->
+                        <div class="section-badges" v-if="getSectionsForPage(p.page_num).length > 0">
+                          <span v-for="sec in getSectionsForPage(p.page_num)" :key="sec" class="s-badge" :class="sec">
+                            {{ sec.substring(0, 4) }}
+                          </span>
+                        </div>
                         <button class="zoom-trigger" @click.stop="openZoom(p)" title="Enlarge Page">
                           <ZoomIn :size="20" />
                         </button>
@@ -1081,6 +1211,7 @@ watch(activeSection, (newSection) => {
                 <X :size="24" />
               </button>
               <div class="modal-content">
+                <div v-if="zoomedPage?.label" class="zoom-label">{{ zoomedPage?.label }}</div>
                 <img :src="`data:image/jpeg;base64,${zoomedPage?.thumbnail}`" class="full-page-img" />
               </div>
             </div>
@@ -1188,10 +1319,6 @@ watch(activeSection, (newSection) => {
   gap: 0;
 }
 
-/* Prevent layout shift of main area */
-.dashboard.sidebar-is-collapsed .dashboard-main {
-  /* inherits flex:1 — no explicit width needed */
-}
 
 /* Sidebar toggle button (hamburger) */
 .sidebar-toggle {
@@ -3587,6 +3714,45 @@ textarea {
   align-items: flex-start;
 }
 
+/* NEW: Subheadings Preview */
+.subheadings-preview {
+  margin: 1.25rem 0;
+  padding: 0.85rem 1.15rem;
+  background: #f8fafc;
+  border-radius: 12px;
+  border: 1px dashed #cbd5e1;
+}
+
+.sub-label {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  margin-bottom: 0.6rem;
+  letter-spacing: 0.5px;
+}
+
+.sub-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.sub-tag {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: #ecfdf5;
+  color: #059669;
+  padding: 0.25rem 0.75rem;
+  border-radius: 99px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border: 1px solid #10b98122;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
 .row .input-group {
   flex: 1;
 }
@@ -3758,6 +3924,43 @@ textarea {
   border-radius: 4px;
   font-size: 0.65rem;
   font-weight: 700;
+  z-index: 5;
+}
+
+.section-badges {
+  position: absolute;
+  top: 30px;
+  left: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 5;
+}
+
+.s-badge {
+  font-size: 0.6rem;
+  font-weight: 800;
+  color: white;
+  padding: 1px 4px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.s-badge.introduction {
+  background: #3b82f6;
+}
+
+.s-badge.methods {
+  background: #10b981;
+}
+
+.s-badge.results {
+  background: #f59e0b;
+}
+
+.s-badge.discussion {
+  background: #8b5cf6;
 }
 
 .zoom-trigger {
@@ -4131,6 +4334,139 @@ textarea {
   background: white;
 }
 
+/* IMRAD Warning Banner */
+.imrad-warning-banner {
+  background: #fffbeb;
+  border-left: 4px solid #f59e0b;
+  margin-bottom: 1.5rem;
+  padding: 1.25rem 1.5rem;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  animation: slideDown 0.4s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.warning-main {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.warning-icon-wrap {
+  width: 40px;
+  height: 40px;
+  background: #fef3c7;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.warning-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.warning-title {
+  font-weight: 700;
+  color: #92400e;
+  font-size: 0.95rem;
+  margin: 0;
+}
+
+.warning-desc {
+  color: #b45309;
+  font-size: 0.82rem;
+  margin: 0;
+}
+
+.sections-badge-list {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-left: 0.4rem;
+}
+
+.missing-s-badge {
+  background: #fef3c7;
+  color: #92400e;
+  border: 1px solid #fcd34d;
+  padding: 0.1rem 0.5rem;
+  border-radius: 99px;
+  font-weight: 700;
+  font-size: 0.7rem;
+  text-transform: capitalize;
+}
+
+.warning-buttons {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;
+}
+
+.warning-action {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1rem;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.warning-action.fallback {
+  background: #92400e;
+  color: #fff;
+  border: none;
+}
+
+.warning-action.fallback:hover {
+  background: #78350f;
+  transform: translateY(-1px);
+}
+
+.warning-action.decline {
+  background: transparent;
+  color: #dc2626;
+  border: 1px solid #fca5a5;
+}
+
+.warning-action.decline:hover {
+  background: #fef2f2;
+}
+
+/* Responsive adjustments for banner */
+@media (max-width: 768px) {
+  .imrad-warning-banner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .warning-buttons {
+    width: 100%;
+    justify-content: flex-end;
+  }
+}
+
 /* ── Responsive ── */
 @media (max-width: 1024px) {
   .review-grid {
@@ -4157,5 +4493,20 @@ textarea {
     width: 100%;
     justify-content: space-between;
   }
+}
+
+.zoom-label {
+  position: absolute;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(16, 185, 129, 0.9);
+  color: white;
+  padding: 0.5rem 1.25rem;
+  border-radius: 99px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  z-index: 10;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
 }
 </style>

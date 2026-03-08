@@ -38,10 +38,21 @@ const metadata = reactive<PartialPaperMetadata>({
   department: 'N/A',
   keywords: '',
   project_type: 'Thesis',
-  degree_program: 'N/A'
+  degree_program: 'N/A',
+  detected_subheadings: []
 })
 
+const imradSections = reactive({
+  introduction: '',
+  methods: '',
+  results: '',
+  discussion: ''
+})
+
+const activeImradTab = ref<'introduction' | 'methods' | 'results' | 'discussion'>('introduction')
+
 const authors = ref<string[]>([''])
+const sectionPages = ref<Record<string, number[]>>({})
 
 // Page Selection
 const selectedPages = ref<number[]>([])
@@ -103,10 +114,18 @@ const startInitialExtraction = async (autoExtract: boolean = true) => {
 
     // Fill pages
     pages.value = preview.pages
-    // Auto-select pages that have text (heuristic)
-    selectedPages.value = preview.pages
-      .filter(p => p.preview_text.length > 10)
-      .map(p => p.page_num)
+
+    // Fill IMRAD sections
+    if (preview.sections) {
+      Object.assign(imradSections, preview.sections)
+    }
+
+    // Store section→pages mapping for badge display
+    sectionPages.value = preview.section_pages || {}
+
+    // Backend already filtered pages to IMRAD-only.
+    // Select all returned pages by default — user can deselect manually.
+    selectedPages.value = preview.pages.map(p => p.page_num)
 
     step.value = 2
   } catch (err) {
@@ -126,6 +145,16 @@ const togglePage = (pageNum: number, event: Event) => {
   } else {
     selectedPages.value.push(pageNum)
   }
+}
+
+const getSectionsForPage = (pageNum: number) => {
+  const found: string[] = []
+  for (const [section, pages] of Object.entries(sectionPages.value)) {
+    if (pages.includes(pageNum)) {
+      found.push(section)
+    }
+  }
+  return found
 }
 
 const selectAll = () => {
@@ -170,7 +199,12 @@ const handleFinalConfirm = async () => {
         ...metadata,
         author: finalAuthorString || 'Unknown'
       },
-      selected_pages: selectedPages.value
+      selected_pages: selectedPages.value,
+      // Pass IMRAD sections
+      introduction: imradSections.introduction,
+      methods: imradSections.methods,
+      results: imradSections.results,
+      discussion: imradSections.discussion
     })
     step.value = 3
     setTimeout(() => {
@@ -407,6 +441,40 @@ const goBack = () => {
                 </select>
               </div>
             </div>
+
+            <!-- IMRAD Section Analysis -->
+            <div class="imrad-editor shadow-sm">
+              <div class="section-banner">
+                <span class="step-badge">1.5</span>
+                <div class="banner-title">
+                  <h4>Refine IMRAD Sections</h4>
+                  <span class="required-badge">Auto-extracted</span>
+                </div>
+              </div>
+
+              <!-- NEW: Detected Methodology Components -->
+              <div v-if="metadata.detected_subheadings && metadata.detected_subheadings.length > 0" class="subheadings-preview">
+                <label class="sub-label">Detected Methodology Components:</label>
+                <div class="sub-tags">
+                  <span v-for="sub in metadata.detected_subheadings" :key="sub" class="sub-tag">
+                    <Check :size="12" /> {{ sub }}
+                  </span>
+                </div>
+              </div>
+
+              <div class="imrad-tabs">
+                <button v-for="tab in (['introduction', 'methods', 'results', 'discussion'] as const)" :key="tab"
+                  type="button" class="imrad-tab-btn" :class="{ active: activeImradTab === tab }"
+                  @click="activeImradTab = tab">
+                  {{ tab.charAt(0).toUpperCase() + tab.slice(1) }}
+                </button>
+              </div>
+
+              <div class="imrad-content">
+                <textarea v-model="imradSections[activeImradTab]" class="imrad-textarea"
+                  placeholder="No content detected for this section. You can manually paste it here if needed."></textarea>
+              </div>
+            </div>
           </div>
         </section>
 
@@ -438,6 +506,13 @@ const goBack = () => {
               <div class="thumbnail-wrapper">
                 <img :src="`data:image/jpeg;base64,${p.thumbnail}`" loading="lazy" class="page-thumb-img" />
                 <div class="page-num">P{{ p.page_num }}</div>
+
+                <!-- Section Badges -->
+                <div class="section-badges" v-if="getSectionsForPage(p.page_num).length > 0">
+                  <span v-for="sec in getSectionsForPage(p.page_num)" :key="sec" class="s-badge" :class="sec">
+                    {{ sec.substring(0, 4) }}
+                  </span>
+                </div>
 
                 <button class="zoom-trigger" @click.stop="openZoom(p)" title="Enlarge Page">
                   <ZoomIn :size="20" />
@@ -1035,7 +1110,33 @@ textarea.abstract-area {
   padding: 2px 6px;
   border-radius: 4px;
   font-size: 10px;
+  z-index: 5;
 }
+
+.section-badges {
+  position: absolute;
+  top: 30px;
+  left: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 5;
+}
+
+.s-badge {
+  font-size: 8px;
+  font-weight: 800;
+  color: white;
+  padding: 1px 4px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+
+.s-badge.introduction { background: #3b82f6; }
+.s-badge.methods { background: #10b981; }
+.s-badge.results { background: #f59e0b; }
+.s-badge.discussion { background: #8b5cf6; }
 
 .selection-overlay {
   position: absolute;
@@ -1189,6 +1290,105 @@ textarea.abstract-area {
   align-items: center;
   gap: 0.5rem;
   font-size: 0.9rem;
+}
+
+/* IMRAD Editor Styles */
+.imrad-editor {
+  margin-top: 2rem;
+  background: #fff;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+}
+
+.subheadings-preview {
+  margin: 1rem;
+  padding: 0.75rem 1rem;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px dashed #cbd5e1;
+}
+
+.sub-label {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  margin-bottom: 0.5rem;
+}
+
+.sub-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.sub-tag {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: #ecfdf5;
+  color: #059669;
+  padding: 0.2rem 0.6rem;
+  border-radius: 99px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: 1px solid #10b98122;
+}
+
+.imrad-tabs {
+  display: flex;
+  background: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+  padding: 0.5rem;
+  gap: 0.5rem;
+}
+
+.imrad-tab-btn {
+  flex: 1;
+  padding: 0.6rem 0.5rem;
+  border: none;
+  background: none;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.imrad-tab-btn:hover {
+  background: #f3f4f6;
+  color: #111;
+}
+
+.imrad-tab-btn.active {
+  background: white;
+  color: #10b981;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.imrad-content {
+  padding: 1rem;
+}
+
+.imrad-textarea {
+  width: 100%;
+  height: 250px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 0.75rem;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  resize: vertical;
+  background: #fff;
+}
+
+.imrad-textarea:focus {
+  outline: none;
+  border-color: #10b981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
 }
 
 /* Modal Styles */
