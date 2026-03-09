@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { getAuthState } from '../composables/useAuth'
 
 import HomeView from '../views/home_view.vue'
 import ResultsView from '../views/result_win.vue'
@@ -7,6 +8,8 @@ import LoginView from '../views/auth_win.vue'
 import RegisterView from '../views/reg_win.vue'
 import ManagementView from '../views/manage_win.vue'
 import UploadView from '../views/up_win.vue'
+
+const STAFF_ROLES = ['Admin', 'Faculty']  // matches backend UserRole enum
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -45,23 +48,51 @@ const router = createRouter({
       path: '/management',
       name: 'management',
       component: ManagementView,
-      meta: { title: 'Management - Lumia' }
+      meta: {
+        title: 'Management - Lumia',
+        requiresAuth: true,
+        requiredRoles: STAFF_ROLES,
+      }
     },
     {
       path: '/upload',
       name: 'upload',
       component: UploadView,
-      meta: { title: 'Upload Research - Lumia' }
+      meta: {
+        title: 'Upload Research - Lumia',
+        requiresAuth: true,
+        requiredRoles: STAFF_ROLES,
+      }
     },
   ],
 })
 
-// Navigation Guard to update page title
-router.beforeEach((to, from, next) => {
-  const title = to.meta.title as string
-  if (title) {
-    document.title = title
+// ── Navigation Guard ──────────────────────────────────────────────
+router.beforeEach((to, _from, next) => {
+  // Update page title
+  if (to.meta.title) {
+    document.title = to.meta.title as string
   }
+
+  const { isLoggedIn, role } = getAuthState()
+  const requiresAuth  = to.meta.requiresAuth as boolean | undefined
+  const requiredRoles = to.meta.requiredRoles as string[] | undefined
+
+  // 1. Route requires authentication
+  if (requiresAuth && !isLoggedIn) {
+    return next({ name: 'login', query: { redirect: to.fullPath } })
+  }
+
+  // 2. Route requires a specific role
+  if (requiredRoles && !requiredRoles.includes(role)) {
+    return next({ name: 'home' })
+  }
+
+  // 3. Already logged-in user visiting login/register — skip to home
+  if ((to.name === 'login' || to.name === 'register') && isLoggedIn) {
+    return next({ name: 'home' })
+  }
+
   next()
 })
 

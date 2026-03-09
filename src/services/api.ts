@@ -39,10 +39,44 @@ export interface SearchResult {
   }
 }
 
-// Token helper
-const getAuthHeaders = (): Record<string, string> => {
+// ── Token helpers ────────────────────────────────────────────────
+
+/** Returns token only if it exists and is not expired. Auto-clears stale tokens. */
+const getValidToken = (): string | null => {
   const token = localStorage.getItem('token')
+  if (!token) return null
+  try {
+    const part = token.split('.')[1]
+    if (!part) return null
+    const payload = JSON.parse(atob(part.replace(/-/g, '+').replace(/_/g, '/')))
+    if (payload.exp && Date.now() / 1000 > payload.exp) {
+      localStorage.removeItem('token')
+      return null
+    }
+    return token
+  } catch {
+    localStorage.removeItem('token')
+    return null
+  }
+}
+
+const getAuthHeaders = (): Record<string, string> => {
+  const token = getValidToken()
   return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
+/**
+ * Fetch wrapper for authenticated requests.
+ * On 401 (expired/invalid token): clears token and redirects to /login.
+ */
+async function apiFetch(input: RequestInfo, init?: RequestInit): Promise<Response> {
+  const response = await fetch(input, init)
+  if (response.status === 401) {
+    localStorage.removeItem('token')
+    window.location.href = '/login'
+    return new Promise(() => {}) // halt — redirect is in progress
+  }
+  return response
 }
 
 export interface PaperUpdate {
@@ -198,7 +232,7 @@ export const api = {
   async uploadPaper(file: File) {
     const formData = new FormData()
     formData.append('file', file)
-    const response = await fetch(`${BASE_URL}/papers/upload`, {
+    const response = await apiFetch(`${BASE_URL}/papers/upload`, {
       method: 'POST',
       headers: getAuthHeaders(),
       body: formData,
@@ -222,7 +256,7 @@ export const api = {
     const url = new URL(`${BASE_URL}/papers/preview`)
     url.searchParams.append('auto_extract', autoExtract.toString())
 
-    const response = await fetch(url.toString(), {
+    const response = await apiFetch(url.toString(), {
       method: 'POST',
       headers: getAuthHeaders(),
       body: formData,
@@ -240,7 +274,7 @@ export const api = {
     results?: string
     discussion?: string
   }) {
-    const response = await fetch(`${BASE_URL}/papers/confirm-upload`, {
+    const response = await apiFetch(`${BASE_URL}/papers/confirm-upload`, {
       method: 'POST',
       headers: {
         ...getAuthHeaders(),
@@ -253,7 +287,7 @@ export const api = {
   },
 
   async updatePaper(id: number, updates: PaperUpdate) {
-    const response = await fetch(`${BASE_URL}/papers/${id}`, {
+    const response = await apiFetch(`${BASE_URL}/papers/${id}`, {
       method: 'PUT',
       headers: {
         ...getAuthHeaders(),
@@ -266,7 +300,7 @@ export const api = {
   },
 
   async deletePaper(id: number) {
-    const response = await fetch(`${BASE_URL}/papers/${id}`, {
+    const response = await apiFetch(`${BASE_URL}/papers/${id}`, {
       method: 'DELETE',
       headers: getAuthHeaders(),
     })
@@ -282,7 +316,7 @@ export const api = {
   },
 
   async getCiteStatus(id: number): Promise<{ has_cited: boolean; citation_count: number }> {
-    const response = await fetch(`${BASE_URL}/papers/${id}/cite-status`, {
+    const response = await apiFetch(`${BASE_URL}/papers/${id}/cite-status`, {
       headers: getAuthHeaders(),
     })
     if (!response.ok) throw new Error('Cite status failed')
@@ -290,7 +324,7 @@ export const api = {
   },
 
   async citePaper(id: number): Promise<{ has_cited: boolean; citation_count: number }> {
-    const response = await fetch(`${BASE_URL}/papers/${id}/cite`, {
+    const response = await apiFetch(`${BASE_URL}/papers/${id}/cite`, {
       method: 'POST',
       headers: getAuthHeaders(),
     })
@@ -299,7 +333,7 @@ export const api = {
   },
 
   async listUsers(): Promise<UserResponse[]> {
-    const response = await fetch(`${BASE_URL}/users/`, {
+    const response = await apiFetch(`${BASE_URL}/users/`, {
       headers: getAuthHeaders(),
     })
     if (!response.ok) throw new Error('Failed to list users')
@@ -307,7 +341,7 @@ export const api = {
   },
 
   async getSystemHealth(): Promise<SystemHealth> {
-    const response = await fetch(`${BASE_URL}/system/health`, {
+    const response = await apiFetch(`${BASE_URL}/system/health`, {
       headers: getAuthHeaders(),
     })
     if (!response.ok) throw new Error('Failed to fetch system health')
@@ -316,7 +350,7 @@ export const api = {
 
   // Borrowing & Penalties
   async listBorrowRecords(): Promise<BorrowRecord[]> {
-    const response = await fetch(`${BASE_URL}/borrowing/`, {
+    const response = await apiFetch(`${BASE_URL}/borrowing/`, {
       headers: getAuthHeaders(),
     })
     if (!response.ok) throw new Error('Failed to list borrow records')
@@ -324,7 +358,7 @@ export const api = {
   },
 
   async createBorrowRecord(data: { paper_id: number; user_id: number; due_date: string }) {
-    const response = await fetch(`${BASE_URL}/borrowing/`, {
+    const response = await apiFetch(`${BASE_URL}/borrowing/`, {
       method: 'POST',
       headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
@@ -334,7 +368,7 @@ export const api = {
   },
 
   async returnBook(recordId: number) {
-    const response = await fetch(`${BASE_URL}/borrowing/${recordId}/return`, {
+    const response = await apiFetch(`${BASE_URL}/borrowing/${recordId}/return`, {
       method: 'PUT',
       headers: getAuthHeaders(),
     })
@@ -343,7 +377,7 @@ export const api = {
   },
 
   async listPenalties(): Promise<Penalty[]> {
-    const response = await fetch(`${BASE_URL}/borrowing/penalties`, {
+    const response = await apiFetch(`${BASE_URL}/borrowing/penalties`, {
       headers: getAuthHeaders(),
     })
     if (!response.ok) throw new Error('Failed to list penalties')
@@ -351,7 +385,7 @@ export const api = {
   },
 
   async payPenalty(penaltyId: number) {
-    const response = await fetch(`${BASE_URL}/borrowing/penalties/${penaltyId}/pay`, {
+    const response = await apiFetch(`${BASE_URL}/borrowing/penalties/${penaltyId}/pay`, {
       method: 'PUT',
       headers: getAuthHeaders(),
     })
@@ -360,7 +394,7 @@ export const api = {
   },
 
   async getDashboardStats(): Promise<DashboardStats> {
-    const response = await fetch(`${BASE_URL}/borrowing/dashboard/stats`, {
+    const response = await apiFetch(`${BASE_URL}/borrowing/dashboard/stats`, {
       headers: getAuthHeaders(),
     })
     if (!response.ok) throw new Error('Failed to fetch dashboard stats')
