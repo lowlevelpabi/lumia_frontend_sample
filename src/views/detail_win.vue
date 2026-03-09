@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft, Calendar, User, FileText, Share2, BookOpen, Eye, Award, CheckCircle, FileIcon, Sparkles, TrendingUp, MessageSquare, ImageIcon, Loader2 } from 'lucide-vue-next'
+import { useRoute, useRouter, RouterLink } from 'vue-router'
+import { useAuth } from '../composables/useAuth'
+import { Calendar, User, FileText, BookOpen, Eye, Award, CheckCircle, Sparkles, TrendingUp, MessageSquare, ImageIcon, Loader2, ChevronRight } from 'lucide-vue-next'
 import { api, type Paper, type SearchResult } from '../services/api'
 
 const route = useRoute()
@@ -15,10 +16,10 @@ const viewCount = ref(0)
 const citationCount = ref(0)
 const hasCited = ref(false)
 const citeLoading = ref(false)
-const isLoggedIn = computed(() => !!localStorage.getItem('token'))
+const { isLoggedIn } = useAuth()
 
 // Document view state
-const activeTab = ref<'abstract' | 'introduction' | 'methods' | 'results' | 'discussion' | 'document'>('abstract')
+const activeTab = ref<'abstract' | 'introduction' | 'methods' | 'results' | 'discussion' | 'authors' | 'document'>('abstract')
 const pdfUrl = computed(() => {
   const base = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api/v1'
   return paper.value ? `${base}/papers/${paper.value.id}/pdf` : ''
@@ -118,6 +119,28 @@ const handleCite = async () => {
   }
 }
 
+// Split authors intelligently:
+// 1. If pipe-separated → split by |
+// 2. Filipino ALL-CAPS format: "SURNAME, FIRSTNAME M." repeated
+//    Split on boundary: after a period, before next ALL-CAPS word + comma
+const authorList = computed(() => {
+  if (!paper.value?.author) return []
+  const raw = paper.value.author.trim()
+  if (raw.includes('|')) {
+    return raw.split('|').map((a: string) => a.trim()).filter(Boolean)
+  }
+  // Split on ", " after a period, before an ALL-CAPS surname+comma
+  // e.g. "BILLONES, PRINCE ISIAH R., ORANG, ..." → 3 separate authors
+  const parts = raw.split(/(?<=\.),\s+(?=[A-Z]{2,},)/)
+  if (parts.length > 1) {
+    return parts.map((a: string) => {
+      const t = a.trim()
+      return t.endsWith('.') ? t : t + '.'
+    }).filter(Boolean)
+  }
+  return [raw]
+})
+
 const abstractPreview = computed(() => {
   if (!paper.value?.abstract) return ''
   return paper.value.abstract.length > ABSTRACT_PREVIEW_LIMIT && !showFullAbstract.value
@@ -128,87 +151,112 @@ const abstractPreview = computed(() => {
 
 <template>
   <div class="detail-page" v-if="!loading && paper">
-    <nav class="detail-nav">
-      <button @click="goBack" class="back-btn">
-        <ArrowLeft :size="20" /> Back to Results
-      </button>
-      <div class="actions">
-        <button class="icon-btn">
-          <Share2 :size="18" />
-        </button>
+    <!-- Header sits above the 3-col layout so left sidebar aligns to tabs -->
+    <div class="paper-header-wrap">
+      <!-- Breadcrumb nav — matches manage_win topbar style -->
+      <div class="paper-header-inner">
+        <div class="paper-breadcrumb">
+          <RouterLink :to="{ name: 'home' }" class="bc-link">Home</RouterLink>
+          <ChevronRight :size="13" class="bc-sep" />
+          <button @click="goBack" class="bc-link">Results</button>
+          <ChevronRight :size="13" class="bc-sep" />
+          <span class="bc-active">{{ paper.title.length > 60 ? paper.title.substring(0, 60) + '…' : paper.title
+          }}</span>
+        </div>
       </div>
-    </nav>
+      <div class="paper-header-inner">
+        <div class="header-badges">
+          <span class="badge badge-dept">{{ paper.department }}</span>
+          <span class="badge badge-type">{{ paper.project_type }}</span>
+          <span v-if="paper.degree_program !== 'N/A'" class="badge badge-degree">{{ paper.degree_program }}</span>
+        </div>
+        <h1>{{ paper.title }}</h1>
+        <div class="metadata-grid">
+          <div class="meta-item">
+            <User :size="15" /><span>{{ paper.author }}</span>
+          </div>
+          <div class="meta-item">
+            <Calendar :size="15" /><span>{{ paper.year }}</span>
+          </div>
+        </div>
+        <div class="engagement-row">
+          <div class="stat-chip">
+            <Eye :size="14" /><span>{{ viewCount.toLocaleString() }} views</span>
+          </div>
+          <div class="stat-chip">
+            <Award :size="14" /><span>{{ citationCount.toLocaleString() }} citations</span>
+          </div>
+          <button v-if="isLoggedIn" class="cite-btn" :class="{ cited: hasCited, loading: citeLoading }"
+            :disabled="hasCited || citeLoading" @click="handleCite">
+            <CheckCircle v-if="hasCited" :size="15" />
+            <Award v-else :size="15" />
+            {{ hasCited ? 'You Cited This' : citeLoading ? 'Citing...' : 'Cite this study' }}
+          </button>
+          <span v-else class="cite-hint">Authentication required to cite</span>
+        </div>
+      </div>
+    </div>
 
+    <!-- 3-column content row -->
     <div class="detail-layout">
+
+      <!-- Left: Document Content sidebar -->
+      <aside class="doc-content-aside">
+        <p class="doc-content-title">Document Content</p>
+        <nav class="doc-content-nav">
+          <button class="dcn-item" :class="{ active: activeTab === 'abstract' }" @click="activeTab = 'abstract'">
+            Abstract
+          </button>
+          <button v-if="paper.introduction" class="dcn-item" :class="{ active: activeTab === 'introduction' }"
+            @click="activeTab = 'introduction'">
+            Introduction
+          </button>
+          <button v-if="paper.methods" class="dcn-item" :class="{ active: activeTab === 'methods' }"
+            @click="activeTab = 'methods'">
+            Methods
+          </button>
+          <button v-if="paper.results" class="dcn-item" :class="{ active: activeTab === 'results' }"
+            @click="activeTab = 'results'">
+            Results
+          </button>
+          <button v-if="paper.discussion" class="dcn-item" :class="{ active: activeTab === 'discussion' }"
+            @click="activeTab = 'discussion'">
+            Discussion
+          </button>
+        </nav>
+        <p class="doc-content-title" style="margin-top:1.5rem">Authors</p>
+        <nav class="doc-content-nav">
+          <button class="dcn-item" :class="{ active: activeTab === 'authors' }" @click="activeTab = 'authors'">
+            Author(s)
+          </button>
+        </nav>
+      </aside>
+
+      <!-- Center: Main content -->
       <main class="paper-main">
-        <!-- Header -->
-        <header class="paper-header">
-          <div class="header-badges">
-            <span class="badge badge-dept">{{ paper.department }}</span>
-            <span class="badge badge-type">{{ paper.project_type }}</span>
-            <span v-if="paper.degree_program !== 'N/A'" class="badge badge-degree">{{ paper.degree_program }}</span>
-          </div>
-          <h1>{{ paper.title }}</h1>
-
-          <!-- Author & Year -->
-          <div class="metadata-grid">
-            <div class="meta-item">
-              <User :size="15" />
-              <span>{{ paper.author }}</span>
-            </div>
-            <div class="meta-item">
-              <Calendar :size="15" />
-              <span>{{ paper.year }}</span>
-            </div>
-          </div>
-
-          <!-- Engagement Stats -->
-          <div class="engagement-row">
-            <div class="stat-chip">
-              <Eye :size="14" />
-              <span>{{ viewCount.toLocaleString() }} views</span>
-            </div>
-            <div class="stat-chip">
-              <Award :size="14" />
-              <span>{{ citationCount.toLocaleString() }} citations</span>
-            </div>
-
-            <!-- Cite Button -->
-            <button v-if="isLoggedIn" class="cite-btn" :class="{ cited: hasCited, loading: citeLoading }"
-              :disabled="hasCited || citeLoading" @click="handleCite">
-              <CheckCircle v-if="hasCited" :size="15" />
-              <Award v-else :size="15" />
-              {{ hasCited ? 'You Cited This' : citeLoading ? 'Citing...' : 'Cite / Vouch' }}
-            </button>
-            <span v-else class="cite-hint">Log in to cite this paper</span>
-          </div>
-        </header>
-
-        <hr class="divider" />
-
         <!-- Tab Toggle -->
         <div class="doc-tabs">
           <button class="doc-tab" :class="{ active: activeTab === 'abstract' }" @click="activeTab = 'abstract'">
-            <FileText :size="15" /> Abstract
+            Abstract
           </button>
           <button v-if="paper.introduction" class="doc-tab" :class="{ active: activeTab === 'introduction' }"
             @click="activeTab = 'introduction'">
-            <BookOpen :size="15" /> Introduction
+            Introduction
           </button>
           <button v-if="paper.methods" class="doc-tab" :class="{ active: activeTab === 'methods' }"
             @click="activeTab = 'methods'">
-            <Sparkles :size="15" /> Methods
+            Methods
           </button>
           <button v-if="paper.results" class="doc-tab" :class="{ active: activeTab === 'results' }"
             @click="activeTab = 'results'">
-            <TrendingUp :size="15" /> Results
+            Results
           </button>
           <button v-if="paper.discussion" class="doc-tab" :class="{ active: activeTab === 'discussion' }"
             @click="activeTab = 'discussion'">
-            <MessageSquare :size="15" /> Discussion
+            Discussion
           </button>
-          <button class="doc-tab" :class="{ active: activeTab === 'document' }" @click="activeTab = 'document'">
-            <FileIcon :size="15" /> Full Document
+          <button class="doc-tab" :class="{ active: activeTab === 'authors' }" @click="activeTab = 'authors'">
+            Authors
           </button>
         </div>
 
@@ -266,8 +314,10 @@ const abstractPreview = computed(() => {
             </div>
 
             <!-- Extracted text (always visible, selectable, copyable) -->
-            <div v-if="cfg.content" class="section-text-wrap">
-              <pre class="section-text">{{ cfg.content }}</pre>
+            <div v-if="cfg.content" class="section-text-outer">
+              <div class="section-text-wrap">
+                <pre class="section-text">{{ cfg.content }}</pre>
+              </div>
             </div>
             <p v-else class="no-content-note">No extracted text available for this section.</p>
 
@@ -289,6 +339,23 @@ const abstractPreview = computed(() => {
 
           </div>
         </template>
+
+        <!-- Authors Tab -->
+        <div v-if="activeTab === 'authors'" class="paper-section authors-tab">
+          <h3>
+            <User :size="17" /> Authors
+          </h3>
+          <div v-if="authorList.length > 0" class="authors-list">
+            <div v-for="(author, idx) in authorList" :key="idx" class="author-card">
+              <div class="author-avatar">{{ author.charAt(0).toUpperCase() }}</div>
+              <div class="author-info">
+                <p class="author-name">{{ author }}</p>
+                <p class="author-label">Author {{ idx + 1 }}</p>
+              </div>
+            </div>
+          </div>
+          <p v-else class="no-content-note">No author information available.</p>
+        </div>
 
         <!-- Full Document Tab -->
         <div v-if="activeTab === 'document'" class="pdf-viewer-wrap">
@@ -328,49 +395,65 @@ const abstractPreview = computed(() => {
   font-family: 'Inter', -apple-system, sans-serif;
 }
 
-.detail-nav {
-  display: flex;
-  justify-content: space-between;
-  padding: 1rem 2rem;
+.paper-header-wrap {
   background: white;
-  border-bottom: 1px solid #eee;
-  position: sticky;
-  top: 0;
-  z-index: 10;
+  border-bottom: 1px solid #e5e7eb;
+  padding-top: 1.25rem;
+  padding-bottom: 2rem;
 }
 
-.back-btn {
-  background: none;
-  border: none;
+/* ── Breadcrumb inside header-wrap ───────────────────────────── */
+.paper-breadcrumb {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  color: #666;
-  font-weight: 500;
-  cursor: pointer;
-  font-size: 0.9rem;
+  gap: 0.4rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid #f0f0f0;
+  margin-bottom: 1.75rem;
 }
 
-.icon-btn {
+.bc-link {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #9ca3af;
   background: none;
-  border: 1px solid #eee;
-  padding: 0.5rem;
-  border-radius: 6px;
-  margin-left: 0.5rem;
+  border: none;
   cursor: pointer;
-  color: #666;
+  padding: 0;
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.bc-link:hover {
+  color: #00a651;
+}
+
+.bc-sep {
+  color: #d1d5db;
+}
+
+.bc-active {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #374151;
+}
+
+.paper-header-inner {
+  max-width: 1300px;
+  margin: 0 auto;
 }
 
 .detail-layout {
   display: flex;
-  max-width: 1200px;
+  max-width: 1300px;
   margin: 0 auto;
-  padding: 3rem 2rem;
-  gap: 4rem;
+  padding: 2rem 2rem;
+  gap: 2rem;
+  align-items: flex-start;
 }
 
 .paper-main {
-  flex: 1;
+  flex: 1 1 0;
   min-width: 0;
 }
 
@@ -406,7 +489,7 @@ const abstractPreview = computed(() => {
   color: #c2410c;
 }
 
-.paper-header h1 {
+.paper-header-inner h1 {
   font-size: 2rem;
   margin: 0 0 1.2rem 0;
   line-height: 1.25;
@@ -486,9 +569,7 @@ const abstractPreview = computed(() => {
 }
 
 .divider {
-  border: none;
-  border-top: 1px solid #e5e7eb;
-  margin: 0 0 2rem 0;
+  display: none;
 }
 
 /* Paper Sections */
@@ -511,6 +592,7 @@ const abstractPreview = computed(() => {
   color: #444;
   font-size: 1rem;
   margin-bottom: 0.5rem;
+  text-align: justify;
 }
 
 .read-more-btn {
@@ -733,14 +815,49 @@ const abstractPreview = computed(() => {
 }
 
 /* Extracted text wrapper */
+/* Outer wrapper: holds the ripple, no overflow clipping */
+.section-text-outer {
+  position: relative;
+  margin-bottom: 1rem;
+  border-radius: 8px;
+}
+
+/* Ripple ring — sits on outer wrapper so overflow:auto can't clip it */
+.section-text-outer::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: 8px;
+  border: 1.5px solid rgba(16, 185, 129, 0.7);
+  animation: border-ripple 2.4s cubic-bezier(0.2, 0.6, 0.4, 1) infinite;
+  pointer-events: none;
+  z-index: 1;
+}
+
+@keyframes border-ripple {
+  0% {
+    inset: -1px;
+    border-color: rgba(16, 185, 129, 0.7);
+    opacity: 1;
+  }
+
+  100% {
+    inset: -14px;
+    border-color: rgba(16, 185, 129, 0);
+    opacity: 0;
+  }
+}
+
+/* Inner box: the actual scrollable text area */
 .section-text-wrap {
   background: #f9fafb;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
   padding: 1.25rem 1.5rem;
-  margin-bottom: 1rem;
   max-height: 480px;
   overflow-y: auto;
+  position: relative;
+  z-index: 2;
 }
 
 /* Extracted text — pre preserves paragraphs, wraps long lines */
@@ -755,6 +872,7 @@ const abstractPreview = computed(() => {
   padding: 0;
   background: none;
   border: none;
+  text-align: justify;
 }
 
 .no-content-note {
@@ -822,6 +940,102 @@ const abstractPreview = computed(() => {
   }
 }
 
+/* ── Left Document Content sidebar ──────────────────────────── */
+.doc-content-aside {
+  width: 190px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 4.5rem;
+  align-self: flex-start;
+}
+
+.doc-content-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: #9ca3af;
+  margin: 0 0 0.4rem 0.5rem;
+}
+
+.doc-content-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.dcn-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 0.45rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #6b7280;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.dcn-item:hover {
+  background: #f3f4f6;
+  color: #111;
+}
+
+.dcn-item.active {
+  background: #f0fdf4;
+  color: #059669;
+  font-weight: 700;
+}
+
+/* ── Authors tab ─────────────────────────────────────────────── */
+.authors-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.author-card {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.85rem 1rem;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+}
+
+.author-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: white;
+  font-size: 1.1rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.author-name {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #111;
+  margin: 0 0 0.15rem 0;
+}
+
+.author-label {
+  font-size: 0.78rem;
+  color: #9ca3af;
+  margin: 0;
+}
+
 /* ── Tablet (≤768px) ─────────────────────────────────────────── */
 @media (max-width: 768px) {
   .detail-layout {
@@ -830,27 +1044,27 @@ const abstractPreview = computed(() => {
     gap: 2rem;
   }
 
+  .doc-content-aside {
+    display: none;
+  }
+
   .recommendations-aside {
     width: 100%;
   }
 
-  .paper-header h1 {
+  .paper-header-inner h1 {
     font-size: 1.6rem;
   }
 }
 
 /* ── Phone (≤480px) — Primary Android target 360–412px ───────── */
 @media (max-width: 480px) {
-  .detail-nav {
-    padding: 0.75rem 1rem;
-  }
-
   .detail-layout {
     padding: 1rem;
     gap: 1.5rem;
   }
 
-  .paper-header h1 {
+  .paper-header-inner h1 {
     font-size: 1.3rem;
   }
 

@@ -11,8 +11,10 @@ import {
   AlertTriangle, RefreshCw
 } from 'lucide-vue-next'
 import { api, type Paper, type UserResponse, type PartialPaperMetadata } from '../services/api'
+import { useAuth } from '../composables/useAuth'
 
 const router = useRouter()
+const { isAdmin } = useAuth()
 
 // ── Sidebar collapse ────────────────────────────────────────────
 const sidebarCollapsed = ref(false)
@@ -22,18 +24,27 @@ const toggleSidebar = () => { sidebarCollapsed.value = !sidebarCollapsed.value }
 type Section = 'dashboard' | 'repository' | 'users' | 'upload'
 const activeSection = ref<Section>('dashboard')
 
-const navItems: { id: Section; label: string; icon: Component; description: string }[] = [
+// Base nav — all staff see these
+const baseNavItems: { id: Section; label: string; icon: Component; description: string }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: Home, description: 'Overview of repository' },
   { id: 'upload', label: 'Upload Research', icon: FileUp, description: 'Index new PDF documents' },
   { id: 'repository', label: 'Thesis & Research', icon: Library, description: 'Browse & manage indexed works' },
+]
+// Admin-only nav item
+const adminNavItems: { id: Section; label: string; icon: Component; description: string }[] = [
   { id: 'users', label: 'User Manager', icon: Users, description: 'Manage students & faculty' },
 ]
+const navItems = computed(() =>
+  isAdmin.value ? [...baseNavItems, ...adminNavItems] : baseNavItems
+)
 
 const activeLabel = computed(() => {
-  return navItems.find(i => i.id === activeSection.value)?.label ?? 'Dashboard'
+  return navItems.value.find(i => i.id === activeSection.value)?.label ?? 'Dashboard'
 })
 
 const setSection = (s: Section) => {
+  // Guard: only admin can access user manager
+  if (s === 'users' && !isAdmin.value) return
   activeSection.value = s
   router.push({ query: { ...router.currentRoute.value.query, tab: s } })
   // Auto-collapse on mobile after selecting
@@ -43,12 +54,12 @@ const setSection = (s: Section) => {
 // Browser History Sync
 onMounted(() => {
   const tab = router.currentRoute.value.query.tab as Section
-  if (tab && navItems.map(i => i.id).includes(tab)) {
+  if (tab && navItems.value.map(i => i.id).includes(tab)) {
     activeSection.value = tab
   }
 })
 watch(() => router.currentRoute.value.query.tab, (newTab) => {
-  if (newTab && navItems.map(i => i.id).includes(newTab as Section)) {
+  if (newTab && navItems.value.map(i => i.id).includes(newTab as Section)) {
     activeSection.value = newTab as Section
   }
 })
@@ -1172,7 +1183,7 @@ watch(activeSection, (newSection) => {
                   <Settings2 :size="24" color="#10b981" />
                 </div>
                 <div class="header-text">
-                  <h3>Upload method</h3>
+                  <h3>Upload options</h3>
                   <p><strong>{{ file?.name }}</strong></p>
                 </div>
                 <button @click="goBackToStep1" class="close-modal">
@@ -1186,8 +1197,8 @@ watch(activeSection, (newSection) => {
                     <Sparkles :size="28" />
                   </div>
                   <div class="strategy-info">
-                    <h4>Smart Scan</h4>
-                    <p>Automatically extract title, authors, and abstract using OCR.</p>
+                    <h4>Automatic Scan</h4>
+                    <p>Automatically extract metadata using OCR + IMRAD formatting.</p>
                   </div>
                   <div class="strategy-badge">Recommended</div>
                 </button>

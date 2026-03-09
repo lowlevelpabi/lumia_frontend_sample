@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter, RouterLink } from 'vue-router'
-import { Search, User, ChevronRight, Sparkles, Filter, Lightbulb, BookOpen } from 'lucide-vue-next'
+import { Search, User, ChevronRight, Filter } from 'lucide-vue-next'
 import { api, type Paper } from '../services/api'
 
 const router = useRouter()
@@ -39,7 +39,7 @@ const handleSearch = () => {
       <div class="hero-inner">
         <div class="hero-content">
           <h1 class="hero-title">Lumia: Smart Research</h1>
-          <p class="hero-subtitle">Search across titles, abstracts, and full-text — powered by Lumia's smart retrieval.
+          <p class="hero-subtitle">Search across various domains or topics.
           </p>
 
           <div class="search-panel">
@@ -71,30 +71,6 @@ const handleSearch = () => {
 
     <!-- Main Content Area -->
     <main class="home-main">
-      <!-- Feature Highlights: Grid -->
-      <section class="features-grid">
-        <div class="feature-card">
-          <div class="feature-icon">
-            <Sparkles :size="24" color="#00a651" />
-          </div>
-          <div class="feature-info">
-            <h3>Smart Section Retrieval</h3>
-            <p>Target specific sections like <strong>Methods</strong> or <strong>Results</strong> for surgical precision
-              in your research discovery.</p>
-          </div>
-        </div>
-        <div class="feature-card">
-          <div class="feature-icon">
-            <BookOpen :size="24" color="#00a651" />
-          </div>
-          <div class="feature-info">
-            <h3>BERT Semantic Search</h3>
-            <p>Our NLP engine understands context, not just keywords, helping you find relevant papers even with
-              different terminology.</p>
-          </div>
-        </div>
-      </section>
-
       <div class="content-layout">
         <!-- Left Sidebar: Quick Refine -->
         <aside class="left-aside">
@@ -104,19 +80,15 @@ const handleSearch = () => {
               <h4>Refine Discovery</h4>
             </div>
             <div class="filter-group">
-              <span class="group-label">Program Type</span>
+              <span class="group-label">Document / Article Type</span>
               <RouterLink :to="{ name: 'results', query: { q: 'Thesis' } }" class="filter-link">Thesis</RouterLink>
               <RouterLink :to="{ name: 'results', query: { q: 'Capstone' } }" class="filter-link">Capstone Projects
               </RouterLink>
             </div>
             <div class="filter-group">
-              <span class="group-label">Departments</span>
+              <span class="group-label">Department(s)</span>
               <RouterLink :to="{ name: 'results', query: { q: 'Computer Science' } }" class="filter-link">Computer
-                Science</RouterLink>
-              <RouterLink :to="{ name: 'results', query: { q: 'Information Technology' } }" class="filter-link">
-                Information Tech</RouterLink>
-              <RouterLink :to="{ name: 'results', query: { q: 'Engineering' } }" class="filter-link">Engineering
-              </RouterLink>
+                Studies</RouterLink>
             </div>
           </div>
         </aside>
@@ -163,25 +135,6 @@ const handleSearch = () => {
           </div>
         </section>
 
-        <!-- Right Sidebar: Search Assistant -->
-        <aside class="right-aside">
-          <div class="guide-card">
-            <div class="card-header-row">
-              <Lightbulb :size="16" color="#f59e0b" />
-              <h4>Search Assistant</h4>
-            </div>
-            <p class="guide-intro">Get better results by targeting specific paper sections:</p>
-            <div class="tip-box">
-              <code class="tip-cmd">methods: RNN</code>
-              <p class="tip-desc">Search only within the Methodology section.</p>
-            </div>
-            <div class="tip-box">
-              <code class="tip-cmd">results: accuracy</code>
-              <p class="tip-desc">Look for specific findings in the Results section.</p>
-            </div>
-            <RouterLink to="/results" class="guide-link">View Search Guide →</RouterLink>
-          </div>
-        </aside>
       </div>
     </main>
   </div>

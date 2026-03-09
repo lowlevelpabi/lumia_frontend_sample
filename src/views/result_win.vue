@@ -509,4 +509,3 @@ const viewDetail = (id: number) => router.push({ name: 'detail', params: { id } 
   }
 }
 </style>
-

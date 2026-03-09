@@ -1,18 +1,22 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter, RouterLink } from 'vue-router'
-import { UserPlus, User, Mail, Lock, ShieldCheck, BookOpen } from 'lucide-vue-next'
+import { UserPlus, User, Mail, Lock, BookOpen } from 'lucide-vue-next'
 import { api } from '../services/api'
 
 const router = useRouter()
 const username = ref('')
 const email = ref('')
 const password = ref('')
-const role = ref('User')
+const confirmPassword = ref('')
 const loading = ref(false)
 const error = ref('')
 
 const handleRegister = async () => {
+  if (password.value !== confirmPassword.value) {
+    error.value = 'Passwords do not match.'
+    return
+  }
   loading.value = true
   error.value = ''
   try {
@@ -20,7 +24,7 @@ const handleRegister = async () => {
       username: username.value,
       email: email.value,
       password: password.value,
-      role: role.value
+      role: 'User'
     })
     // Auto login or redirect to login
     router.push({ name: 'login' })
@@ -51,31 +55,30 @@ const handleRegister = async () => {
           <label>
             <User :size="14" /> Username
           </label>
-          <input v-model="username" type="text" required placeholder="johndoe" />
+          <input v-model="username" id="username" type="text" autocomplete="username" required placeholder="johndoe" />
         </div>
 
         <div class="input-group">
           <label>
             <Mail :size="14" /> Email Address
           </label>
-          <input v-model="email" type="email" required placeholder="john@example.com" />
+          <input v-model="email" id="email" type="email" autocomplete="email" required placeholder="john@example.com" />
         </div>
 
         <div class="input-group">
           <label>
             <Lock :size="14" /> Password
           </label>
-          <input v-model="password" type="password" required placeholder="••••••••" />
+          <input v-model="password" id="password" type="password" autocomplete="new-password" required
+            placeholder="••••••••" />
         </div>
 
         <div class="input-group">
           <label>
-            <ShieldCheck :size="14" /> Account Type
+            <Lock :size="14" /> Confirm Password
           </label>
-          <select v-model="role" class="role-select">
-            <option value="User">Student</option>
-            <option value="Faculty">Faculty / Admin</option>
-          </select>
+          <input v-model="confirmPassword" id="confirmPassword" type="password" autocomplete="new-password" required
+            placeholder="••••••••" />
         </div>
 
         <button type="submit" class="auth-btn" :disabled="loading">
@@ -143,18 +146,37 @@ const handleRegister = async () => {
   margin-bottom: 0.5rem;
 }
 
-.input-group input,
-.role-select {
+.input-group input {
   width: 100%;
   padding: 0.75rem;
   border: 1px solid #ddd;
   border-radius: 6px;
   font-size: 1rem;
+  transition: border-color 0.2s;
+  background: white !important;
+  box-sizing: border-box;
 }
 
-.role-select {
-  background-color: white;
-  cursor: pointer;
+.input-group input:not(:placeholder-shown) {
+  color: #111827;
+  -webkit-text-fill-color: #111827;
+}
+
+.input-group input:focus {
+  outline: none;
+  border-color: #10b981;
+}
+
+
+
+/* Kill Chrome autofill green/yellow */
+.input-group input:-webkit-autofill,
+.input-group input:-webkit-autofill:hover,
+.input-group input:-webkit-autofill:focus,
+.input-group input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 9999px white inset !important;
+  -webkit-text-fill-color: #111827 !important;
+  caret-color: #111827;
 }
 
 .auth-btn {
