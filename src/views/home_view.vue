@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter, RouterLink } from 'vue-router'
-import { Search, User, ChevronRight, Filter } from 'lucide-vue-next'
+import { Search, User, ArrowRight, BookOpen, Hash, Clock } from 'lucide-vue-next'
 import { api, type Paper } from '../services/api'
 
 const router = useRouter()
@@ -12,10 +12,9 @@ const loading = ref(true)
 onMounted(async () => {
   try {
     const allPapers = await api.listAllPapers()
-    // Sort by created_at desc (if available) or just take the last 5
     recentPapers.value = allPapers
       .sort((a, b) => (b.id || 0) - (a.id || 0))
-      .slice(0, 5)
+      .slice(0, 6)
   } catch (e) {
     console.error('Failed to fetch recent papers:', e)
   } finally {
@@ -28,603 +27,737 @@ const handleSearch = () => {
     router.push({ name: 'results', query: { q: searchQuery.value } })
   }
 }
-
-
 </script>
 
 <template>
-  <div class="home-container">
-    <!-- Hero / Search Panel -->
-    <header class="home-hero">
+  <div class="home">
+
+    <!-- ══ HERO ══════════════════════════════════════════════════════ -->
+    <section class="hero">
       <div class="hero-inner">
-        <div class="hero-content">
-          <h1 class="hero-title">Lumia: Smart Research</h1>
-          <p class="hero-subtitle">Search across various domains or topics.
-          </p>
 
-          <div class="search-panel">
-            <div class="search-box">
-              <div class="search-input-wrap">
-                <Search :size="20" class="search-icon" />
-                <input v-model="searchQuery" type="text" placeholder="Search by title, abstract content, or keywords"
-                  @keyup.enter="handleSearch" />
-              </div>
-              <button class="search-btn" @click="handleSearch">Search</button>
-            </div>
-            <div class="search-hint">Try: "deep learning for healthcare" or "machine learning"</div>
-          </div>
+        <div class="hero-masthead">
+          <span class="masthead-rule"></span>
+          <span class="masthead-label">Lumia · Research Retrieval System</span>
+          <span class="masthead-rule"></span>
         </div>
 
-        <div class="hero-featured">
-          <div class="featured-card">
-            <span class="feat-badge">Featured Thesis</span>
-            <h4 class="feat-title">A compact overview of modern retrieval techniques</h4>
-            <p class="feat-desc">Exploring how neural search is transforming academic discovery.</p>
-            <RouterLink :to="{ name: 'results', query: { q: '' } }" class="cta-link">
-              Browse Related
-              <ChevronRight :size="16" />
-            </RouterLink>
+        <h1 class="hero-heading">
+          Lumia Retrieval System
+        </h1>
+
+        <p class="hero-sub">
+          Full-text retrieval across theses, capstone projects, and research
+          from the institution's indexed collection.
+        </p>
+
+        <div class="search-row">
+          <div class="search-field">
+            <Search :size="17" class="s-icon" />
+            <input v-model="searchQuery" type="text" placeholder="Title, author, keywords, abstract…"
+              @keyup.enter="handleSearch" spellcheck="false" autocomplete="off" />
           </div>
+          <button class="search-btn" @click="handleSearch">Search</button>
         </div>
+
+        <div class="browse-chips">
+          <span class="chips-label">Browse for:</span>
+          <RouterLink :to="{ name: 'results', query: { q: 'thesis article' } }" class="chip">thesis article</RouterLink>
+          <RouterLink :to="{ name: 'results', query: { q: 'capstone project' } }" class="chip">capstone project
+          </RouterLink>
+          <RouterLink :to="{ name: 'results', query: { q: 'computer science topic' } }" class="chip">computer science
+            topic
+          </RouterLink>
+        </div>
+
       </div>
-    </header>
+    </section>
 
-    <!-- Main Content Area -->
-    <main class="home-main">
-      <div class="content-layout">
-        <!-- Left Sidebar: Quick Refine -->
-        <aside class="left-aside">
-          <div class="utility-card">
-            <div class="card-header-row">
-              <Filter :size="16" />
-              <h4>Refine Discovery</h4>
-            </div>
-            <div class="filter-group">
-              <span class="group-label">Document / Article Type</span>
-              <RouterLink :to="{ name: 'results', query: { q: 'Thesis' } }" class="filter-link">Thesis</RouterLink>
-              <RouterLink :to="{ name: 'results', query: { q: 'Capstone' } }" class="filter-link">Capstone Projects
-              </RouterLink>
-            </div>
-            <div class="filter-group">
-              <span class="group-label">Department(s)</span>
-              <RouterLink :to="{ name: 'results', query: { q: 'Computer Science' } }" class="filter-link">Computer
-                Studies</RouterLink>
-            </div>
-          </div>
-        </aside>
+    <!-- ══ CONTENT ════════════════════════════════════════════════════ -->
+    <main class="content-wrap">
+      <div class="content-grid">
 
-        <!-- Feed / Recent Uploads -->
-        <section class="main-feed">
-          <div class="feed-header">
-            <h2 class="section-title">Recently Added Research</h2>
-            <RouterLink :to="{ name: 'results', query: { q: '' } }" class="text-link">View all</RouterLink>
-          </div>
+        <!-- ── Recent Papers ──────────────────────────────────────── -->
+        <section class="feed">
 
-          <div v-if="loading" class="loading-feed">
-            <div v-for="i in 3" :key="i" class="paper-card skeleton">
-              <div class="skel skel-line"></div>
-              <div class="skel skel-line short"></div>
-              <div class="skel skel-abstract"></div>
+          <header class="feed-head">
+            <div class="feed-head-left">
+              <Clock :size="13" />
+              <span>Recently Added</span>
             </div>
-          </div>
+            <RouterLink :to="{ name: 'results', query: { q: '' } }" class="head-link">
+              All records
+              <ArrowRight :size="12" />
+            </RouterLink>
+          </header>
 
-          <div v-else class="papers-feed">
-            <div v-for="paper in recentPapers" :key="paper.id" class="paper-card">
-              <div class="paper-type">{{ paper.project_type || 'Research' }}</div>
-              <RouterLink :to="{ name: 'detail', params: { id: paper.id } }" class="paper-title">
-                {{ paper.title }}
-              </RouterLink>
-              <div class="paper-authors">
-                <User :size="14" class="inline-icon" />
-                <span>{{ paper.author }}</span>
+          <!-- Skeleton state -->
+          <div v-if="loading" class="paper-list">
+            <div v-for="i in 5" :key="i" class="paper-item skeleton">
+              <div class="sk-num"></div>
+              <div class="sk-body">
+                <div class="sk-tag"></div>
+                <div class="sk-title"></div>
+                <div class="sk-meta"></div>
+                <div class="sk-abstract"></div>
               </div>
-              <p class="paper-abstract-preview">
-                {{ paper.abstract?.substring(0, 180) }}...
-              </p>
-              <div class="paper-actions">
-                <RouterLink :to="{ name: 'detail', params: { id: paper.id } }" class="view-btn">
-                  View Full-text
-                  <ChevronRight :size="14" />
+            </div>
+          </div>
+
+          <!-- Papers list -->
+          <ol v-else class="paper-list">
+            <li v-for="(paper, idx) in recentPapers" :key="paper.id" class="paper-item">
+              <span class="item-num">{{ String(idx + 1).padStart(2, '0') }}</span>
+
+              <div class="item-body">
+                <div class="item-tags">
+                  <span class="type-tag">{{ paper.project_type || 'Research' }}</span>
+                  <span v-if="paper.year" class="year-tag">{{ paper.year }}</span>
+                </div>
+
+                <RouterLink :to="{ name: 'detail', params: { id: paper.id } }" class="item-title">{{ paper.title }}
+                </RouterLink>
+
+                <div class="item-meta">
+                  <User :size="11" />
+                  <span>{{ paper.author }}</span>
+                  <template v-if="paper.department">
+                    <span class="dot">·</span>
+                    <span class="item-dept">{{ paper.department }}</span>
+                  </template>
+                </div>
+
+                <p class="item-abstract">{{ paper.abstract?.substring(0, 210) }}…</p>
+
+                <RouterLink :to="{ name: 'detail', params: { id: paper.id } }" class="item-action">
+                  Read full record
+                  <ArrowRight :size="12" />
                 </RouterLink>
               </div>
+            </li>
+          </ol>
+
+          <RouterLink :to="{ name: 'results', query: { q: '' } }" class="view-more">
+            View the full repository
+            <ArrowRight :size="14" />
+          </RouterLink>
+
+        </section>
+
+        <!-- ── Sidebar ────────────────────────────────────────────── -->
+        <aside class="sidebar">
+
+          <div class="sb-panel">
+            <div class="sb-title">
+              <BookOpen :size="13" />
+              <span>Browse Collection</span>
             </div>
 
-            <RouterLink :to="{ name: 'results', query: { q: '' } }" class="see-more-btn">
-              Explore More Research
-            </RouterLink>
+            <div class="sb-group">
+              <p class="sb-group-label">By Document Type</p>
+              <RouterLink :to="{ name: 'results', query: { q: 'Thesis' } }" class="sb-link">Thesis / Research
+              </RouterLink>
+              <RouterLink :to="{ name: 'results', query: { q: 'Capstone Project' } }" class="sb-link">Capstone Project
+              </RouterLink>
+            </div>
+
+            <div class="sb-group">
+              <p class="sb-group-label">By Department</p>
+              <RouterLink :to="{ name: 'results', query: { q: 'computer science' } }" class="sb-link">Department of
+                Computer
+                Studies
+              </RouterLink>
+            </div>
           </div>
-        </section>
+
+          <div class="sb-panel">
+            <div class="sb-title">
+              <Hash :size="13" />
+              <span>Search Tips</span>
+            </div>
+            <ul class="tips">
+              <li>Use <code>"exact phrase"</code> for precise matches</li>
+              <li>Search by author name to find all their works</li>
+              <li>Abstract keywords yield broader results than titles alone</li>
+              <li>Combine terms: <code>neural network classification</code></li>
+            </ul>
+          </div>
+
+        </aside>
 
       </div>
     </main>
+
   </div>
 </template>
 
 <style scoped>
-.home-container {
+@import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400;1,600&family=Source+Sans+3:wght@400;500;600;700&display=swap');
+
+/* ── Design tokens ───────────────────────────────────────── */
+.home {
+  --ink: #181c18;
+  --ink-2: #3d4239;
+  --ink-3: #7a7f75;
+  --rule: #dfe0db;
+  --surface: #f5f5f2;
+  --paper: #ffffff;
+  --green: #00a651;
+  --green-dk: #007d3d;
+  --green-dim: #e6f4ed;
+  --hero-bg: #0d1f12;
+
   min-height: calc(100vh - 64px);
-  background-color: #f8fafc;
+  background: var(--surface);
+  font-family: 'Source Sans 3', sans-serif;
+  color: var(--ink);
 }
 
-/* ── Hero Section ────────────────────────────────────────── */
-.home-hero {
-  background: linear-gradient(135deg, #001a0d 0%, #004d26 100%);
-  padding: 4rem 1.5rem 5rem;
-  color: #fff;
+/* ══ HERO ════════════════════════════════════════════════ */
+.hero {
+  background: var(--hero-bg);
+  padding: 4.5rem 2rem 4rem;
+  position: relative;
+  border-bottom: 3px solid var(--green);
+}
+
+/* Subtle dot-grid texture */
+.hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.055) 1px, transparent 1px);
+  background-size: 28px 28px;
+  pointer-events: none;
 }
 
 .hero-inner {
-  max-width: 1200px;
+  max-width: 780px;
   margin: 0 auto;
+  position: relative;
+  z-index: 1;
+}
+
+/* Masthead bar — journal-header feel */
+.hero-masthead {
   display: flex;
   align-items: center;
-  gap: 3rem;
+  gap: 1rem;
+  margin-bottom: 2.5rem;
 }
 
-.hero-content {
+.masthead-rule {
   flex: 1;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.14);
 }
 
-.hero-title {
-  font-size: 2.75rem;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  margin-bottom: 0.75rem;
-  line-height: 1.1;
-}
-
-.hero-subtitle {
-  font-size: 1.125rem;
-  color: rgba(255, 255, 255, 0.85);
-  margin-bottom: 2rem;
-  line-height: 1.5;
-  max-width: 600px;
-}
-
-/* Search Box */
-.search-panel {
-  max-width: 650px;
-}
-
-.search-box {
-  display: flex;
-  background: #fff;
-  border-radius: 12px;
-  padding: 0.4rem;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
-}
-
-.search-input-wrap {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  padding: 0 0.75rem;
-}
-
-.search-input-wrap input {
-  width: 100%;
-  border: none;
-  padding: 0.75rem 0.5rem;
-  font-size: 1rem;
-  outline: none;
-  color: #1a1a1a;
-}
-
-.search-icon {
-  color: #94a3b8;
-}
-
-.search-btn {
-  background: #00a651;
-  color: #fff;
-  border: none;
-  padding: 0.75rem 2rem;
-  border-radius: 8px;
-  font-weight: 700;
-  font-size: 1rem;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.search-btn:hover {
-  background: #008c44;
-  transform: translateY(-1px);
-}
-
-.search-hint {
-  margin-top: 0.75rem;
-  font-size: 0.875rem;
-  color: rgba(255, 255, 255, 0.6);
-}
-
-/* Hero Featured Card */
-.hero-featured {
-  width: 340px;
-}
-
-.featured-card {
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  padding: 1.5rem;
-  border-radius: 16px;
-  color: #fff;
-}
-
-.feat-badge {
-  display: inline-block;
-  font-size: 0.65rem;
-  font-weight: 800;
+.masthead-label {
+  font-size: 0.68rem;
+  font-weight: 600;
   text-transform: uppercase;
-  background: #00a651;
-  padding: 0.25rem 0.6rem;
-  border-radius: 4px;
-  margin-bottom: 1rem;
+  letter-spacing: 0.14em;
+  color: rgba(255, 255, 255, 0.32);
+  white-space: nowrap;
 }
 
-.feat-title {
-  font-size: 1.125rem;
-  font-weight: 700;
-  margin-bottom: 0.5rem;
-  line-height: 1.4;
+/* Heading */
+.hero-heading {
+  font-family: 'Lora', Georgia, serif;
+  font-size: clamp(2.5rem, 5.5vw, 3.75rem);
+  font-weight: 600;
+  line-height: 1.1;
+  color: #fff;
+  margin: 0 0 1.25rem;
+  letter-spacing: -0.01em;
 }
 
-.feat-desc {
-  font-size: 0.875rem;
-  color: rgba(255, 255, 255, 0.7);
+.hero-heading em {
+  font-style: italic;
+  color: var(--green);
+}
+
+.hero-sub {
+  font-size: 1rem;
+  line-height: 1.7;
+  color: rgba(255, 255, 255, 0.46);
+  margin: 0 0 2.5rem;
+  max-width: 540px;
+}
+
+/* Search */
+.search-row {
+  display: flex;
+  gap: 0.5rem;
+  max-width: 620px;
   margin-bottom: 1.5rem;
 }
 
-.cta-link {
+.search-field {
+  flex: 1;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  color: #00a651;
-  text-decoration: none;
-  font-weight: 700;
-  font-size: 0.95rem;
+  gap: 0.65rem;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 6px;
+  padding: 0 1rem;
+  transition: border-color 0.15s, background 0.15s;
 }
 
-.cta-link:hover {
-  text-decoration: underline;
+.search-field:focus-within {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.3);
 }
 
-/* ── Main Layout (3-Column Utility) ─────────────────────── */
-.home-main {
-  max-width: 1200px;
-  margin: 0 auto 5rem;
-  padding: 0 1.5rem;
-}
-
-.features-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1.5rem;
-  margin: -2.5rem auto 3rem;
-  position: relative;
-  z-index: 10;
-}
-
-.feature-card {
-  background: #fff;
-  border-radius: 16px;
-  padding: 1.5rem;
-  display: flex;
-  align-items: center;
-  gap: 1.25rem;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
-  border: 1px solid #e2e8f0;
-}
-
-.feature-icon {
-  width: 48px;
-  height: 48px;
-  background: #f0fdf4;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.s-icon {
+  color: rgba(255, 255, 255, 0.28);
   flex-shrink: 0;
 }
 
-.feature-info h3 {
-  font-size: 1rem;
-  font-weight: 800;
-  color: #0f172a;
-  margin-bottom: 0.15rem;
+.search-field input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #fff;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.95rem;
+  padding: 0.85rem 0;
 }
 
-.feature-info p {
-  font-size: 0.875rem;
-  color: #64748b;
-  line-height: 1.4;
+.search-field input::placeholder {
+  color: rgba(255, 255, 255, 0.22);
 }
 
-.content-layout {
+.search-btn {
+  background: var(--green);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 0.85rem 1.6rem;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.search-btn:hover {
+  background: var(--green-dk);
+}
+
+/* Browse chips */
+.browse-chips {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.chips-label {
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.26);
+  margin-right: 0.1rem;
+}
+
+.chip {
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.42);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 3px;
+  padding: 0.25rem 0.58rem;
+  text-decoration: none;
+  transition: color 0.14s, border-color 0.14s;
+}
+
+.chip:hover {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.36);
+}
+
+/* ══ CONTENT ════════════════════════════════════════════ */
+.content-wrap {
+  padding: 2.75rem 2rem 5rem;
+}
+
+.content-grid {
+  max-width: 1080px;
+  margin: 0 auto;
   display: grid;
-  grid-template-columns: 260px 1fr 260px;
-  gap: 2rem;
+  grid-template-columns: 1fr 224px;
+  gap: 3rem;
   align-items: start;
 }
 
-/* Sidebar Cards */
-.utility-card,
-.guide-card {
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 1.25rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-}
-
-.card-header-row {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 1.25rem;
-  color: #0f172a;
-}
-
-.card-header-row h4 {
-  font-size: 0.95rem;
-  font-weight: 700;
-}
-
-.filter-group {
-  margin-bottom: 1.5rem;
-}
-
-.group-label {
-  display: block;
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: #94a3b8;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 0.75rem;
-}
-
-.filter-link {
-  display: block;
-  font-size: 0.9rem;
-  color: #475569;
-  text-decoration: none;
-  padding: 0.4rem 0;
-  transition: all 0.2s;
-}
-
-.filter-link:hover {
-  color: #00a651;
-  padding-left: 4px;
-}
-
-/* Guide Card */
-.guide-intro {
-  font-size: 0.85rem;
-  color: #64748b;
-  margin-bottom: 1rem;
-  line-height: 1.4;
-}
-
-.tip-box {
-  background: #f8fafc;
-  border: 1px solid #f1f5f9;
-  border-radius: 8px;
-  padding: 0.75rem;
-  margin-bottom: 0.75rem;
-}
-
-.tip-cmd {
-  display: block;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 0.75rem;
-  color: #00a651;
-  font-weight: 700;
-  margin-bottom: 0.25rem;
-}
-
-.tip-desc {
-  font-size: 0.75rem;
-  color: #64748b;
-  line-height: 1.3;
-}
-
-.guide-link {
-  display: block;
-  margin-top: 1rem;
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: #00a651;
-  text-decoration: none;
-}
-
-.guide-link:hover {
-  text-decoration: underline;
-}
-
-/* Main Feed */
-.feed-header {
+/* ── Feed ──────────────────────────────────────────────── */
+.feed-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 1.5rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 2px solid var(--ink);
+  margin-bottom: 0;
 }
 
-.section-title {
-  font-size: 1.25rem;
-  font-weight: 800;
-  color: #0f172a;
-}
-
-.text-link {
-  color: #00a651;
-  text-decoration: none;
-  font-weight: 700;
-}
-
-.paper-card {
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 1.5rem;
-  margin-bottom: 1.25rem;
-  transition: all 0.2s;
-}
-
-.paper-card:hover {
-  border-color: #00a651;
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
-  transform: translateY(-2px);
-}
-
-.paper-type {
+.feed-head-left {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
   font-size: 0.7rem;
-  font-weight: 800;
-  color: #059669;
+  font-weight: 700;
   text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--ink-2);
+}
+
+.head-link {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--green);
+  text-decoration: none;
+}
+
+.head-link:hover {
+  text-decoration: underline;
+}
+
+/* Paper list */
+.paper-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.paper-item {
+  display: grid;
+  grid-template-columns: 38px 1fr;
+  gap: 0 1rem;
+  padding: 1.5rem 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.paper-item:last-of-type {
+  border-bottom: none;
+}
+
+.item-num {
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: var(--ink-3);
+  opacity: 0.45;
+  padding-top: 0.22rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.item-body {
+  min-width: 0;
+}
+
+.item-tags {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 0.38rem;
+}
+
+.type-tag {
+  font-size: 0.61rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--green-dk);
+  background: var(--green-dim);
+  padding: 0.14rem 0.44rem;
+  border-radius: 2px;
+}
+
+.year-tag {
+  font-size: 0.68rem;
+  color: var(--ink-3);
+}
+
+.item-title {
+  display: block;
+  font-family: 'Lora', Georgia, serif;
+  font-size: 1.02rem;
+  font-weight: 600;
+  color: var(--ink);
+  text-decoration: none;
+  line-height: 1.45;
+  margin-bottom: 0.38rem;
+  transition: color 0.14s;
+}
+
+.item-title:hover {
+  color: var(--green-dk);
+}
+
+.item-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.77rem;
+  color: var(--ink-3);
+  margin-bottom: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.dot {
+  opacity: 0.38;
+}
+
+.item-dept {
+  font-style: italic;
+}
+
+.item-abstract {
+  font-size: 0.84rem;
+  color: var(--ink-2);
+  line-height: 1.7;
+  margin: 0 0 0.75rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.item-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.77rem;
+  font-weight: 600;
+  color: var(--green-dk);
+  text-decoration: none;
+  transition: gap 0.14s;
+}
+
+.item-action:hover {
+  gap: 0.5rem;
+}
+
+/* View more */
+.view-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 2rem;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--ink);
+  border: 1.5px solid var(--ink);
+  border-radius: 5px;
+  padding: 0.6rem 1.15rem;
+  text-decoration: none;
+  transition: background 0.14s, color 0.14s;
+}
+
+.view-more:hover {
+  background: var(--ink);
+  color: #fff;
+}
+
+/* ── Skeleton ──────────────────────────────────────────── */
+@keyframes shimmer {
+  0% {
+    background-position: -500px 0;
+  }
+
+  100% {
+    background-position: 500px 0;
+  }
+}
+
+.skeleton {
+  pointer-events: none;
+}
+
+.sk-num,
+.sk-tag,
+.sk-title,
+.sk-meta,
+.sk-abstract {
+  background: linear-gradient(90deg, var(--rule) 25%, #e8e8e3 50%, var(--rule) 75%);
+  background-size: 500px 100%;
+  animation: shimmer 1.4s infinite;
+  border-radius: 3px;
   margin-bottom: 0.5rem;
 }
 
-.paper-title {
-  text-decoration: none;
-  font-size: 1.125rem;
-  font-weight: 700;
-  color: #1e293b;
-  line-height: 1.4;
-  margin-bottom: 0.75rem;
-  display: block;
+.sk-num {
+  width: 22px;
+  height: 13px;
+  margin-top: 0.22rem;
 }
 
-.paper-title:hover {
-  color: #00a651;
+.sk-tag {
+  width: 62px;
+  height: 15px;
 }
 
-.paper-authors {
+.sk-title {
+  width: 88%;
+  height: 18px;
+}
+
+.sk-meta {
+  width: 50%;
+  height: 12px;
+}
+
+.sk-abstract {
+  width: 100%;
+  height: 50px;
+  margin-bottom: 0;
+}
+
+/* ── Sidebar ───────────────────────────────────────────── */
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  position: sticky;
+  top: calc(64px + 1.5rem);
+}
+
+.sb-panel {
+  border-top: 2px solid var(--ink);
+  padding-top: 0.85rem;
+}
+
+.sb-title {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.875rem;
-  color: #64748b;
+  gap: 0.45rem;
+  font-size: 0.67rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink);
+  margin-bottom: 1.1rem;
+}
+
+.sb-group {
   margin-bottom: 1rem;
 }
 
-.inline-icon {
-  color: #94a3b8;
+.sb-group:last-child {
+  margin-bottom: 0;
 }
 
-.paper-abstract-preview {
-  font-size: 0.9rem;
-  color: #475569;
-  line-height: 1.6;
-  margin-bottom: 1.25rem;
-}
-
-.view-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  color: #00a651;
-  text-decoration: none;
+.sb-group-label {
+  font-size: 0.61rem;
   font-weight: 700;
-  font-size: 0.875rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--ink-3);
+  margin: 0 0 0.38rem;
 }
 
-.see-more-btn {
+.sb-link {
   display: block;
-  text-align: center;
-  padding: 1rem;
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  color: #64748b;
-  font-weight: 700;
+  font-size: 0.83rem;
+  color: var(--ink-2);
   text-decoration: none;
-  margin-top: 2rem;
-  transition: all 0.2s;
+  padding: 0.27rem 0;
+  transition: color 0.13s, padding-left 0.13s;
 }
 
-.see-more-btn:hover {
-  border-color: #00a651;
-  color: #00a651;
+.sb-link:hover {
+  color: var(--green-dk);
+  padding-left: 5px;
 }
 
-/* ── Skeletons ─────────────────────────────────────────── */
-.skeleton .skel {
-  background: #f1f5f9;
-  border-radius: 6px;
+/* Tips */
+.tips {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
 }
 
-.skel-line {
-  height: 1.2rem;
-  margin-bottom: 0.75rem;
+.tips li {
+  font-size: 0.79rem;
+  color: var(--ink-2);
+  line-height: 1.55;
+  padding-left: 1rem;
+  position: relative;
 }
 
-.skel-line.short {
-  width: 60%;
+.tips li::before {
+  content: '—';
+  position: absolute;
+  left: 0;
+  color: var(--ink-3);
+  font-size: 0.68rem;
 }
 
-.skel-abstract {
-  height: 4rem;
+.tips code {
+  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+  font-size: 0.72rem;
+  background: #ededea;
+  padding: 0.1rem 0.3rem;
+  border-radius: 3px;
+  color: var(--ink);
 }
 
 /* ── Responsive ────────────────────────────────────────── */
-@media (max-width: 1200px) {
-  .hero-inner {
-    flex-direction: column;
-    text-align: center;
+@media (max-width: 860px) {
+  .content-grid {
+    grid-template-columns: 1fr;
+    gap: 2.5rem;
   }
 
-  .hero-subtitle {
-    margin-left: auto;
-    margin-right: auto;
-  }
-
-  .search-panel {
-    margin: 0 auto;
-  }
-
-  .hero-featured {
-    width: 100%;
-    max-width: 500px;
-    margin: 0 auto;
+  .sidebar {
+    position: static;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
   }
 }
 
-@media (max-width: 1100px) {
-  .home-main {
-    max-width: 800px;
+@media (max-width: 600px) {
+  .hero {
+    padding: 3rem 1.25rem 3rem;
   }
 
-  .content-layout {
-    grid-template-columns: 1fr;
+  .hero-heading {
+    font-size: 2.2rem;
   }
 
-  .left-aside,
-  .right-aside {
+  .hero-masthead {
     display: none;
   }
-}
 
-@media (max-width: 768px) {
-  .features-grid {
-    grid-template-columns: 1fr;
-    margin-top: -1.5rem;
-  }
-}
-
-@media (max-width: 640px) {
-  .hero-title {
-    font-size: 2rem;
-  }
-
-  .search-box {
+  .search-row {
     flex-direction: column;
-    padding: 0.5rem;
   }
 
   .search-btn {
     width: 100%;
-    margin-top: 0.5rem;
+    text-align: center;
+  }
+
+  .content-wrap {
+    padding: 2rem 1.25rem 4rem;
+  }
+
+  .paper-item {
+    grid-template-columns: 28px 1fr;
+    gap: 0 0.6rem;
+  }
+
+  .sidebar {
+    grid-template-columns: 1fr;
   }
 }
 </style>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, watch, reactive, type Component } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch, reactive, type Component } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   Library, Trash2, Edit3,
@@ -8,7 +8,7 @@ import {
   Settings, ArrowLeft, Save, Hash, BookOpen,
   UserCheck, Menu, X, Clock, TrendingUp,
   FileUp, Sparkles, Eye, Settings2, ZoomIn, CheckCircle, AlertCircle, Check,
-  AlertTriangle, RefreshCw
+  AlertTriangle, RefreshCw, SquareArrowRight
 } from 'lucide-vue-next'
 import { api, type Paper, type UserResponse, type PartialPaperMetadata } from '../services/api'
 import { useAuth } from '../composables/useAuth'
@@ -18,7 +18,25 @@ const { isAdmin } = useAuth()
 
 // ── Sidebar collapse ────────────────────────────────────────────
 const sidebarCollapsed = ref(false)
-const toggleSidebar = () => { sidebarCollapsed.value = !sidebarCollapsed.value }
+const mobileSidebarOpen = ref(false)
+
+const toggleSidebar = () => {
+  if (window.innerWidth <= 768) {
+    mobileSidebarOpen.value = !mobileSidebarOpen.value
+  } else {
+    sidebarCollapsed.value = !sidebarCollapsed.value
+  }
+}
+
+const closeMobileSidebar = () => {
+  mobileSidebarOpen.value = false
+}
+
+// Reactive mobile breakpoint check
+const isMobile = ref(window.innerWidth <= 768)
+const onResize = () => { isMobile.value = window.innerWidth <= 768 }
+onMounted(() => window.addEventListener('resize', onResize))
+onUnmounted(() => window.removeEventListener('resize', onResize))
 
 // ── Sidebar ─────────────────────────────────────────────────────
 type Section = 'dashboard' | 'repository' | 'users' | 'upload'
@@ -47,8 +65,10 @@ const setSection = (s: Section) => {
   if (s === 'users' && !isAdmin.value) return
   activeSection.value = s
   router.push({ query: { ...router.currentRoute.value.query, tab: s } })
-  // Auto-collapse on mobile after selecting
-  if (window.innerWidth < 768) sidebarCollapsed.value = true
+  // Close mobile sidebar after selecting a section
+  mobileSidebarOpen.value = false
+  // Auto-collapse desktop sidebar on tablet after selecting
+  if (window.innerWidth < 1024 && window.innerWidth > 768) sidebarCollapsed.value = true
 }
 
 // Browser History Sync
@@ -404,8 +424,15 @@ watch(activeSection, (newSection) => {
 <template>
   <div class="dashboard" :class="{ 'sidebar-is-collapsed': sidebarCollapsed }">
 
+    <!-- ══ Mobile Sidebar Backdrop ══ -->
+    <!-- Sits above navbar (z-index 1050) but below the drawer itself (1100).
+         Tapping it closes the drawer without triggering the navbar. -->
+    <transition name="backdrop-fade">
+      <div v-if="mobileSidebarOpen" class="mobile-sidebar-backdrop" @click="closeMobileSidebar" />
+    </transition>
+
     <!-- ══════════════ SIDEBAR ══════════════ -->
-    <aside class="sidebar" :class="{ collapsed: sidebarCollapsed }">
+    <aside class="sidebar" :class="{ collapsed: sidebarCollapsed, 'mobile-open': mobileSidebarOpen }">
       <!-- Brand -->
       <div class="sidebar-brand">
         <div class="brand-icon">
@@ -446,14 +473,50 @@ watch(activeSection, (newSection) => {
         <div class="topbar-left">
           <!-- Hamburger toggle -->
           <button class="sidebar-toggle" @click="toggleSidebar"
-            :title="sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'">
-            <X v-if="!sidebarCollapsed" :size="20" stroke-width="2.2" />
-            <Menu v-else :size="20" stroke-width="2.2" />
+            :title="isMobile ? (mobileSidebarOpen ? 'Close menu' : 'Open menu') : (sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar')">
+            <template v-if="isMobile">
+              <X v-if="mobileSidebarOpen" :size="20" stroke-width="2.2" />
+              <Menu v-else :size="20" stroke-width="2.2" />
+            </template>
+            <template v-else>
+              <Menu v-if="!sidebarCollapsed" :size="20" stroke-width="2.2" />
+              <SquareArrowRight v-else :size="20" stroke-width="2.2" />
+            </template>
           </button>
           <!-- Breadcrumb -->
           <span class="breadcrumb-root">Management</span>
           <ChevronRight :size="13" class="breadcrumb-sep" />
           <span class="breadcrumb-active">{{ activeLabel }}</span>
+        </div>
+
+        <!-- Step indicator — only visible on the Upload section -->
+        <div v-if="activeSection === 'upload'" class="steps-rail">
+          <div class="step-item" :class="{ active: step >= 1, completed: step > 1 }">
+            <div class="step-num">
+              <Check v-if="step > 1" :size="13" />
+              <span v-else>1</span>
+              <div v-if="step === 1" class="pulse-ring"></div>
+            </div>
+            <span class="step-label">Upload</span>
+          </div>
+          <div class="step-line"></div>
+          <div class="step-item" :class="{ active: step >= 2, completed: step > 2 }">
+            <div class="step-num">
+              <Check v-if="step > 2" :size="13" />
+              <span v-else>2</span>
+              <div v-if="step === 2" class="pulse-ring"></div>
+            </div>
+            <span class="step-label">Review</span>
+          </div>
+          <div class="step-line"></div>
+          <div class="step-item" :class="{ active: step >= 3 }">
+            <div class="step-num">
+              <Check v-if="step > 3" :size="13" />
+              <span v-else>3</span>
+              <div v-if="step === 3" class="pulse-ring"></div>
+            </div>
+            <span class="step-label">Done</span>
+          </div>
         </div>
       </header>
 
@@ -566,33 +629,6 @@ watch(activeSection, (newSection) => {
         <!-- ══ SECTION: UPLOAD ══════════════════════════════════════ -->
         <template v-else-if="activeSection === 'upload'">
           <div class="upload-section">
-            <div class="steps-rail">
-              <div class="step-item" :class="{ active: step >= 1, completed: step > 1 }">
-                <div class="step-num shadow-sm">
-                  <Check v-if="step > 1" :size="14" />
-                  <span v-else>1</span>
-                  <div v-if="step === 1" class="pulse-ring"></div>
-                </div>
-                <span class="step-label">Upload</span>
-              </div>
-              <div class="step-line-v"></div>
-              <div class="step-item" :class="{ active: step >= 2, completed: step > 2 }">
-                <div class="step-num shadow-sm">
-                  <Check v-if="step > 2" :size="14" />
-                  <span v-else>2</span>
-                  <div v-if="step === 2" class="pulse-ring"></div>
-                </div>
-                <span class="step-label">Review</span>
-              </div>
-              <div class="step-line-v"></div>
-              <div class="step-item" :class="{ active: step >= 3, completed: step > 3 }">
-                <div class="step-num shadow-sm">
-                  <span>3</span>
-                  <div v-if="step === 3" class="pulse-ring"></div>
-                </div>
-                <span class="step-label">Done</span>
-              </div>
-            </div>
 
             <div v-if="step !== 2" class="standard-container">
               <div class="upload-card shadow-lg">
@@ -697,21 +733,24 @@ watch(activeSection, (newSection) => {
               <div v-if="missingSections.length > 0" class="imrad-warning-banner shadow-sm">
                 <div class="warning-main">
                   <div class="warning-icon-wrap">
-                    <AlertTriangle :size="20" color="#f59e0b" />
+                    <AlertTriangle :size="18" color="#f59e0b" />
                   </div>
                   <div class="warning-body">
-                    <p class="warning-title">One or more sections of IMRAD (Introduction, Methods, Results, Discussion)
-                      is missing.</p>
-                    <p class="warning-desc">
-                      The IMRAD service couldn't find: <span class="sections-badge-list">
-                        <span v-for="s in missingSections" :key="s" class="missing-s-badge">{{ s }}</span>
+                    <p class="warning-title">Incomplete IMRAD structure detected</p>
+                    <p class="warning-desc">The following sections could not be found in the document. You may proceed,
+                      but search
+                      accuracy may be reduced.</p>
+                    <div class="missing-sections-list">
+                      <span v-for="s in missingSections" :key="s" class="missing-s-badge">
+                        <span class="missing-s-dot"></span>
+                        {{ s }}
                       </span>
-                    </p>
+                    </div>
                   </div>
                 </div>
                 <div class="warning-buttons">
                   <button @click="cancelUpload" class="warning-action decline">
-                    <span>Cancel Indexing</span>
+                    Cancel Indexing
                   </button>
                 </div>
               </div>
@@ -3242,20 +3281,101 @@ textarea {
 }
 
 /* ══════════════════════════════════════════════════════════════
+   Mobile Sidebar Backdrop
+   z-index 1050 → above global navbar drawer (999) but below
+   the management sidebar drawer (1100) so taps are isolated.
+══════════════════════════════════════════════════════════════ */
+.mobile-sidebar-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  top: 64px;
+  /* sit below the global navbar */
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 1050;
+}
+
+.backdrop-fade-enter-active,
+.backdrop-fade-leave-active {
+  transition: opacity 0.25s ease;
+}
+
+.backdrop-fade-enter-from,
+.backdrop-fade-leave-to {
+  opacity: 0;
+}
+
+/* ══════════════════════════════════════════════════════════════
    Responsive — Tablet ≤768px
 ══════════════════════════════════════════════════════════════ */
 @media (max-width: 768px) {
+
+  /* Show the backdrop when sidebar is open */
+  .mobile-sidebar-backdrop {
+    display: block;
+  }
+
+  /* Sidebar becomes a fixed left drawer on mobile.
+     It slides in from the left when .mobile-open is applied.
+     z-index 1100 keeps it above both the navbar menu (999)
+     and the backdrop (1050) with no conflict. */
   .sidebar {
-    display: none;
-    /* collapsed on tablet — use topbar-only nav */
+    position: fixed;
+    top: 64px;
+    left: 0;
+    height: calc(100vh - 64px);
+    width: 240px !important;
+    /* always full width when shown as drawer */
+    z-index: 1100;
+    transform: translateX(-100%);
+    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+      width 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+    /* Override the sticky positioning from desktop */
+    overflow-y: auto;
+  }
+
+  /* When the mobile drawer is open */
+  .sidebar.mobile-open {
+    transform: translateX(0);
+  }
+
+  /* Show all text labels inside the mobile drawer regardless of collapsed state */
+  .sidebar.mobile-open .brand-text,
+  .sidebar.mobile-open .sidebar-section-label,
+  .sidebar.mobile-open .sidebar-item-text,
+  .sidebar.mobile-open .sidebar-item-arrow,
+  .sidebar.mobile-open .sidebar-logout span {
+    opacity: 1;
+    width: auto;
+    overflow: visible;
+    pointer-events: auto;
+  }
+
+  .sidebar.mobile-open .sidebar-item {
+    justify-content: flex-start;
+    padding: 0.6rem 0.6rem 0.6rem 0.7rem;
+    gap: 0.6rem;
+  }
+
+  .sidebar.mobile-open .sidebar-brand {
+    justify-content: flex-start;
+    padding: 1rem 1rem 0.9rem;
+    gap: 0.6rem;
+  }
+
+  /* The hamburger in the topbar now controls the mobile drawer */
+  .sidebar-toggle {
+    display: flex;
   }
 
   .content {
-    padding: 1.25rem;
+    padding: 1rem;
   }
 
+  /* Stats: 2 columns on tablet */
   .stats-row {
     grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
   }
 
   .topbar {
@@ -3278,6 +3398,72 @@ textarea {
 
   .paper-author {
     max-width: 160px;
+  }
+
+  /* Dashboard grid: single column */
+  .dash-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Upload review: stack vertically */
+  .review-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .review-header {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 1rem 1.25rem;
+    gap: 0.75rem;
+  }
+
+  .header-right {
+    width: 100%;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.65rem;
+  }
+
+  /* Step rail — hide labels on mobile to keep topbar compact */
+  .step-label {
+    display: none;
+  }
+
+  .step-line {
+    width: 20px;
+    margin: 0 0.3rem;
+  }
+
+  /* Workspace header: stack on mobile */
+  .workspace-header {
+    height: auto;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 0.85rem 1rem;
+    gap: 0.75rem;
+  }
+
+  .workspace-header-right {
+    width: 100%;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+
+  .workspace-title {
+    font-size: 0.875rem;
+    max-width: 240px;
+  }
+
+  .id-badge {
+    display: none;
+  }
+
+  .workspace-body {
+    padding: 0.85rem;
+  }
+
+  .form-row-2 {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -3347,6 +3533,69 @@ textarea {
   .paper-author {
     max-width: 110px;
   }
+
+  /* Hide department column on very small screens */
+  .tbl th:nth-child(3),
+  .tbl-row td:nth-child(3) {
+    display: none;
+  }
+
+  /* Compact upload card on phone */
+  .upload-card {
+    padding: 1.5rem 1.1rem 1.25rem;
+  }
+
+  .upload-title {
+    font-size: 1.25rem;
+  }
+
+  .drop-zone {
+    padding: 2rem 1.25rem;
+  }
+
+  /* Steps: slightly smaller circles on phone */
+  .step-num {
+    width: 24px;
+    height: 24px;
+    font-size: 0.7rem;
+  }
+
+  /* Thumbnails: 2 columns on phone */
+  .thumbnails-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.65rem;
+  }
+
+  /* File name truncation */
+  .file-name {
+    max-width: 140px;
+  }
+
+  /* Confirm button full width on smallest screens */
+  .confirm-btn {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .header-right {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .file-stack {
+    align-items: flex-start;
+  }
+
+  /* Warning banner stacks */
+  .imrad-warning-banner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .warning-buttons {
+    width: 100%;
+    justify-content: flex-end;
+  }
 }
 
 /* ── Health Enhancements ────────────────────────────────────── */
@@ -3395,55 +3644,51 @@ textarea {
 }
 
 /* ══════════════════════════════════════════════════════════════
-   Upload Section Styles (Ported from up_win.vue)
+   Upload Section
 ══════════════════════════════════════════════════════════════ */
 .upload-section {
   padding: 1rem 0;
-  position: relative;
-}
-
-/* Vertical Step Rail */
-.steps-rail {
-  position: fixed;
-  right: 2rem;
-  top: 50%;
-  transform: translateY(-50%);
   display: flex;
   flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* ── Step Indicator — lives in the topbar ────────────────── */
+.steps-rail {
+  display: flex;
   align-items: center;
-  gap: 0.25rem;
-  z-index: 100;
-  width: 60px;
+  gap: 0;
 }
 
 .step-item {
   display: flex;
-  flex-direction: column;
   align-items: center;
   gap: 0.5rem;
   color: #94a3b8;
-  position: relative;
+  flex-shrink: 0;
 }
 
 .step-num {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  background: white;
+  background: #f1f5f9;
   border: 2px solid #e2e8f0;
   display: flex;
   align-items: center;
   justify-content: center;
   font-weight: 700;
-  font-size: 0.85rem;
-  z-index: 2;
+  font-size: 0.78rem;
   position: relative;
+  flex-shrink: 0;
   transition: all 0.3s;
 }
 
 .active .step-num {
+  background: #fff;
   border-color: #10b981;
   color: #10b981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.12);
 }
 
 .completed .step-num {
@@ -3452,47 +3697,58 @@ textarea {
   color: white;
 }
 
-.step-line-v {
-  width: 2px;
-  height: 32px;
-  background: #e2e8f0;
-  margin: 0.15rem 0;
-}
-
 .step-label {
-  font-size: 0.65rem;
+  font-size: 0.72rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+  color: #94a3b8;
 }
 
-/* Pulse Effect */
+.active .step-label {
+  color: #10b981;
+}
+
+.completed .step-label {
+  color: #374151;
+}
+
+/* Horizontal connector line between steps */
+.step-line {
+  width: 32px;
+  height: 2px;
+  background: #e2e8f0;
+  border-radius: 2px;
+  margin: 0 0.5rem;
+  flex-shrink: 0;
+}
+
+/* Pulse ring on active step */
 .pulse-ring {
   position: absolute;
-  width: 100%;
-  height: 100%;
+  inset: -4px;
   border-radius: 50%;
-  border: 4px solid #10b981;
-  animation: pulse 2s infinite;
+  border: 2px solid #10b981;
+  animation: pulse-step 2s ease-out infinite;
   opacity: 0;
-  z-index: 1;
 }
 
-@keyframes pulse {
+@keyframes pulse-step {
   0% {
-    transform: scale(0.8);
-    opacity: 0.5;
+    transform: scale(0.85);
+    opacity: 0.6;
   }
 
   100% {
-    transform: scale(2);
+    transform: scale(1.6);
     opacity: 0;
   }
 }
 
 .standard-container {
   max-width: 650px;
-  margin: 2rem auto;
+  margin: 0 auto;
 }
 
 .upload-card {
@@ -3525,12 +3781,109 @@ textarea {
   font-weight: 800;
 }
 
+.card-header p {
+  font-size: 0.9rem;
+  color: #64748b;
+  margin: 0;
+}
+
+.drop-zone {
+  border: 2px dashed #e2e8f0;
+  border-radius: 16px;
+  padding: 4rem 2rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+}
+
+.drop-zone:hover:not(.is-processing) {
+  border-color: #10b981;
+  background: #f0fdf4;
+}
+
+.drop-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.9rem;
+  color: #64748b;
+}
+
+.drop-text strong {
+  color: #0f172a;
+}
+
+.drop-text span {
+  font-size: 0.78rem;
+  color: #94a3b8;
+}
+
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  text-align: center;
+}
+
+.loading-state h3 {
+  margin: 0.5rem 0 0.25rem;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.loading-state p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.success-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.success-state h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.success-state p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #64748b;
+}
+
+.error-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+  padding: 0.75rem 1rem;
+  border-radius: 10px;
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+}
+
 /* Review UI */
 .review-container {
   max-width: 1400px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
+  gap: 1rem;
 }
 
 .review-header {
@@ -3540,7 +3893,6 @@ textarea {
   background: white;
   padding: 1.25rem 2rem;
   border-radius: 16px;
-  margin-bottom: 1.5rem;
   border: 1px solid #eef2f6;
 }
 
@@ -3664,6 +4016,13 @@ textarea {
   color: #0f172a;
 }
 
+.banner-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
 .required-badge {
   background: #fef2f2;
   color: #ef4444;
@@ -3701,6 +4060,8 @@ textarea {
   background: #f9fafb;
   box-sizing: border-box;
   transition: border-color 0.2s, box-shadow 0.2s;
+  font-family: inherit;
+  color: #0f172a;
 }
 
 .metadata-form textarea:focus,
@@ -3723,45 +4084,6 @@ textarea {
   gap: 1.5rem;
   width: 100%;
   align-items: flex-start;
-}
-
-/* NEW: Subheadings Preview */
-.subheadings-preview {
-  margin: 1.25rem 0;
-  padding: 0.85rem 1.15rem;
-  background: #f8fafc;
-  border-radius: 12px;
-  border: 1px dashed #cbd5e1;
-}
-
-.sub-label {
-  display: block;
-  font-size: 0.7rem;
-  font-weight: 700;
-  color: #64748b;
-  text-transform: uppercase;
-  margin-bottom: 0.6rem;
-  letter-spacing: 0.5px;
-}
-
-.sub-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.sub-tag {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  background: #ecfdf5;
-  color: #059669;
-  padding: 0.25rem 0.75rem;
-  border-radius: 99px;
-  font-size: 0.75rem;
-  font-weight: 700;
-  border: 1px solid #10b98122;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .row .input-group {
@@ -3851,6 +4173,10 @@ textarea {
   border: 1px solid #eef2f6;
 }
 
+.selector-header {
+  margin-bottom: 1rem;
+}
+
 .selector-title-row {
   display: flex;
   justify-content: space-between;
@@ -3886,6 +4212,8 @@ textarea {
   transition: all 0.2s;
   position: relative;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .thumbnail-wrapper {
@@ -3923,6 +4251,17 @@ textarea {
 
 .is-selected .selection-overlay {
   opacity: 1;
+}
+
+.check-circle {
+  width: 28px;
+  height: 28px;
+  background: #10b981;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
 }
 
 .page-num {
@@ -3992,6 +4331,7 @@ textarea {
   transition: all 0.2s;
   border: none;
   z-index: 10;
+  cursor: pointer;
 }
 
 .page-card:hover .zoom-trigger {
@@ -4016,6 +4356,7 @@ textarea {
   transition: all 0.2s;
   background: #10b981;
   color: white;
+  white-space: nowrap;
 }
 
 .confirm-btn:hover:not(:disabled) {
@@ -4348,21 +4689,21 @@ textarea {
 /* IMRAD Warning Banner */
 .imrad-warning-banner {
   background: #fffbeb;
+  border: 1px solid #fde68a;
   border-left: 4px solid #f59e0b;
-  margin-bottom: 1.5rem;
-  padding: 1.25rem 1.5rem;
+  padding: 1rem 1.25rem;
   border-radius: 12px;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 1.5rem;
-  animation: slideDown 0.4s ease-out;
+  gap: 1.25rem;
+  animation: slideDown 0.35s ease-out;
 }
 
 @keyframes slideDown {
   from {
     opacity: 0;
-    transform: translateY(-10px);
+    transform: translateY(-8px);
   }
 
   to {
@@ -4373,70 +4714,90 @@ textarea {
 
 .warning-main {
   display: flex;
-  align-items: center;
-  gap: 1rem;
+  align-items: flex-start;
+  gap: 0.85rem;
+  flex: 1;
+  min-width: 0;
 }
 
 .warning-icon-wrap {
-  width: 40px;
-  height: 40px;
+  width: 34px;
+  height: 34px;
   background: #fef3c7;
-  border-radius: 50%;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  margin-top: 0.1rem;
 }
 
 .warning-body {
   display: flex;
   flex-direction: column;
-  gap: 0.15rem;
+  gap: 0.25rem;
+  min-width: 0;
 }
 
 .warning-title {
   font-weight: 700;
-  color: #92400e;
-  font-size: 0.95rem;
+  color: #78350f;
+  font-size: 0.875rem;
   margin: 0;
+  line-height: 1.3;
 }
 
 .warning-desc {
-  color: #b45309;
-  font-size: 0.82rem;
+  color: #92400e;
+  font-size: 0.78rem;
   margin: 0;
+  line-height: 1.5;
 }
 
-.sections-badge-list {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  margin-left: 0.4rem;
+/* Vertical list of missing section pills */
+.missing-sections-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-top: 0.5rem;
 }
 
 .missing-s-badge {
-  background: #fef3c7;
-  color: #92400e;
-  border: 1px solid #fcd34d;
-  padding: 0.1rem 0.5rem;
-  border-radius: 99px;
-  font-weight: 700;
-  font-size: 0.7rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #fef9c3;
+  color: #78350f;
+  border: 1px solid #fde68a;
+  padding: 0.28rem 0.65rem;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.75rem;
   text-transform: capitalize;
+  width: fit-content;
+}
+
+.missing-s-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #f59e0b;
+  flex-shrink: 0;
 }
 
 .warning-buttons {
   display: flex;
-  align-items: center;
-  gap: 0.75rem;
+  align-items: flex-start;
+  gap: 0.65rem;
   flex-shrink: 0;
+  padding-top: 0.1rem;
 }
 
 .warning-action {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.6rem 1rem;
+  gap: 0.4rem;
+  padding: 0.5rem 0.9rem;
   border-radius: 8px;
   font-size: 0.82rem;
   font-weight: 600;
@@ -4478,31 +4839,10 @@ textarea {
   }
 }
 
-/* ── Responsive ── */
+/* ── Responsive: tablet 1024px ── */
 @media (max-width: 1024px) {
   .review-grid {
     grid-template-columns: 1fr;
-  }
-
-  .metadata-form {
-    max-height: 400px;
-  }
-
-  .steps-rail {
-    display: none;
-  }
-}
-
-@media (max-width: 640px) {
-  .review-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 1rem;
-  }
-
-  .header-right {
-    width: 100%;
-    justify-content: space-between;
   }
 }
 

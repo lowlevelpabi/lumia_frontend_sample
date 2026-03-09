@@ -283,6 +283,10 @@ const logout = () => {
     display: block;
   }
 
+  /* Mobile dropdown menu — hidden by default using visibility + opacity
+     so it is fully removed from interaction and cannot bleed into the
+     page below (the management topbar sits right at top: 64px + 52px).
+     z-index 999 keeps it below the management sidebar drawer (1100). */
   .nav-actions {
     position: fixed;
     top: 64px;
@@ -295,11 +299,20 @@ const logout = () => {
     gap: 0.25rem;
     border-bottom: 1px solid #e5e7eb;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
-    transform: translateY(-110%);
-    transition: transform 0.25s ease;
+    /* Use visibility + opacity instead of transform so the element
+       is fully non-interactive and invisible when closed */
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translateY(-8px);
+    transition: opacity 0.2s ease, visibility 0.2s ease, transform 0.2s ease;
+    z-index: 999;
   }
 
   .nav-actions.mobile-open {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
     transform: translateY(0);
   }
 
