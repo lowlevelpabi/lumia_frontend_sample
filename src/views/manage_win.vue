@@ -5,10 +5,10 @@ import {
   Library, Trash2, Edit3,
   Search, Plus, FolderOpen, Home, Loader2,
   FileText, Users, Calendar, ChevronRight,
-  Settings, ArrowLeft, Save, Hash, BookOpen,
+  Settings, ArrowLeft, Save, BookOpen,
   UserCheck, Menu, X, Clock, TrendingUp,
   FileUp, Sparkles, Eye, Settings2, ZoomIn, CheckCircle, AlertCircle, Check,
-  AlertTriangle, RefreshCw, SquareArrowRight
+  AlertTriangle, RefreshCw, SquareArrowRight, ShieldAlert, ShieldCheck, UserCog
 } from 'lucide-vue-next'
 import { api, type Paper, type UserResponse, type PartialPaperMetadata } from '../services/api'
 import { useAuth } from '../composables/useAuth'
@@ -42,13 +42,11 @@ onUnmounted(() => window.removeEventListener('resize', onResize))
 type Section = 'dashboard' | 'repository' | 'users' | 'upload'
 const activeSection = ref<Section>('dashboard')
 
-// Base nav — all staff see these
 const baseNavItems: { id: Section; label: string; icon: Component; description: string }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: Home, description: 'Overview of repository' },
   { id: 'upload', label: 'Upload Research', icon: FileUp, description: 'Index new PDF documents' },
   { id: 'repository', label: 'Thesis & Research', icon: Library, description: 'Browse & manage indexed works' },
 ]
-// Admin-only nav item
 const adminNavItems: { id: Section; label: string; icon: Component; description: string }[] = [
   { id: 'users', label: 'User Manager', icon: Users, description: 'Manage students & faculty' },
 ]
@@ -61,17 +59,13 @@ const activeLabel = computed(() => {
 })
 
 const setSection = (s: Section) => {
-  // Guard: only admin can access user manager
   if (s === 'users' && !isAdmin.value) return
   activeSection.value = s
   router.push({ query: { ...router.currentRoute.value.query, tab: s } })
-  // Close mobile sidebar after selecting a section
   mobileSidebarOpen.value = false
-  // Auto-collapse desktop sidebar on tablet after selecting
   if (window.innerWidth < 1024 && window.innerWidth > 768) sidebarCollapsed.value = true
 }
 
-// Browser History Sync
 onMounted(() => {
   const tab = router.currentRoute.value.query.tab as Section
   if (tab && navItems.value.map(i => i.id).includes(tab)) {
@@ -179,10 +173,43 @@ const adminCount = computed(() => users.value.filter(u => u.role === 'Admin').le
 const facultyCount = computed(() => users.value.filter(u => u.role === 'Faculty').length)
 const studentCount = computed(() => users.value.filter(u => u.role === 'User').length) // Based on models/user.py UserRole.USER = "User"
 
+// ── Role Change ───────────────────────────────────────────────────
+const roleTarget = ref<UserResponse | null>(null)
+const roleNew = ref('')
+const roleChanging = ref(false)
+const roleError = ref('')
 
-// (Announcements UI removed)
-// ── Upload ──
-const step = ref(1) // 1: Select, 2: Review, 3: Success
+const openRoleModal = (user: UserResponse) => {
+  roleTarget.value = user
+  roleNew.value = user.role
+  roleError.value = ''
+}
+
+const closeRoleModal = () => {
+  roleTarget.value = null
+  roleNew.value = ''
+  roleError.value = ''
+}
+
+const handleRoleChange = async () => {
+  if (!roleTarget.value || !roleNew.value) return
+  if (roleNew.value === roleTarget.value.role) { closeRoleModal(); return }
+  roleChanging.value = true
+  roleError.value = ''
+  try {
+    await api.changeUserRole(roleTarget.value.id, roleNew.value)
+    await fetchUsers()
+    closeRoleModal()
+  } catch (e) {
+    roleError.value = 'Failed to update role. Check your permissions.'
+    console.error(e)
+  } finally {
+    roleChanging.value = false
+  }
+}
+
+// ── Upload ────────────────────────────────────────────────────────
+const step = ref(1)
 const uploadingPaper = ref(false)
 const processingDoc = ref(false)
 const showStrategyModal = ref(false)
@@ -223,8 +250,7 @@ const selectedPages = ref<number[]>([])
 const sectionPages = ref<Record<string, number[]>>({})
 const isManuscript = ref(false)
 
-// IMRAD Validation
-const REQUIRED_SECTIONS = ['abstract', 'introduction', 'methods', 'results', 'discussion']
+const REQUIRED_SECTIONS = ['introduction', 'methods', 'results', 'discussion']
 const missingSections = computed(() => {
   const present = Object.keys(uploadMetadata.section_pages || {})
   return REQUIRED_SECTIONS.filter(s => !present.includes(s))
@@ -234,25 +260,15 @@ const triggerFallback = async () => {
   if (!file.value) return
   processingDoc.value = true
   const prevStep = step.value
-  step.value = 1 // Go back to show loading state
-
+  step.value = 1
   try {
-    // Calling with autoExtract=false disables IMRAD filtering and returns ALL pages
     const preview = await api.getUploadPreview(file.value, false)
     sessionId.value = preview.session_id
     Object.assign(uploadMetadata, preview.metadata)
     pages.value = preview.pages
-
-    // Select all pages by default in fallback mode
     selectedPages.value = preview.pages.map(p => p.page_num)
-
-    // Fallback mode always shows full doc — clear manuscript flag
     isManuscript.value = false
-
-    setTimeout(() => {
-      step.value = 2
-      processingDoc.value = false
-    }, 400)
+    setTimeout(() => { step.value = 2; processingDoc.value = false }, 400)
   } catch (err) {
     uploadError.value = (err as Error).message || 'Failed to trigger fallback.'
     step.value = prevStep
@@ -261,82 +277,41 @@ const triggerFallback = async () => {
 }
 
 const cancelUpload = () => {
-  step.value = 1
-  file.value = null
-  pages.value = []
-  selectedPages.value = []
-  uploadMetadata.title = ''
+  step.value = 1; file.value = null; pages.value = []; selectedPages.value = []; uploadMetadata.title = ''
 }
 
 const showZoomModal = ref(false)
 const zoomedPage = ref<PageData | null>(null)
-
-const openZoom = (page: PageData) => {
-  zoomedPage.value = page
-  showZoomModal.value = true
-}
-
-const closeZoom = () => {
-  showZoomModal.value = false
-  zoomedPage.value = null
-}
+const openZoom = (page: PageData) => { zoomedPage.value = page; showZoomModal.value = true }
+const closeZoom = () => { showZoomModal.value = false; zoomedPage.value = null }
 
 const handleFileChange = (e: Event) => {
   const target = e.target as HTMLInputElement
-  if (target.files && target.files[0]) {
-    file.value = target.files[0]
-    showStrategyModal.value = true
-  }
+  if (target.files && target.files[0]) { file.value = target.files[0]; showStrategyModal.value = true }
 }
 
 const selectStrategy = async (auto: boolean) => {
   showStrategyModal.value = false
-  // Small delay to let modal close animation finish and loading state show
-  setTimeout(() => {
-    startInitialExtraction(auto)
-  }, 100)
+  setTimeout(() => { startInitialExtraction(auto) }, 100)
 }
 
 const startInitialExtraction = async (autoExtract: boolean = true) => {
   if (!file.value) return
   processingDoc.value = true
   uploadError.value = ''
-
   try {
     const preview = await api.getUploadPreview(file.value, autoExtract)
     sessionId.value = preview.session_id
     Object.assign(uploadMetadata, preview.metadata)
-
     if (preview.metadata.author) {
-      const splitAuthors = preview.metadata.author
-        .split(/\s*\|\s*/)
-        .map((a: string) => a.trim())
-        .filter((a: string) => a.length > 0)
+      const splitAuthors = preview.metadata.author.split(/\s*\|\s*/).map((a: string) => a.trim()).filter((a: string) => a.length > 0)
       authors.value = splitAuthors.length > 0 ? splitAuthors : ['']
-    } else {
-      authors.value = ['']
-    }
-
+    } else { authors.value = [''] }
     pages.value = preview.pages
-
-    // Fill IMRAD sections
-    if (preview.sections) {
-      Object.assign(imradSections, preview.sections)
-    }
-
-    // Store section→pages mapping for badge display
+    if (preview.sections) Object.assign(imradSections, preview.sections)
     sectionPages.value = preview.section_pages || {}
-
-
-    // Backend already filtered pages to IMRAD-only.
-    // Auto-select ALL returned pages — user can deselect manually.
     selectedPages.value = preview.pages.map(p => p.page_num)
-
-    // Smooth transition to step 2 after data is ready
-    setTimeout(() => {
-      step.value = 2
-      processingDoc.value = false
-    }, 400)
+    setTimeout(() => { step.value = 2; processingDoc.value = false }, 400)
   } catch (err) {
     uploadError.value = (err as Error).message || 'Failed to parse PDF.'
     processingDoc.value = false
@@ -353,9 +328,7 @@ const togglePage = (pageNum: number, event: Event) => {
 const getSectionsForPage = (pageNum: number) => {
   const found: string[] = []
   for (const [section, pNums] of Object.entries(sectionPages.value)) {
-    if (pNums.includes(pageNum)) {
-      found.push(section)
-    }
+    if (pNums.includes(pageNum)) found.push(section)
   }
   return found
 }
@@ -369,10 +342,7 @@ const removeAuthor = (index: number) => {
 }
 
 const handleFinalConfirm = async () => {
-  if (selectedPages.value.length === 0) {
-    uploadError.value = 'Please select at least one page to index.'
-    return
-  }
+  if (selectedPages.value.length === 0) { uploadError.value = 'Please select at least one page to index.'; return }
   uploadingPaper.value = true
   uploadError.value = ''
   try {
@@ -381,540 +351,451 @@ const handleFinalConfirm = async () => {
       session_id: sessionId.value,
       metadata: { ...uploadMetadata, author: finalAuthorString || 'Unknown' },
       selected_pages: selectedPages.value,
-      // Pass IMRAD sections
       introduction: imradSections.introduction,
       methods: imradSections.methods,
       results: imradSections.results,
       discussion: imradSections.discussion
     })
     step.value = 3
-    setTimeout(() => {
-      setSection('repository')
-      // Reset upload state
-      step.value = 1
-      file.value = null
-    }, 2000)
+    setTimeout(() => { setSection('repository'); step.value = 1; file.value = null }, 2000)
   } catch (err) {
     uploadError.value = (err as Error).message || 'Failed to finalize upload.'
-  } finally {
-    uploadingPaper.value = false
-  }
+  } finally { uploadingPaper.value = false }
 }
 
-const goBackToStep1 = () => {
-  step.value = 1
-  file.value = null
-  showStrategyModal.value = false
-}
+const goBackToStep1 = () => { step.value = 1; file.value = null; showStrategyModal.value = false }
 
-// ── Recent papers (for dashboard panel) ─────────────────────────
 const recentPapers = computed(() => papers.value.slice().sort((a, b) => b.id - a.id).slice(0, 6))
 
-// ── Watchers ─────────────────────────────────────────────────────
 watch(activeSection, (newSection) => {
-  if (newSection === 'repository') {
-    fetchPapers()
-  }
-  if (newSection === 'users' && users.value.length === 0) {
-    fetchUsers()
-  }
+  if (newSection === 'repository') fetchPapers()
+  if (newSection === 'users' && users.value.length === 0) fetchUsers()
 }, { immediate: true })
 </script>
 
 <template>
-  <div class="dashboard" :class="{ 'sidebar-is-collapsed': sidebarCollapsed }">
+  <div class="mgmt" :class="{ 'sb-collapsed': sidebarCollapsed }">
 
-    <!-- ══ Mobile Sidebar Backdrop ══ -->
-    <!-- Sits above navbar (z-index 1050) but below the drawer itself (1100).
-         Tapping it closes the drawer without triggering the navbar. -->
-    <transition name="backdrop-fade">
-      <div v-if="mobileSidebarOpen" class="mobile-sidebar-backdrop" @click="closeMobileSidebar" />
+    <!-- Mobile backdrop -->
+    <transition name="fade">
+      <div v-if="mobileSidebarOpen" class="sb-backdrop" @click="closeMobileSidebar" />
     </transition>
 
-    <!-- ══════════════ SIDEBAR ══════════════ -->
-    <aside class="sidebar" :class="{ collapsed: sidebarCollapsed, 'mobile-open': mobileSidebarOpen }">
-      <!-- Brand -->
-      <div class="sidebar-brand">
-        <div class="brand-icon">
-          <BookOpen :size="18" color="#ffffff" stroke-width="2.5" />
+    <!-- ══ SIDEBAR ════════════════════════════════════════════════ -->
+    <aside class="sidebar" :class="{ collapsed: sidebarCollapsed, 'mob-open': mobileSidebarOpen }">
+      <div class="sb-brand">
+        <div class="sb-brand-icon">
+          <BookOpen :size="16" color="#fff" stroke-width="2.5" />
         </div>
-        <div class="brand-text">
-          <span class="brand-name">Lumia</span>
-          <span class="brand-sub">Dashboard</span>
+        <div class="sb-brand-text">
+          <span class="sb-name">Lumia</span>
+          <span class="sb-sub">Management</span>
         </div>
       </div>
 
-      <!-- Nav label -->
-      <p class="sidebar-section-label">Management</p>
+      <p class="sb-group-label">Navigation</p>
 
-      <!-- Nav items -->
-      <nav class="sidebar-nav">
-        <button v-for="item in navItems" :key="item.id" class="sidebar-item"
-          :class="{ active: activeSection === item.id }" @click="setSection(item.id)"
-          :title="sidebarCollapsed ? item.label : undefined">
-          <div class="icon-wrap" :aria-hidden="sidebarCollapsed" :class="{ active: activeSection === item.id }">
-            <component :is="item.icon" :size="18" class="sidebar-item-icon" stroke-width="2.2" />
+      <nav class="sb-nav">
+        <button v-for="item in navItems" :key="item.id" class="sb-item" :class="{ active: activeSection === item.id }"
+          @click="setSection(item.id)" :title="sidebarCollapsed ? item.label : undefined">
+          <div class="sb-icon" :class="{ active: activeSection === item.id }">
+            <component :is="item.icon" :size="16" stroke-width="2.2" />
           </div>
-          <div class="sidebar-item-text">
-            <span class="sidebar-item-label">{{ item.label }}</span>
-            <span class="sidebar-item-desc">{{ item.description }}</span>
+          <div class="sb-item-body">
+            <span class="sb-item-label">{{ item.label }}</span>
+            <span class="sb-item-desc">{{ item.description }}</span>
           </div>
-          <ChevronRight v-if="!sidebarCollapsed" :size="13" class="sidebar-item-arrow" />
+          <ChevronRight v-if="!sidebarCollapsed" :size="12" class="sb-arrow" />
         </button>
       </nav>
 
+      <div class="sb-footer">
+        <ShieldAlert :size="12" /><span>Staff access only</span>
+      </div>
     </aside>
 
-    <!-- ══════════════ MAIN ══════════════ -->
-    <div class="dashboard-main">
+    <!-- ══ MAIN ═══════════════════════════════════════════════════ -->
+    <div class="mgmt-main">
 
-      <!-- ── Topbar ────────────────────────────────────────────── -->
+      <!-- Topbar -->
       <header class="topbar">
         <div class="topbar-left">
-          <!-- Hamburger toggle -->
-          <button class="sidebar-toggle" @click="toggleSidebar"
-            :title="isMobile ? (mobileSidebarOpen ? 'Close menu' : 'Open menu') : (sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar')">
+          <button class="sb-toggle" @click="toggleSidebar">
             <template v-if="isMobile">
-              <X v-if="mobileSidebarOpen" :size="20" stroke-width="2.2" />
-              <Menu v-else :size="20" stroke-width="2.2" />
+              <X v-if="mobileSidebarOpen" :size="19" stroke-width="2.2" />
+              <Menu v-else :size="19" stroke-width="2.2" />
             </template>
             <template v-else>
-              <Menu v-if="!sidebarCollapsed" :size="20" stroke-width="2.2" />
-              <SquareArrowRight v-else :size="20" stroke-width="2.2" />
+              <Menu v-if="!sidebarCollapsed" :size="19" stroke-width="2.2" />
+              <SquareArrowRight v-else :size="19" stroke-width="2.2" />
             </template>
           </button>
-          <!-- Breadcrumb -->
-          <span class="breadcrumb-root">Management</span>
-          <ChevronRight :size="13" class="breadcrumb-sep" />
-          <span class="breadcrumb-active">{{ activeLabel }}</span>
+          <span class="bc-root">Management</span>
+          <ChevronRight :size="12" class="bc-sep" />
+          <span class="bc-active">{{ activeLabel }}</span>
         </div>
 
-        <!-- Step indicator — only visible on the Upload section -->
+        <!-- Upload step rail -->
         <div v-if="activeSection === 'upload'" class="steps-rail">
-          <div class="step-item" :class="{ active: step >= 1, completed: step > 1 }">
+          <div class="step-item" :class="{ active: step >= 1, done: step > 1 }">
             <div class="step-num">
-              <Check v-if="step > 1" :size="13" />
-              <span v-else>1</span>
-              <div v-if="step === 1" class="pulse-ring"></div>
+              <Check v-if="step > 1" :size="12" /><span v-else>1</span>
+              <div v-if="step === 1" class="pulse-ring" />
             </div>
             <span class="step-label">Upload</span>
           </div>
-          <div class="step-line"></div>
-          <div class="step-item" :class="{ active: step >= 2, completed: step > 2 }">
+          <div class="step-line" />
+          <div class="step-item" :class="{ active: step >= 2, done: step > 2 }">
             <div class="step-num">
-              <Check v-if="step > 2" :size="13" />
-              <span v-else>2</span>
-              <div v-if="step === 2" class="pulse-ring"></div>
+              <Check v-if="step > 2" :size="12" /><span v-else>2</span>
+              <div v-if="step === 2" class="pulse-ring" />
             </div>
             <span class="step-label">Review</span>
           </div>
-          <div class="step-line"></div>
+          <div class="step-line" />
           <div class="step-item" :class="{ active: step >= 3 }">
             <div class="step-num">
-              <Check v-if="step > 3" :size="13" />
-              <span v-else>3</span>
-              <div v-if="step === 3" class="pulse-ring"></div>
+              <Check v-if="step > 3" :size="12" /><span v-else>3</span>
+              <div v-if="step === 3" class="pulse-ring" />
             </div>
             <span class="step-label">Done</span>
           </div>
         </div>
       </header>
 
-      <!-- ── Content ───────────────────────────────────────────── -->
+      <!-- ── Content ─────────────────────────────────────────── -->
       <div class="content">
 
-        <!-- ══ SECTION: DASHBOARD ══════════════════════════════════ -->
+        <!-- ══ DASHBOARD ════════════════════════════════════════ -->
         <template v-if="activeSection === 'dashboard'">
-          <div class="content-header">
-            <div>
-              <h1 class="content-title">Management Dashboard</h1>
-              <p class="content-sub">Overview of repository.</p>
-            </div>
+          <div class="page-head">
+            <h1 class="page-title">Management Dashboard</h1>
+            <p class="page-sub">Overview of the Lumia repository.</p>
           </div>
 
-
-
-          <!-- ══ Dashboard 2-column layout ══ -->
           <div class="dash-grid">
-
-            <!-- LEFT: Recent Uploads -->
-            <div class="dash-panel">
-              <div class="dash-panel-header">
-                <div class="dash-panel-title">
-                  <Clock :size="14" />
-                  <span>Recent uploaded thesis/research</span>
+            <div class="panel">
+              <div class="panel-head">
+                <div class="panel-label">
+                  <Clock :size="13" /> Recent Uploads
                 </div>
-                <button class="dash-panel-link" @click="setSection('repository')">View all →</button>
+                <button class="panel-link" @click="setSection('repository')">View all →</button>
               </div>
-              <div class="dash-panel-body">
-                <div v-if="loading" class="dash-loading">
-                  <Loader2 :size="16" class="spin" />
-                  <span>Loading papers...</span>
+              <div class="panel-body">
+                <div v-if="loading" class="panel-loading">
+                  <Loader2 :size="15" class="spin" /> Loading…
                 </div>
                 <template v-else-if="recentPapers.length > 0">
-                  <div v-for="paper in recentPapers" :key="paper.id" class="dash-paper-row">
-                    <div class="dash-paper-av" :data-t="paper.project_type === 'Thesis' ? 'blue' : 'orange'">
+                  <div v-for="paper in recentPapers" :key="paper.id" class="dash-row">
+                    <div class="dash-av" :data-t="paper.project_type === 'Thesis' ? 'blue' : 'orange'">
                       {{paper.title.trim().split(' ').slice(0, 2).map(w => w[0]?.toUpperCase() ?? '').join('')}}
                     </div>
-                    <div class="dash-paper-info">
-                      <span class="dash-paper-title">{{ paper.title }}</span>
-                      <span class="dash-paper-meta">{{ paper.author }} &bull; {{ paper.year }}</span>
+                    <div class="dash-info">
+                      <span class="dash-title">{{ paper.title }}</span>
+                      <span class="dash-meta">{{ paper.author }} · {{ paper.year }}</span>
                     </div>
-                    <span class="dash-type-chip" :class="paper.project_type === 'Thesis' ? 'blue' : 'orange'">
+                    <span class="type-chip" :class="paper.project_type === 'Thesis' ? 'blue' : 'orange'">
                       {{ paper.project_type === 'Thesis' ? 'TH' : 'CP' }}
                     </span>
                   </div>
                 </template>
-                <div v-else class="dash-empty">
-                  <FolderOpen :size="32" color="#d1d5db" />
+                <div v-else class="panel-empty">
+                  <FolderOpen :size="30" />
                   <p>No papers uploaded yet.</p>
                 </div>
               </div>
             </div>
 
-            <!-- RIGHT: Placeholder panel -->
-            <div class="dash-panel">
-              <div class="dash-panel-header">
-                <div class="dash-panel-title">
-                  <TrendingUp :size="14" />
-                  <span>Quick Overview of the Repository</span>
+            <div class="panel">
+              <div class="panel-head">
+                <div class="panel-label">
+                  <TrendingUp :size="13" /> Repository Overview
                 </div>
               </div>
-              <div class="dash-panel-body">
-                <!-- Dashboard Statistics Inline -->
-                <div class="dash-panel-stats">
-                  <div class="dash-pstat-card">
-                    <div class="dash-ov-icon green">
-                      <Library :size="16" />
+              <div class="panel-body">
+                <div class="stat-grid">
+                  <div class="stat-tile">
+                    <div class="stat-ico green">
+                      <Library :size="15" />
                     </div>
-                    <div class="dash-pstat-info">
-                      <span class="stat-val">{{ totalPapers }}</span>
-                      <span class="stat-lbl">Total Books</span>
+                    <div class="stat-data"><span class="stat-val">{{ totalPapers }}</span><span class="stat-lbl">Total
+                        Works</span>
                     </div>
                   </div>
-                  <div class="dash-pstat-card">
-                    <div class="dash-ov-icon blue">
-                      <FileText :size="16" />
+                  <div class="stat-tile">
+                    <div class="stat-ico blue">
+                      <FileText :size="15" />
                     </div>
-                    <div class="dash-pstat-info">
-                      <div class="pstat-multi">
+                    <div class="stat-data">
+                      <div class="stat-split">
                         <div><span class="stat-val">{{ thesisCount }}</span><span class="stat-lbl">Thesis</span></div>
-                        <div class="stat-divider"></div>
+                        <div class="stat-divider" />
                         <div><span class="stat-val">{{ capstoneCount }}</span><span class="stat-lbl">Capstone</span>
                         </div>
                       </div>
                     </div>
                   </div>
-                  <div class="dash-pstat-card">
-                    <div class="dash-ov-icon purple">
-                      <UserCheck :size="16" />
+                  <div class="stat-tile">
+                    <div class="stat-ico purple">
+                      <UserCheck :size="15" />
                     </div>
-                    <div class="dash-pstat-info">
-                      <div class="pstat-multi">
+                    <div class="stat-data">
+                      <div class="stat-split">
                         <div><span class="stat-val">{{ adminCount + facultyCount }}</span><span
                             class="stat-lbl">Staff</span></div>
-                        <div class="stat-divider"></div>
+                        <div class="stat-divider" />
                         <div><span class="stat-val">{{ studentCount }}</span><span class="stat-lbl">Students</span>
                         </div>
                       </div>
                     </div>
                   </div>
+                  <div class="stat-tile">
+                    <div class="stat-ico amber">
+                      <Calendar :size="15" />
+                    </div>
+                    <div class="stat-data"><span class="stat-val">{{ yearSpan }}</span><span class="stat-lbl">Year
+                        Span</span></div>
+                  </div>
                 </div>
               </div>
             </div>
-
           </div>
         </template>
 
-        <!-- ══ SECTION: UPLOAD ══════════════════════════════════════ -->
+        <!-- ══ UPLOAD ════════════════════════════════════════════ -->
         <template v-else-if="activeSection === 'upload'">
-          <div class="upload-section">
-
-            <div v-if="step !== 2" class="standard-container">
-              <div class="upload-card shadow-lg">
+          <div class="upload-wrap">
+            <div v-if="step !== 2" class="upload-center">
+              <div class="upload-card">
                 <div v-if="step === 1">
-                  <div class="card-header">
-                    <div class="icon-circle">
-                      <FileUp :size="24" color="#10b981" />
+                  <div class="upload-card-head">
+                    <div class="upload-card-icon">
+                      <FileUp :size="22" color="#00a651" />
                     </div>
-                    <h1 class="upload-title">Upload Document</h1>
-                    <p>Start by uploading your PDF document. Choose method to process your document.</p>
+                    <h1 class="upload-card-title">Upload Document</h1>
+                    <p>Upload a PDF to index into the research repository.</p>
                   </div>
-
                   <div v-if="uploadError" class="error-banner">
-                    <AlertCircle :size="18" /> {{ uploadError }}
+                    <AlertCircle :size="16" /> {{ uploadError }}
                   </div>
-
-                  <div class="drop-zone" @click="fileInput?.click()" :class="{ 'is-processing': processingDoc }">
-                    <input type="file" ref="fileInput" @change="handleFileChange" style="display: none"
+                  <div class="drop-zone" @click="fileInput?.click()" :class="{ processing: processingDoc }">
+                    <input type="file" ref="fileInput" @change="handleFileChange" style="display:none"
                       accept="application/pdf" />
-
-                    <div v-if="processingDoc" class="loading-state">
-                      <Loader2 class="spinner" :size="48" color="#10b981" />
-                      <h3>Parsing PDF...</h3>
+                    <div v-if="processingDoc" class="drop-loading">
+                      <Loader2 :size="40" class="spin" color="#00a651" />
+                      <h3>Parsing PDF…</h3>
                       <p>Running OCR and generating thumbnails</p>
                     </div>
                     <template v-else>
-                      <FileUp :size="48" color="#10b981" />
-                      <div class="drop-text">
-                        <strong>Click to upload</strong> or drag and drop
-                        <span>PDF files only</span>
-                      </div>
+                      <FileUp :size="40" color="#00a651" />
+                      <div class="drop-text"><strong>Click to upload</strong> or drag and drop<span>PDF files
+                          only</span></div>
                     </template>
                   </div>
                 </div>
-
-                <div v-else-if="step === 3" class="success-state">
-                  <CheckCircle :size="64" color="#10b981" />
+                <div v-else-if="step === 3" class="upload-success">
+                  <CheckCircle :size="56" color="#00a651" />
                   <h2>Research Indexed!</h2>
                   <p>Paper and selected vectors have been stored in the repository.</p>
                 </div>
               </div>
             </div>
 
-            <div v-else class="review-container">
-              <header class="review-header shadow-sm">
-                <div class="header-left">
-                  <div class="header-icon">
-                    <FileText :size="24" color="#10b981" />
+            <!-- Step 2: Review -->
+            <div v-else class="review-wrap">
+              <header class="review-bar">
+                <div class="review-bar-left">
+                  <div class="review-bar-icon">
+                    <FileText :size="20" color="#00a651" />
                   </div>
-                  <div class="header-titles">
-                    <h1 class="review-title">Review & Index Document</h1>
-                    <p class="header-subtext">Please check the extracted info and select
-                      indexable pages.</p>
+                  <div>
+                    <h1 class="review-bar-title">Review & Index Document</h1>
+                    <p class="review-bar-sub">Verify extracted info and select indexable pages.</p>
                   </div>
                 </div>
-                <div class="header-right">
-                  <div class="file-stack">
-                    <div class="file-info-row">
-                      <span class="file-label">ACTIVE FILE: </span>
-                      <span class="file-name">{{ file?.name }}</span>
-                    </div>
-                    <div class="selection-count">
-                      <strong>{{ selectedPages.length }}</strong>/{{ pages.length }} Pages
-                    </div>
+                <div class="review-bar-right">
+                  <div class="file-pill">
+                    <span class="file-pill-label">FILE</span>
+                    <span class="file-pill-name">{{ file?.name }}</span>
+                    <span class="file-pill-count"><strong>{{ selectedPages.length }}</strong>/{{ pages.length }}
+                      pages</span>
                   </div>
-                  <button @click="handleFinalConfirm" class="confirm-btn primary" :disabled="uploadingPaper">
-                    <Loader2 v-if="uploadingPaper" class="spinner" :size="18" />
-                    <Check v-else :size="18" />
-                    <span>Confirm Indexing</span>
+                  <button @click="handleFinalConfirm" class="confirm-btn" :disabled="uploadingPaper">
+                    <Loader2 v-if="uploadingPaper" :size="15" class="spin" />
+                    <Check v-else :size="15" />
+                    Confirm Indexing
                   </button>
                 </div>
               </header>
 
-              <!-- Manuscript / In-Progress Notice -->
-              <div v-if="isManuscript" class="manuscript-banner shadow-sm">
-                <div class="warning-main">
-                  <div class="warning-icon-wrap" style="background:#eff6ff">
-                    <AlertCircle :size="20" color="#3b82f6" />
-                  </div>
-                  <div class="warning-body">
-                    <p class="warning-title" style="color:#1e40af">Manuscript / In-Progress Document</p>
-                    <p class="warning-desc" style="color:#3b82f6">
-                      No IMRAD section headings were detected. This document may be incomplete or still
-                      in draft form. The first 10 pages are shown for preview. You can still index it —
-                      fill in the sections manually below, or trigger fallback to browse all pages.
-                    </p>
-                  </div>
+              <div v-if="isManuscript" class="notice-banner blue">
+                <div class="notice-icon">
+                  <AlertCircle :size="18" color="#3b82f6" />
                 </div>
-                <div class="warning-buttons">
-                  <button @click="triggerFallback" class="warning-action fallback" style="background:#1d4ed8"
-                    title="Load all document pages">
-                    <RefreshCw :size="14" />
-                    <span>Browse All Pages</span>
+                <div class="notice-body">
+                  <p class="notice-title" style="color:#1e40af">Manuscript / In-Progress Document</p>
+                  <p class="notice-desc" style="color:#3b82f6">No IMRAD section headings were detected. The first 10
+                    pages are shown
+                    for preview. Fill in sections manually or browse all pages.</p>
+                </div>
+                <div class="notice-actions">
+                  <button @click="triggerFallback" class="notice-btn" style="background:#1d4ed8">
+                    <RefreshCw :size="13" /> Browse All Pages
                   </button>
-                  <button @click="cancelUpload" class="warning-action decline">
-                    <span>Decline &amp; Reset</span>
-                  </button>
+                  <button @click="cancelUpload" class="notice-btn ghost">Decline &amp; Reset</button>
                 </div>
               </div>
 
-              <!-- IMRAD Validation Warning -->
-              <div v-if="missingSections.length > 0" class="imrad-warning-banner shadow-sm">
-                <div class="warning-main">
-                  <div class="warning-icon-wrap">
-                    <AlertTriangle :size="18" color="#f59e0b" />
-                  </div>
-                  <div class="warning-body">
-                    <p class="warning-title">Incomplete IMRAD structure detected</p>
-                    <p class="warning-desc">The following sections could not be found in the document. You may proceed,
-                      but search
-                      accuracy may be reduced.</p>
-                    <div class="missing-sections-list">
-                      <span v-for="s in missingSections" :key="s" class="missing-s-badge">
-                        <span class="missing-s-dot"></span>
-                        {{ s }}
-                      </span>
-                    </div>
+              <div v-if="missingSections.length > 0" class="notice-banner amber">
+                <div class="notice-icon">
+                  <AlertTriangle :size="18" color="#f59e0b" />
+                </div>
+                <div class="notice-body">
+                  <p class="notice-title">Incomplete IMRAD structure detected</p>
+                  <p class="notice-desc">The following sections could not be found. Search accuracy may be reduced.</p>
+                  <div class="missing-list">
+                    <span v-for="s in missingSections" :key="s" class="missing-badge"><span class="missing-dot" />{{ s
+                    }}</span>
                   </div>
                 </div>
-                <div class="warning-buttons">
-                  <button @click="cancelUpload" class="warning-action decline">
-                    Cancel Indexing
-                  </button>
+                <div class="notice-actions">
+                  <button @click="cancelUpload" class="notice-btn ghost">Cancel Indexing</button>
                 </div>
               </div>
 
-              <main class="review-grid">
-                <section class="metadata-form shadow-sm">
-                  <div class="form-section">
-                    <div class="section-banner">
-                      <span class="step-badge">1</span>
-                      <h4>Verify Metadata</h4>
-                    </div>
-
-                    <div class="input-group">
-                      <label>Title</label>
-                      <textarea v-model="uploadMetadata.title" placeholder="Research Title"></textarea>
-                    </div>
-
-                    <div class="input-group">
-                      <label>Author(s)</label>
-                      <div class="authors-list">
-                        <div v-for="(author, index) in authors" :key="index" class="author-input-row">
-                          <input v-model="authors[index]" type="text" placeholder="Full Name of Author" />
-                          <button @click="removeAuthor(index)" class="remove-btn" title="Remove Author">
-                            <Trash2 :size="16" />
-                          </button>
-                        </div>
-                        <button @click="addAuthor" class="add-author-btn">
-                          <Plus :size="14" /> Add Another Author
+              <div class="review-grid">
+                <section class="meta-panel">
+                  <div class="meta-panel-head">
+                    <span class="step-badge">1</span>
+                    <h4>Verify Metadata</h4>
+                  </div>
+                  <div class="fg"><label>Title</label><textarea v-model="uploadMetadata.title"
+                      placeholder="Research Title" /></div>
+                  <div class="fg">
+                    <label>Author(s)</label>
+                    <div class="authors-stack">
+                      <div v-for="(author, index) in authors" :key="index" class="author-row">
+                        <input v-model="authors[index]" type="text" placeholder="Full Name of Author" />
+                        <button @click="removeAuthor(index)" class="icon-btn red">
+                          <Trash2 :size="14" />
                         </button>
                       </div>
+                      <button @click="addAuthor" class="add-btn">
+                        <Plus :size="13" /> Add Author
+                      </button>
                     </div>
-
-                    <div class="row">
-                      <div class="input-group">
-                        <label>Year</label>
-                        <input v-model="uploadMetadata.year" type="text" placeholder="e.g., 2025" />
-                      </div>
-                      <div class="input-group">
-                        <label>Type</label>
-                        <select v-model="uploadMetadata.project_type">
-                          <option>Thesis</option>
-                          <option>Capstone Project</option>
-                          <option>Technical Report</option>
-                        </select>
-                      </div>
+                  </div>
+                  <div class="fg-row">
+                    <div class="fg"><label>Year</label><input v-model="uploadMetadata.year" type="text"
+                        placeholder="e.g., 2025" />
                     </div>
-
-                    <div class="input-group">
-                      <label>Abstract</label>
-                      <textarea v-model="uploadMetadata.abstract" class="abstract-area"
-                        placeholder="Enter abstract..."></textarea>
-                    </div>
-
-                    <div class="input-group">
-                      <label>Department</label>
-                      <select v-model="uploadMetadata.department">
-                        <option>N/A</option>
-                        <option>Department of Computer Science</option>
-                        <option>Department of Information Technology</option>
-                        <option>Department of Information Systems</option>
-                        <option>Department of Computer Engineering</option>
-                        <option>College of Computer Science</option>
-                        <option>College of Engineering</option>
-                        <option>College of Information Technology</option>
+                    <div class="fg">
+                      <label>Type</label>
+                      <select v-model="uploadMetadata.project_type">
+                        <option>Thesis</option>
+                        <option>Capstone Project</option>
+                        <option>Technical Report</option>
                       </select>
                     </div>
                   </div>
+                  <div class="fg"><label>Abstract</label><textarea v-model="uploadMetadata.abstract"
+                      class="abstract-area" placeholder="Enter abstract…" /></div>
+                  <div class="fg">
+                    <label>Department</label>
+                    <select v-model="uploadMetadata.department">
+                      <option>N/A</option>
+                      <option>Department of Computer Science</option>
+                      <option>Department of Information Technology</option>
+                      <option>Department of Information Systems</option>
+                      <option>Department of Computer Engineering</option>
+                      <option>College of Computer Science</option>
+                      <option>College of Engineering</option>
+                      <option>College of Information Technology</option>
+                    </select>
+                  </div>
                 </section>
 
-                <section class="page-selector shadow-sm">
-                  <div class="selector-header">
-                    <div class="section-banner">
+                <section class="page-panel">
+                  <div class="page-panel-head">
+                    <div class="page-panel-title">
                       <span class="step-badge">2</span>
-                      <div class="banner-title">
-                        <h4>Select Pages to Index</h4>
-                        <span class="required-badge">Required for AI Search</span>
-                      </div>
+                      <h4>Select Pages to Index</h4>
                     </div>
-                    <div class="selector-title-row">
-                      <p class="selector-hint">Select and unselect the pages you want to index, IMRAD pages are
-                        pre-selected.</p>
-                      <div class="selector-actions">
+                    <div class="page-panel-actions">
+                      <p class="selector-hint">IMRAD pages are pre-selected.</p>
+                      <div class="selector-btns">
                         <button @click="selectAll" class="text-btn">Select All</button>
-                        <span class="dot"></span>
+                        <span class="dot-sep" />
                         <button @click="deselectAll" class="text-btn">Uncheck All</button>
                       </div>
                     </div>
                   </div>
-
-                  <div class="thumbnails-grid">
-                    <div v-for="(p, idx) in pages" :key="p.label || p.page_num + '-' + idx" class="page-card"
-                      :class="{ 'is-selected': selectedPages.includes(p.page_num) }"
-                      @click="togglePage(p.page_num, $event)">
-                      <div class="thumbnail-wrapper">
-                        <img :src="`data:image/jpeg;base64,${p.thumbnail}`" loading="lazy" class="page-thumb-img" />
-                        <div class="page-num">{{ p.label || 'P' + p.page_num }}</div>
-
-                        <!-- Section Badges -->
-                        <div class="section-badges" v-if="getSectionsForPage(p.page_num).length > 0">
-                          <span v-for="sec in getSectionsForPage(p.page_num)" :key="sec" class="s-badge" :class="sec">
-                            {{ sec.substring(0, 4) }}
-                          </span>
+                  <div class="thumbs-grid">
+                    <div v-for="(p, idx) in pages" :key="p.label || p.page_num + '-' + idx" class="thumb-card"
+                      :class="{ selected: selectedPages.includes(p.page_num) }" @click="togglePage(p.page_num, $event)">
+                      <div class="thumb-wrap">
+                        <img :src="`data:image/jpeg;base64,${p.thumbnail}`" loading="lazy" class="thumb-img" />
+                        <div class="thumb-num">{{ p.label || 'P' + p.page_num }}</div>
+                        <div class="thumb-sec-badges" v-if="getSectionsForPage(p.page_num).length > 0">
+                          <span v-for="sec in getSectionsForPage(p.page_num)" :key="sec" class="sec-badge"
+                            :class="sec">{{
+                              sec.substring(0, 4) }}</span>
                         </div>
-                        <button class="zoom-trigger" @click.stop="openZoom(p)" title="Enlarge Page">
-                          <ZoomIn :size="20" />
+                        <button class="zoom-trigger" @click.stop="openZoom(p)">
+                          <ZoomIn :size="18" />
                         </button>
-                        <div class="selection-overlay">
-                          <div class="check-circle">
-                            <Check :size="16" />
+                        <div class="thumb-overlay">
+                          <div class="thumb-check">
+                            <Check :size="14" />
                           </div>
                         </div>
                       </div>
                     </div>
                   </div>
                 </section>
-              </main>
+              </div>
             </div>
           </div>
         </template>
 
-
+        <!-- ══ REPOSITORY ════════════════════════════════════════ -->
         <template v-else-if="activeSection === 'repository'">
-          <!-- Page title -->
-          <div class="content-header">
-            <div>
-              <h1 class="content-title">Research Repository</h1>
-              <p class="content-sub">Manage and monitor all indexed research papers.</p>
-            </div>
+          <div class="page-head">
+            <h1 class="page-title">Research Repository</h1>
+            <p class="page-sub">Manage and monitor all indexed research papers.</p>
           </div>
 
-          <!-- Stats row -->
           <div class="stats-row">
             <div class="stat-card">
-              <div class="stat-icon green">
-                <Library :size="16" />
+              <div class="stat-ico green">
+                <Library :size="15" />
               </div>
               <div><span class="stat-val">{{ totalPapers }}</span><span class="stat-lbl">Total Papers</span></div>
             </div>
             <div class="stat-card">
-              <div class="stat-icon blue">
-                <FileText :size="16" />
+              <div class="stat-ico blue">
+                <FileText :size="15" />
               </div>
               <div><span class="stat-val">{{ thesisCount }}</span><span class="stat-lbl">Theses</span></div>
             </div>
             <div class="stat-card">
-              <div class="stat-icon orange">
-                <Users :size="16" />
+              <div class="stat-ico orange">
+                <Users :size="15" />
               </div>
               <div><span class="stat-val">{{ capstoneCount }}</span><span class="stat-lbl">Capstone</span></div>
             </div>
             <div class="stat-card">
-              <div class="stat-icon purple">
-                <Calendar :size="16" />
+              <div class="stat-ico purple">
+                <Calendar :size="15" />
               </div>
               <div><span class="stat-val">{{ yearSpan }}</span><span class="stat-lbl">Year Span</span></div>
             </div>
           </div>
 
-          <!-- Toolbar -->
           <div class="toolbar">
-            <div class="search-wrap">
-              <Search :size="14" class="search-ico" />
-              <input v-model="searchQuery" type="text" placeholder="Search by title, author, or department…"
-                class="search-input" />
+            <div class="search-box">
+              <Search :size="13" class="search-ico" />
+              <input v-model="searchQuery" type="text" placeholder="Search by title, author, or department…" />
             </div>
             <div class="filter-chips">
               <button class="chip" :class="{ active: activeFilter === 'all' }"
@@ -926,16 +807,12 @@ watch(activeSection, (newSection) => {
             </div>
           </div>
 
-          <!-- Table card -->
-          <div class="table-card">
-            <div class="table-card-head">
-              <span class="table-count">
-                {{ filteredPapers.length }} paper{{ filteredPapers.length !== 1 ? 's' : '' }}
-                <span v-if="searchQuery || activeFilter !== 'all'" class="count-hint"> · filtered</span>
-              </span>
+          <div class="tbl-card">
+            <div class="tbl-card-head">
+              <span class="tbl-count">{{ filteredPapers.length }} paper{{ filteredPapers.length !== 1 ? 's' : '' }}<span
+                  v-if="searchQuery || activeFilter !== 'all'" class="tbl-hint"> · filtered</span></span>
             </div>
-
-            <div class="table-scroll">
+            <div class="tbl-scroll">
               <table class="tbl">
                 <thead>
                   <tr>
@@ -943,72 +820,66 @@ watch(activeSection, (newSection) => {
                     <th>Year</th>
                     <th>Department</th>
                     <th>Type</th>
-                    <th class="th-right">Actions</th>
+                    <th class="th-r">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <!-- Skeleton -->
                   <template v-if="loading">
                     <tr v-for="i in 5" :key="'sk' + i" class="skel-row">
                       <td>
                         <div class="skel-paper">
-                          <div class="skel skel-av"></div>
+                          <div class="skel skel-av" />
                           <div>
-                            <div class="skel skel-t1"></div>
-                            <div class="skel skel-t2"></div>
+                            <div class="skel skel-t1" />
+                            <div class="skel skel-t2" />
                           </div>
                         </div>
                       </td>
                       <td>
-                        <div class="skel skel-chip"></div>
+                        <div class="skel skel-chip" />
                       </td>
                       <td>
-                        <div class="skel skel-dept"></div>
+                        <div class="skel skel-dept" />
                       </td>
                       <td>
-                        <div class="skel skel-type"></div>
+                        <div class="skel skel-type" />
                       </td>
-                      <td></td>
+                      <td />
                     </tr>
                   </template>
-
-                  <!-- Empty -->
                   <tr v-else-if="filteredPapers.length === 0">
                     <td colspan="5">
-                      <div class="empty">
-                        <FolderOpen :size="44" color="#d1d5db" />
+                      <div class="tbl-empty">
+                        <FolderOpen :size="40" />
                         <h3>No papers found</h3>
                         <p>{{ searchQuery || activeFilter !== 'all' ? 'Try a different search or filter.' :
-                          'Upload the first research paper to get started.' }}</p>
+                          'Upload the first researchpaper to get started.' }}</p>
                         <button v-if="!searchQuery && activeFilter === 'all'" @click="setSection('upload')"
-                          class="empty-btn">
-                          <Plus :size="14" /> Upload Now
+                          class="empty-cta">
+                          <Plus :size="13" /> Upload Now
                         </button>
                       </div>
                     </td>
                   </tr>
-
-                  <!-- Rows -->
                   <tr v-for="paper in filteredPapers" :key="paper.id" class="tbl-row">
                     <td class="td-paper">
                       <div class="paper-cell">
                         <div class="paper-av" :data-t="typeColor(paper.project_type)">{{ initials(paper.title) }}</div>
-                        <div class="paper-info">
-                          <span class="paper-title">{{ paper.title }}</span>
-                          <span class="paper-author">{{ paper.author }}</span>
-                        </div>
+                        <div class="paper-info"><span class="paper-name">{{ paper.title }}</span><span
+                            class="paper-author">{{
+                              paper.author }}</span></div>
                       </div>
                     </td>
                     <td><span class="year-chip">{{ paper.year }}</span></td>
-                    <td><span class="dept-badge">{{ paper.department }}</span></td>
+                    <td><span class="dept-chip">{{ paper.department }}</span></td>
                     <td><span class="type-badge" :class="typeColor(paper.project_type)">{{ paper.project_type }}</span>
                     </td>
-                    <td class="td-right">
-                      <button @click="openEditModal(paper)" title="Edit" class="edit-btn-row">
-                        <Edit3 :size="14" />
+                    <td class="td-r">
+                      <button @click="openEditModal(paper)" class="row-btn" title="Edit">
+                        <Edit3 :size="13" />
                       </button>
-                      <button @click="handleDelete(paper.id)" title="Delete" class="del-btn">
-                        <Trash2 :size="14" />
+                      <button @click="handleDelete(paper.id)" class="row-btn danger" title="Delete">
+                        <Trash2 :size="13" />
                       </button>
                     </td>
                   </tr>
@@ -1018,54 +889,50 @@ watch(activeSection, (newSection) => {
           </div>
         </template>
 
-        <!-- Announcements tab removed -->
-
-        <!-- ══ SECTION: USER MANAGEMENT ══════════════════════════════ -->
+        <!-- ══ USER MANAGER ══════════════════════════════════════ -->
         <template v-else-if="activeSection === 'users'">
-          <div class="content-header">
-            <div>
-              <h1 class="content-title">User Management</h1>
-              <p class="content-sub">Monitor accounts and manage role-based access control.</p>
-            </div>
+          <div class="page-head">
+            <h1 class="page-title">User Management</h1>
+            <p class="page-sub">Monitor accounts and manage role-based access control.</p>
           </div>
 
-          <!-- Role Legend -->
           <div class="stats-row">
             <div class="stat-card">
-              <div class="stat-icon purple">
-                <ShieldAlert :size="16" />
+              <div class="stat-ico purple">
+                <ShieldAlert :size="15" />
               </div>
               <div><span class="stat-val">{{ adminCount }}</span><span class="stat-lbl">Admins</span></div>
             </div>
             <div class="stat-card">
-              <div class="stat-icon green">
-                <UserCheck :size="16" />
+              <div class="stat-ico green">
+                <UserCheck :size="15" />
               </div>
               <div><span class="stat-val">{{ facultyCount }}</span><span class="stat-lbl">Faculty</span></div>
             </div>
             <div class="stat-card">
-              <div class="stat-icon blue">
-                <Users :size="16" />
+              <div class="stat-ico blue">
+                <Users :size="15" />
               </div>
               <div><span class="stat-val">{{ studentCount }}</span><span class="stat-lbl">Students</span></div>
             </div>
           </div>
 
-          <div class="table-card">
-            <div class="table-scroll">
+          <div class="tbl-card">
+            <div class="tbl-scroll">
               <table class="tbl">
                 <thead>
                   <tr>
                     <th>User</th>
                     <th>Email</th>
                     <th>Role</th>
+                    <th class="th-r">Change Role</th>
                   </tr>
                 </thead>
                 <tbody>
                   <template v-if="loadingUsers">
-                    <tr v-for="i in 3" :key="'u-sk' + i" class="skel-row">
-                      <td colspan="3">
-                        <div class="skel skel-t1"></div>
+                    <tr v-for="i in 4" :key="'u-sk' + i" class="skel-row">
+                      <td colspan="4">
+                        <div class="skel skel-t1" />
                       </td>
                     </tr>
                   </template>
@@ -1073,23 +940,27 @@ watch(activeSection, (newSection) => {
                     <tr v-for="user in users" :key="user.id" class="tbl-row">
                       <td>
                         <div class="paper-cell">
-                          <div class="paper-av" style="background: #e5e7eb; color: #4b5563;">
-                            {{ user.username?.[0]?.toUpperCase() || '?' }}</div>
-                          <div class="paper-info">
-                            <span class="paper-title">{{ user.username }}</span>
-                          </div>
+                          <div class="user-av">{{ user.username?.[0]?.toUpperCase() || '?' }}</div>
+                          <div class="paper-info"><span class="paper-name">{{ user.username }}</span></div>
                         </div>
                       </td>
-                      <td>{{ user.email }}</td>
-                      <td><span class="type-badge"
-                          :class="user.role === 'Admin' ? 'purple' : (user.role === 'Faculty' ? 'green' : 'blue')">{{
-                            user.role }}</span></td>
+                      <td class="td-muted">{{ user.email }}</td>
+                      <td>
+                        <span class="type-badge"
+                          :class="user.role === 'Admin' ? 'purple' : user.role === 'Faculty' ? 'green' : 'blue'">{{
+                            user.role }}</span>
+                      </td>
+                      <td class="td-r">
+                        <button @click="openRoleModal(user)" class="row-btn" title="Change role">
+                          <UserCog :size="13" />
+                        </button>
+                      </td>
                     </tr>
                   </template>
                   <tr v-if="!loadingUsers && users.length === 0">
-                    <td colspan="3">
-                      <div class="empty">
-                        <Users :size="44" color="#d1d5db" />
+                    <td colspan="4">
+                      <div class="tbl-empty">
+                        <Users :size="40" />
                         <h3>No users found</h3>
                       </div>
                     </td>
@@ -1100,1194 +971,828 @@ watch(activeSection, (newSection) => {
           </div>
         </template>
 
-
-
-        <!-- Edit Workspace Overlay -->
-        <div v-if="showEditModal" class="workspace-overlay">
-          <!-- Workspace Header -->
-          <header class="workspace-header">
-            <div class="workspace-header-left">
-              <button @click="closeEditModal" class="workspace-back-btn">
-                <ArrowLeft :size="16" />
+        <!-- ══ EDIT OVERLAY ══════════════════════════════════════ -->
+        <div v-if="showEditModal" class="edit-overlay">
+          <header class="edit-header">
+            <div class="edit-header-left">
+              <button @click="closeEditModal" class="edit-back">
+                <ArrowLeft :size="15" />
               </button>
-              <div class="workspace-title-group">
-                <div class="workspace-breadcrumb">
+              <div>
+                <div class="edit-bc">
                   <span>Management</span>
-                  <ChevronRight :size="12" />
-                  <span>Repository</span>
-                  <ChevronRight :size="12" />
-                  <span class="active">Edit Research</span>
+                  <ChevronRight :size="11" /><span>Repository</span>
+                  <ChevronRight :size="11" /><span class="edit-bc-active">Edit Research</span>
                 </div>
-                <h2 class="workspace-title">{{ editingPaper.title || 'Edit Paper' }}</h2>
+                <h2 class="edit-title">{{ editingPaper.title || 'Edit Paper' }}</h2>
               </div>
             </div>
-            <div class="workspace-header-right">
-              <div class="id-badge">ID: #{{ editingPaper.id }}</div>
-              <button @click="closeEditModal" class="workspace-cancel-btn">Cancel</button>
-              <button @click="handleUpdate" :disabled="updating" class="workspace-save-btn">
-                <Loader2 v-if="updating" :size="14" class="spin" />
-                <Save v-else :size="14" />
-                {{ updating ? 'Saving...' : 'Save Changes' }}
+            <div class="edit-header-right">
+              <span class="id-badge">ID #{{ editingPaper.id }}</span>
+              <button @click="closeEditModal" class="ghost-btn">Cancel</button>
+              <button @click="handleUpdate" :disabled="updating" class="save-btn">
+                <Loader2 v-if="updating" :size="13" class="spin" />
+                <Save v-else :size="13" />
+                {{ updating ? 'Saving…' : 'Save Changes' }}
               </button>
             </div>
           </header>
-
-          <div class="workspace-body">
-            <div class="workspace-grid">
-
-              <!-- Centered: Metadata Form -->
-              <section class="workspace-form-side">
-                <div class="form-header">
-                  <div class="form-icon">
-                    <Settings :size="18" />
-                  </div>
-                  <div>
-                    <h3>Document Metadata</h3>
-                    <p>Update core information for this indexed document.</p>
+          <div class="edit-body">
+            <section class="edit-form-wrap">
+              <div class="edit-form-head">
+                <div class="edit-form-icon">
+                  <Settings :size="16" />
+                </div>
+                <div>
+                  <h3>Document Metadata</h3>
+                  <p>Update core information for this indexed document.</p>
+                </div>
+              </div>
+              <form @submit.prevent="handleUpdate" class="edit-form">
+                <div class="fg"><label>Research Title</label><textarea v-model="editingPaper.title" required rows="3"
+                    placeholder="Enter full research title…" /></div>
+                <div class="fg-row">
+                  <div class="fg"><label>Author / Group</label><input v-model="editingPaper.author" type="text" required
+                      placeholder="Main author names…" /></div>
+                  <div class="fg"><label>Publication Year</label><input v-model="editingPaper.year" type="text" required
+                      placeholder="e.g. 2024" /></div>
+                </div>
+                <div class="fg-row">
+                  <div class="fg"><label>Department</label><input v-model="editingPaper.department" type="text" required
+                      placeholder="e.g. Computer Science" /></div>
+                  <div class="fg">
+                    <label>Project Type</label>
+                    <select v-model="editingPaper.project_type" required>
+                      <option value="Thesis">Thesis</option>
+                      <option value="Capstone Project">Capstone Project</option>
+                    </select>
                   </div>
                 </div>
-
-                <form @submit.prevent="handleUpdate" class="actual-form">
-                  <div class="form-group">
-                    <label>Research Title</label>
-                    <textarea v-model="editingPaper.title" required rows="3"
-                      placeholder="Enter full research title..."></textarea>
-                  </div>
-
-                  <div class="form-row-2">
-                    <div class="form-group">
-                      <label>Author / Group</label>
-                      <div class="input-with-icon">
-                        <Users :size="14" />
-                        <input v-model="editingPaper.author" type="text" required placeholder="Main author names..." />
-                      </div>
-                    </div>
-                    <div class="form-group">
-                      <label>Publication Year</label>
-                      <div class="input-with-icon">
-                        <Calendar :size="14" />
-                        <input v-model="editingPaper.year" type="text" required placeholder="e.g. 2024" />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div class="form-row-2">
-                    <div class="form-group">
-                      <label>Department</label>
-                      <input v-model="editingPaper.department" type="text" required
-                        placeholder="e.g. Computer Science" />
-                    </div>
-                    <div class="form-group">
-                      <label>Project Type</label>
-                      <select v-model="editingPaper.project_type" required>
-                        <option value="Thesis">Thesis</option>
-                        <option value="Capstone Project">Capstone Project</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div class="form-group">
-                    <label>Keywords (Comma separated)</label>
-                    <div class="input-with-icon">
-                      <Hash :size="14" />
-                      <input v-model="editingPaper.keywords" type="text" placeholder="AI, Deep Learning, Bert..." />
-                    </div>
-                  </div>
-
-                  <div class="form-group">
-                    <label>Abstract / Summary</label>
-                    <textarea v-model="editingPaper.abstract" rows="12"
-                      placeholder="Enter abstract content..."></textarea>
-                  </div>
-                </form>
-              </section>
-
-            </div>
+                <div class="fg"><label>Keywords (comma separated)</label><input v-model="editingPaper.keywords"
+                    type="text" placeholder="AI, Deep Learning, BERT…" /></div>
+                <div class="fg"><label>Abstract / Summary</label><textarea v-model="editingPaper.abstract" rows="12"
+                    placeholder="Enter abstract content…" /></div>
+              </form>
+            </section>
           </div>
         </div>
 
-        <!-- Footer notice -->
-        <p class="notice">
-          <ShieldAlert :size="13" /> Note: Only Admin, Faculty, and Librarians can upload or modify papers.
-          If an unauthorized user accidentally access this page, please report it to the administrator for bug
-          inspection.
+        <p class="foot-notice">
+          <ShieldAlert :size="12" /> Only Admin, Faculty, and Librarians can upload or modify papers.
         </p>
 
-        <!-- Modals for Upload -->
+        <!-- ══ TELEPORTED MODALS ══════════════════════════════════ -->
         <Teleport to="body">
+
+          <!-- Strategy modal -->
           <div v-if="showStrategyModal" class="modal-overlay">
-            <div class="strategy-modal">
-              <div class="modal-header">
-                <div class="header-icon">
-                  <Settings2 :size="24" color="#10b981" />
+            <div class="modal-card strategy-modal">
+              <div class="modal-head">
+                <div class="modal-head-icon">
+                  <Settings2 :size="20" color="#00a651" />
                 </div>
-                <div class="header-text">
-                  <h3>Upload options</h3>
-                  <p><strong>{{ file?.name }}</strong></p>
+                <div>
+                  <h3>Upload Options</h3>
+                  <p>{{ file?.name }}</p>
                 </div>
-                <button @click="goBackToStep1" class="close-modal">
-                  <X :size="20" />
+                <button @click="goBackToStep1" class="modal-close">
+                  <X :size="18" />
                 </button>
               </div>
-
-              <div class="strategy-options">
+              <div class="strategy-opts">
                 <button @click="selectStrategy(true)" class="strategy-card smart">
-                  <div class="strategy-icon">
-                    <Sparkles :size="28" />
+                  <div class="strategy-ico">
+                    <Sparkles :size="26" />
                   </div>
                   <div class="strategy-info">
                     <h4>Automatic Scan</h4>
-                    <p>Automatically extract metadata using OCR + IMRAD formatting.</p>
+                    <p>Extract metadata with OCR + IMRAD detection.</p>
                   </div>
-                  <div class="strategy-badge">Recommended</div>
+                  <span class="strategy-badge">Recommended</span>
                 </button>
-
                 <button @click="selectStrategy(false)" class="strategy-card manual">
-                  <div class="strategy-icon">
-                    <Eye :size="28" />
+                  <div class="strategy-ico">
+                    <Eye :size="26" />
                   </div>
                   <div class="strategy-info">
                     <h4>Manual Review</h4>
-                    <p>Just show me the pages. I'll enter the metadata manually.</p>
+                    <p>Browse pages and enter metadata yourself.</p>
                   </div>
                 </button>
               </div>
             </div>
           </div>
 
+          <!-- Zoom modal -->
           <div v-if="showZoomModal" class="modal-overlay" @click="closeZoom">
             <div class="zoom-modal" @click.stop>
-              <button class="modal-close" @click="closeZoom">
-                <X :size="24" />
+              <button class="zoom-close" @click="closeZoom">
+                <X :size="22" />
               </button>
-              <div class="modal-content">
-                <div v-if="zoomedPage?.label" class="zoom-label">{{ zoomedPage?.label }}</div>
-                <img :src="`data:image/jpeg;base64,${zoomedPage?.thumbnail}`" class="full-page-img" />
+              <div v-if="zoomedPage?.label" class="zoom-label">{{ zoomedPage?.label }}</div>
+              <img :src="`data:image/jpeg;base64,${zoomedPage?.thumbnail}`" class="zoom-img" />
+            </div>
+          </div>
+
+          <!-- Role change modal -->
+          <div v-if="roleTarget" class="modal-overlay" @click.self="closeRoleModal">
+            <div class="modal-card role-modal">
+              <div class="modal-head">
+                <div class="modal-head-icon">
+                  <UserCog :size="20" color="#00a651" />
+                </div>
+                <div>
+                  <h3>Change Role</h3>
+                  <p>Assign a new role to <strong>{{ roleTarget.username }}</strong></p>
+                </div>
+                <button @click="closeRoleModal" class="modal-close">
+                  <X :size="18" />
+                </button>
+              </div>
+              <div class="role-opts">
+                <label class="role-opt" :class="{ selected: roleNew === 'User' }">
+                  <input type="radio" v-model="roleNew" value="User" />
+                  <div class="role-opt-ico blue">
+                    <Users :size="15" />
+                  </div>
+                  <div class="role-opt-info"><span class="role-opt-name">Student / User</span><span
+                      class="role-opt-desc">Can
+                      search and view papers only.</span></div>
+                  <Check v-if="roleNew === 'User'" :size="13" class="role-check" />
+                </label>
+                <label class="role-opt" :class="{ selected: roleNew === 'Faculty' }">
+                  <input type="radio" v-model="roleNew" value="Faculty" />
+                  <div class="role-opt-ico green">
+                    <ShieldCheck :size="15" />
+                  </div>
+                  <div class="role-opt-info"><span class="role-opt-name">Faculty</span><span class="role-opt-desc">Can
+                      upload
+                      and manage research papers.</span></div>
+                  <Check v-if="roleNew === 'Faculty'" :size="13" class="role-check" />
+                </label>
+                <label class="role-opt" :class="{ selected: roleNew === 'Admin' }">
+                  <input type="radio" v-model="roleNew" value="Admin" />
+                  <div class="role-opt-ico purple">
+                    <ShieldAlert :size="15" />
+                  </div>
+                  <div class="role-opt-info"><span class="role-opt-name">Admin</span><span class="role-opt-desc">Full
+                      access
+                      including user management.</span></div>
+                  <Check v-if="roleNew === 'Admin'" :size="13" class="role-check" />
+                </label>
+              </div>
+              <p v-if="roleError" class="role-error">{{ roleError }}</p>
+              <div class="modal-foot">
+                <button @click="closeRoleModal" class="ghost-btn">Cancel</button>
+                <button @click="handleRoleChange" :disabled="roleChanging || roleNew === roleTarget.role"
+                  class="save-btn">
+                  <Loader2 v-if="roleChanging" :size="13" class="spin" />
+                  <Check v-else :size="13" />
+                  {{ roleChanging ? 'Updating…' : 'Confirm Role Change' }}
+                </button>
               </div>
             </div>
           </div>
-        </Teleport>
 
-      </div><!-- /content -->
-    </div><!-- /main -->
-  </div><!-- /dashboard -->
+        </Teleport>
+      </div>
+    </div>
+  </div>
 </template>
 
 <style scoped>
-/* ══════════════════════════════════════════════════════════════
-   Layout shell
-══════════════════════════════════════════════════════════════ */
-.dashboard {
+@import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,600;1,400&family=Source+Sans+3:wght@400;500;600;700&display=swap');
+
+/* ── Design Tokens ───────────────────────────────────────────── */
+.mgmt {
+  --ink: #181c18;
+  --ink-2: #3d4239;
+  --ink-3: #7a7f75;
+  --rule: #dfe0db;
+  --surface: #f5f5f2;
+  --paper: #ffffff;
+  --green: #00a651;
+  --green-dk: #007d3d;
+  --green-dim: #e6f4ed;
+  --hero: #0d1f12;
+  --sb-w: 210px;
+
   display: flex;
   min-height: calc(100vh - 64px);
-  background: #f5f7fa;
-  font-family: 'Inter', -apple-system, sans-serif;
+  background: var(--surface);
+  font-family: 'Source Sans 3', sans-serif;
+  color: var(--ink);
 }
 
-/* ══════════════════════════════════════════════════════════════
-   Sidebar
-══════════════════════════════════════════════════════════════ */
+/* ══ SIDEBAR ════════════════════════════════════════════════════ */
 .sidebar {
-  width: 210px;
+  width: var(--sb-w);
   flex-shrink: 0;
   background: #00a651;
   display: flex;
   flex-direction: column;
-  padding: 0;
   position: sticky;
   top: 64px;
   height: calc(100vh - 64px);
   overflow-y: auto;
   overflow-x: hidden;
-  transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* Brand */
-.sidebar-brand {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 1rem 1rem 0.9rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  overflow: hidden;
-  white-space: nowrap;
+  transition: width 0.2s ease;
+  z-index: 999;
 }
 
 .sidebar.collapsed {
   width: 56px;
 }
 
-/* Hide text labels when collapsed */
-.sidebar.collapsed .brand-text,
-.sidebar.collapsed .sidebar-section-label,
-.sidebar.collapsed .sidebar-item-text,
-.sidebar.collapsed .sidebar-item-arrow,
-.sidebar.collapsed .sidebar-logout span {
-  opacity: 0;
-  width: 0;
-  overflow: hidden;
-  pointer-events: none;
-}
-
-/* Center icons when collapsed */
-.sidebar.collapsed .sidebar-item {
-  justify-content: center;
-  padding: 0.6rem 0;
-  gap: 0;
-}
-
-/* When collapsed avoid showing full button backgrounds (prevents small rounded squares)
-   and provide a neat circular icon background instead. */
-.sidebar.collapsed .sidebar-item {
-  border-radius: 0;
-  /* remove rounded pill look when narrow */
-  background: transparent;
-}
-
-.sidebar.collapsed .sidebar-item:hover {
-  background: transparent;
-  color: #fff;
-}
-
-.sidebar.collapsed .icon-wrap {
-  width: 34px;
-  height: 34px;
-  margin-right: 0;
-  background: rgba(255, 255, 255, 0.04);
-  border-radius: 8px;
-}
-
-.sidebar.collapsed .sidebar-logout {
-  justify-content: center;
-  padding: 0.55rem 0;
-  gap: 0;
-}
-
-.sidebar.collapsed .sidebar-brand {
-  justify-content: center;
-  padding: 1.5rem 0 1rem;
-  gap: 0;
-}
-
-
-/* Sidebar toggle button (hamburger) */
-.sidebar-toggle {
+.sb-brand {
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 0.6rem;
+  padding: 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.sb-brand-icon {
   width: 32px;
   height: 32px;
   border-radius: 6px;
-  border: none;
-  background: transparent;
-  color: #4b5563;
-  cursor: pointer;
-  flex-shrink: 0;
-  margin-right: 0.5rem;
-  transition: background 0.15s, color 0.15s;
-}
-
-.sidebar-toggle:hover {
-  background: #f3f4f6;
-  color: #111;
-}
-
-/* ── Dashboard 2-column grid ─────────────────────────────────── */
-.dash-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1rem;
-  margin-top: 1.25rem;
-}
-
-.dash-panel {
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 14px;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-.dash-panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.85rem 1.25rem;
-  border-bottom: 1px solid #f3f4f6;
-}
-
-.dash-panel-title {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: #374151;
-}
-
-.dash-panel-link {
-  background: none;
-  border: none;
-  color: #10b981;
-  font-size: 0.75rem;
-  font-weight: 600;
-  cursor: pointer;
-  padding: 0;
-  transition: color 0.15s;
-}
-
-.dash-panel-link:hover {
-  color: #059669;
-}
-
-.dash-panel-body {
-  flex: 1;
-  overflow-y: auto;
-  max-height: 360px;
-}
-
-/* Recent papers list */
-.dash-paper-row {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.65rem 1.25rem;
-  border-bottom: 1px solid #f9fafb;
-  transition: background 0.1s;
-}
-
-.dash-paper-row:last-child {
-  border-bottom: none;
-}
-
-.dash-paper-row:hover {
-  background: #fafff9;
-}
-
-.dash-paper-av {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
+  background: var(--green);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 800;
-  font-size: 0.65rem;
   flex-shrink: 0;
-  letter-spacing: 0.3px;
 }
 
-.dash-paper-av[data-t="blue"] {
-  background: #eff6ff;
-  color: #2563eb;
+.sb-name {
+  font-family: 'Lora', serif;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #fff;
+  display: block;
 }
 
-.dash-paper-av[data-t="orange"] {
-  background: #fff7ed;
-  color: #d97706;
+.sb-sub {
+  font-size: 0.62rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.35);
+  display: block;
 }
 
-.dash-paper-info {
-  flex: 1;
-  min-width: 0;
+.sb-group-label {
+  font-size: 0.58rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: rgba(255, 255, 255, 0.25);
+  padding: 1.2rem 1rem 0.4rem;
+  margin: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.sb-nav {
   display: flex;
   flex-direction: column;
   gap: 0.1rem;
-}
-
-.dash-paper-title {
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: #111;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.dash-paper-meta {
-  font-size: 0.68rem;
-  color: #9ca3af;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.dash-type-chip {
-  font-size: 0.6rem;
-  font-weight: 800;
-  padding: 0.15rem 0.45rem;
-  border-radius: 99px;
-  flex-shrink: 0;
-  letter-spacing: 0.3px;
-}
-
-.dash-type-chip.blue {
-  background: #eff6ff;
-  color: #2563eb;
-}
-
-.dash-type-chip.orange {
-  background: #fff7ed;
-  color: #d97706;
-}
-
-/* Quick overview grid */
-.dash-overview-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0.75rem;
-  padding: 1rem;
-}
-
-.dash-ov-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 1rem 0.5rem;
-  border-radius: 12px;
-  border: 1px solid #f3f4f6;
-  background: #fafafa;
-  cursor: pointer;
-  transition: border-color 0.15s, background 0.15s, transform 0.15s;
-  text-align: center;
-}
-
-.dash-ov-card:hover {
-  border-color: #10b981;
-  background: #f0fdf4;
-  transform: translateY(-2px);
-}
-
-.dash-ov-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.dash-ov-icon.green {
-  background: #ecfdf5;
-  color: #10b981;
-}
-
-.dash-ov-icon.blue {
-  background: #eff6ff;
-  color: #3b82f6;
-}
-
-.dash-ov-icon.orange {
-  background: #fff7ed;
-  color: #f59e0b;
-}
-
-.dash-ov-icon.purple {
-  background: #faf5ff;
-  color: #8b5cf6;
-}
-
-.dash-ov-icon.gray {
-  background: #f3f4f6;
-  color: #6b7280;
-}
-
-.dash-ov-icon.teal {
-  background: #f0fdfa;
-  color: #0d9488;
-}
-
-.dash-ov-label {
-  font-size: 0.72rem;
-  font-weight: 700;
-  color: #374151;
-  line-height: 1.2;
-}
-
-.dash-ov-hint {
-  font-size: 0.62rem;
-  color: #9ca3af;
-}
-
-/* Panel Stats Layout */
-.dash-panel-stats {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  padding: 1.25rem;
-  border-bottom: 1px solid #f3f4f6;
-  background: #fcfcfc;
-}
-
-.dash-pstat-card {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 0.75rem 1rem;
-  background: #fff;
-  border: 1px solid #f3f4f6;
-  border-radius: 12px;
-}
-
-.dash-pstat-info {
-  flex: 1;
-}
-
-.pstat-multi {
-  display: flex;
-  align-items: center;
-  gap: 1.25rem;
-}
-
-/* Loading & empty states */
-.dash-loading {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 1.5rem 1.25rem;
-  font-size: 0.8rem;
-  color: #9ca3af;
-}
-
-.dash-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 2.5rem 1rem;
-  color: #9ca3af;
-  font-size: 0.8rem;
-}
-
-/* Responsive: collapse grid on smaller screens */
-@media (max-width: 1024px) {
-  .dash-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .dash-overview-grid {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
-
-
-
-.brand-icon {
-  width: 38px;
-  height: 38px;
-  background: rgba(255, 255, 255, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-.brand-text {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-
-.brand-name {
-  font-size: 0.9rem;
-  font-weight: 800;
-  color: #fff;
-  line-height: 1.1;
-}
-
-.brand-sub {
-  font-size: 0.6rem;
-  color: rgba(255, 255, 255, 0.55);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-}
-
-/* Section label */
-.sidebar-section-label {
-  font-size: 0.65rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  color: rgba(255, 255, 255, 0.5);
-  padding: 1.5rem 1.25rem 0.6rem;
-  margin: 0;
-}
-
-/* Nav items */
-.sidebar-nav {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
   padding: 0 0.5rem;
 }
 
-.sidebar-item {
+.sb-item {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.6rem 0.6rem 0.6rem 0.7rem;
-  border-radius: 9px;
-  border: none;
-  background: none;
-  cursor: pointer;
+  gap: 0.65rem;
   width: 100%;
+  background: none;
+  border: none;
+  padding: 0.55rem 0.6rem;
+  border-radius: 6px;
+  cursor: pointer;
   text-align: left;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  color: rgba(255, 255, 255, 0.7);
-  position: relative;
+  transition: background 0.14s;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
-.sidebar-item:hover {
-  background: rgba(0, 0, 0, 0.15);
-  color: #fff;
+.sb-item:hover {
+  background: rgba(255, 255, 255, 0.07);
 }
 
-.sidebar-item.active {
-  background: rgba(255, 255, 255, 0.15);
-  color: #fff;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+.sb-item.active {
+  background: rgba(255, 255, 255, 0.12);
 }
 
-.sidebar-item.active::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 20%;
-  height: 60%;
-  width: 3px;
-  background: #fff;
-  border-radius: 0 4px 4px 0;
-}
-
-.sidebar-item.active .sidebar-item-icon {
-  color: #fff;
-}
-
-.sidebar-item-icon {
-  flex-shrink: 0;
-}
-
-/* Icon wrapper gives a subtle circular surface for icons */
-.icon-wrap {
-  display: inline-flex;
+.sb-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.5);
+  display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
-  margin-right: 0.6rem;
-  background: rgba(255, 255, 255, 0.04);
-  border-radius: 10px;
-  transition: background 0.18s ease, transform 0.18s ease;
+  flex-shrink: 0;
+  transition: background 0.14s, color 0.14s;
 }
 
-.icon-wrap.logout-wrap {
-  margin-right: 0.5rem
+.sb-icon.active {
+  background: var(--green);
+  color: #fff;
 }
 
-.sidebar-item:hover .icon-wrap {
-  background: rgba(255, 255, 255, 0.08);
-  transform: translateY(-1px)
-}
-
-.sidebar-item.active .icon-wrap {
-  background: rgba(255, 255, 255, 0.18);
-}
-
-.sidebar-item-text {
+.sb-item-body {
   flex: 1;
-  display: flex;
-  flex-direction: column;
   min-width: 0;
+  overflow: hidden;
 }
 
-.sidebar-item-label {
-  font-size: 0.85rem;
+.sb-item-label {
+  display: block;
+  font-size: 0.84rem;
   font-weight: 600;
-  line-height: 1.2;
+  color: rgba(255, 255, 255, 0.85);
 }
 
-.sidebar-item-desc {
-  font-size: 0.65rem;
-  color: rgba(255, 255, 255, 0.5);
-  line-height: 1.2;
+.sb-item-desc {
+  display: block;
+  font-size: 0.68rem;
+  color: rgba(255, 255, 255, 0.3);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.sidebar-item.active .sidebar-item-desc {
-  color: rgba(255, 255, 255, 0.65);
-}
-
-.sidebar-item-arrow {
+.sb-arrow {
+  color: rgba(255, 255, 255, 0.2);
   flex-shrink: 0;
-  opacity: 0;
-  transition: opacity 0.15s;
 }
 
-.sidebar-item:hover .sidebar-item-arrow,
-.sidebar-item.active .sidebar-item-arrow {
-  opacity: 1;
-}
-
-/* Footer */
-.sidebar-footer {
+.sb-footer {
   margin-top: auto;
-  padding: 1rem 0.6rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.15);
-}
-
-.sidebar-logout {
+  padding: 1rem;
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  padding: 0.55rem 0.75rem;
-  border-radius: 8px;
-  border: none;
-  background: none;
-  cursor: pointer;
-  color: rgba(255, 255, 255, 0.65);
-  font-size: 0.8rem;
-  font-weight: 600;
-  width: 100%;
-  transition: background 0.15s, color 0.15s;
+  gap: 0.4rem;
+  font-size: 0.65rem;
+  color: rgba(255, 255, 255, 0.2);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+  white-space: nowrap;
 }
 
-.sidebar-logout:hover {
-  background: rgba(0, 0, 0, 0.2);
-  color: #fff;
+.sidebar.collapsed .sb-group-label,
+.sidebar.collapsed .sb-item-body,
+.sidebar.collapsed .sb-arrow,
+.sidebar.collapsed .sb-brand-text,
+.sidebar.collapsed .sb-footer span {
+  opacity: 0;
+  pointer-events: none;
 }
 
-/* ══════════════════════════════════════════════════════════════
-   Main
-══════════════════════════════════════════════════════════════ */
-.dashboard-main {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
+.sb-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 1050;
 }
 
-/* ── Topbar ─────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    width: var(--sb-w) !important;
+    transform: translateX(-100%);
+    transition: transform 0.22s ease;
+    z-index: 1100;
+  }
+
+  .sidebar.mob-open {
+    transform: translateX(0);
+  }
+}
+
+/* ══ TOPBAR ═════════════════════════════════════════════════════ */
 .topbar {
-  background: #fff;
-  border-bottom: 1px solid #e5e7eb;
-  padding: 0 2rem;
-  height: 52px;
+  height: 48px;
+  background: var(--paper);
+  border-bottom: 1px solid var(--rule);
   display: flex;
   align-items: center;
   justify-content: space-between;
+  padding: 0 1.5rem;
   position: sticky;
-  top: 64px;
-  z-index: 30;
+  top: 0;
+  z-index: 20;
   gap: 1rem;
 }
 
 .topbar-left {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.5rem;
 }
 
-.breadcrumb-root {
-  font-size: 0.8rem;
-  color: #9ca3af;
-  font-weight: 500;
-}
-
-.breadcrumb-sep {
-  color: #d1d5db;
-}
-
-.breadcrumb-active {
-  font-size: 0.8rem;
-  color: #374151;
-  font-weight: 700;
-}
-
-/* Topbar nav links */
-.topbar-nav {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-}
-
-.topbar-link {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: #6b7280;
-  text-decoration: none;
-  padding: 0.4rem 0.75rem;
-  border-radius: 7px;
-  transition: background 0.15s, color 0.15s;
-}
-
-.topbar-link:hover {
-  background: #f3f4f6;
-  color: #111;
-}
-
-.topbar-cta {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: white;
-  background: #10b981;
+.sb-toggle {
+  background: none;
   border: none;
-  padding: 0.42rem 0.85rem;
-  border-radius: 7px;
+  color: var(--ink-3);
   cursor: pointer;
-  margin-left: 0.35rem;
-  transition: background 0.15s;
+  padding: 0.3rem;
+  display: flex;
+  align-items: center;
+  border-radius: 5px;
+  transition: background 0.13s, color 0.13s;
 }
 
-.topbar-cta:hover {
-  background: #059669;
+.sb-toggle:hover {
+  background: var(--surface);
+  color: var(--ink);
 }
 
-/* ── Content ────────────────────────────────────────────────── */
-.content {
-  padding: 2rem;
+.bc-root {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--ink-3);
+}
+
+.bc-sep {
+  color: var(--rule);
+}
+
+.bc-active {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+/* Steps rail */
+.steps-rail {
+  display: flex;
+  align-items: center;
+}
+
+.step-item {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--ink-3);
+}
+
+.step-num {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 2px solid var(--rule);
+  font-size: 0.72rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.step-item.active .step-num {
+  border-color: var(--green);
+  color: var(--green);
+  background: var(--paper);
+}
+
+.step-item.done .step-num {
+  background: var(--green);
+  border-color: var(--green);
+  color: #fff;
+}
+
+.step-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.step-item.active .step-label {
+  color: var(--green-dk);
+}
+
+.step-line {
+  width: 28px;
+  height: 2px;
+  background: var(--rule);
+  margin: 0 0.4rem;
+}
+
+.pulse-ring {
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 2px solid var(--green);
+  animation: pulse 1.6s ease-out infinite;
+  opacity: 0;
+}
+
+@keyframes pulse {
+  0% {
+    opacity: .7;
+    transform: scale(1)
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(1.6)
+  }
+}
+
+@media (max-width: 480px) {
+  .step-label {
+    display: none;
+  }
+
+  .step-line {
+    width: 18px;
+    margin: 0 0.2rem;
+  }
+}
+
+/* ══ CONTENT ════════════════════════════════════════════════════ */
+.mgmt-main {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
-.content-header {
-  margin-bottom: 1.5rem;
+.content {
+  flex: 1;
+  padding: 2rem 2rem 4rem;
+  max-width: 1200px;
+  width: 100%;
+  margin: 0 auto;
+  box-sizing: border-box;
 }
 
-.content-title {
-  font-size: 1.6rem;
-  font-weight: 800;
-  color: #111;
-  margin: 0 0 0.3rem;
+.page-head {
+  margin-bottom: 1.75rem;
 }
 
-.content-sub {
-  font-size: 0.875rem;
-  color: #6b7280;
+.page-title {
+  font-family: 'Lora', serif;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0 0 0.25rem;
+}
+
+.page-sub {
+  font-size: 0.84rem;
+  color: var(--ink-3);
   margin: 0;
 }
 
-/* ── Stats ──────────────────────────────────────────────────── */
+/* Stats */
 .stats-row {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  display: flex;
   gap: 1rem;
+  flex-wrap: wrap;
   margin-bottom: 1.5rem;
 }
 
 .stat-card {
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  padding: 1rem 1.25rem;
-  display: flex;
-  align-items: center;
-  gap: 0.85rem;
-}
-
-.stat-split {
-  display: flex;
-  align-items: center;
-  gap: 1.25rem;
   flex: 1;
+  min-width: 130px;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: 0.9rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
 }
 
-.stat-divider {
-  width: 1px;
-  height: 24px;
-  background: #e5e7eb;
-  flex-shrink: 0;
-}
-
-.stat-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 9px;
+.stat-ico {
+  width: 34px;
+  height: 34px;
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
 }
 
-.stat-icon.green {
-  background: #ecfdf5;
-  color: #10b981;
+.stat-ico.green {
+  background: var(--green-dim);
+  color: var(--green-dk);
 }
 
-.stat-icon.blue {
+.stat-ico.blue {
   background: #eff6ff;
-  color: #3b82f6;
+  color: #2563eb;
 }
 
-.stat-icon.orange {
+.stat-ico.orange {
   background: #fff7ed;
-  color: #f59e0b;
+  color: #c2410c;
 }
 
-.stat-icon.purple {
-  background: #faf5ff;
-  color: #8b5cf6;
+.stat-ico.purple {
+  background: #f5f3ff;
+  color: #7c3aed;
+}
+
+.stat-ico.amber {
+  background: #fffbeb;
+  color: #b45309;
 }
 
 .stat-val {
   display: block;
-  font-size: 1.3rem;
-  font-weight: 800;
-  color: #111;
-  line-height: 1.1;
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1.2;
 }
 
 .stat-lbl {
   display: block;
-  font-size: 0.68rem;
-  color: #9ca3af;
-  font-weight: 600;
+  font-size: 0.7rem;
+  color: var(--ink-3);
   text-transform: uppercase;
-  letter-spacing: 0.3px;
+  letter-spacing: 0.05em;
+  font-weight: 600;
 }
 
-/* ── Toolbar ────────────────────────────────────────────────── */
+/* Toolbar */
 .toolbar {
   display: flex;
   align-items: center;
-  gap: 0.85rem;
-  margin-bottom: 1rem;
+  gap: 0.75rem;
   flex-wrap: wrap;
+  margin-bottom: 1rem;
 }
 
-.search-wrap {
+.search-box {
+  flex: 1;
+  min-width: 200px;
   display: flex;
   align-items: center;
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 9px;
-  padding: 0.55rem 0.9rem;
-  flex: 1;
-  min-width: 180px;
-  gap: 0.55rem;
-  transition: border-color 0.15s;
+  gap: 0.5rem;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 0 0.75rem;
 }
 
-.search-wrap:focus-within {
-  border-color: #10b981;
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.08);
+.search-box:focus-within {
+  border-color: var(--green);
 }
 
 .search-ico {
-  color: #9ca3af;
+  color: var(--ink-3);
   flex-shrink: 0;
 }
 
-.search-input {
+.search-box input {
+  flex: 1;
   border: none;
   outline: none;
-  background: none;
-  font-size: 0.875rem;
-  color: #111;
-  width: 100%;
-}
-
-.search-input::placeholder {
-  color: #c0c7d0;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.88rem;
+  color: var(--ink);
+  padding: 0.55rem 0;
+  background: transparent;
 }
 
 .filter-chips {
   display: flex;
-  gap: 0.4rem;
+  gap: 0.35rem;
 }
 
 .chip {
-  background: white;
-  border: 1px solid #e5e7eb;
-  color: #6b7280;
-  padding: 0.48rem 0.85rem;
-  border-radius: 8px;
-  font-size: 0.8rem;
+  border: 1.5px solid var(--rule);
+  background: var(--paper);
+  color: var(--ink-3);
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.76rem;
   font-weight: 600;
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
   cursor: pointer;
-  transition: all 0.15s;
-  white-space: nowrap;
+  transition: all 0.13s;
 }
 
 .chip:hover {
-  border-color: #10b981;
-  color: #10b981;
+  border-color: var(--green);
+  color: var(--green-dk);
 }
 
 .chip.active {
-  background: #10b981;
-  border-color: #10b981;
-  color: white;
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
 }
 
-/* ── Table Card ─────────────────────────────────────────────── */
-.table-card {
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 14px;
+/* Table */
+.tbl-card {
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
   overflow: hidden;
 }
 
-.table-card-head {
-  padding: 0.85rem 1.5rem;
-  border-bottom: 1px solid #f3f4f6;
+.tbl-card-head {
+  padding: 0.75rem 1.25rem;
+  border-bottom: 1px solid var(--rule);
 }
 
-.table-count {
-  font-size: 0.75rem;
-  font-weight: 700;
-  color: #9ca3af;
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
+.tbl-count {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ink-3);
 }
 
-.count-hint {
-  color: #10b981;
+.tbl-hint {
+  color: var(--ink-3);
+  font-weight: 400;
 }
 
-.table-scroll {
+.tbl-scroll {
   overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
 }
 
 .tbl {
   width: 100%;
   border-collapse: collapse;
-  text-align: left;
+  min-width: 580px;
 }
 
-.tbl th {
-  background: #fafafa;
-  padding: 0.75rem 1.25rem;
-  font-size: 0.72rem;
+.tbl thead th {
+  padding: 0.65rem 1rem;
+  font-size: 0.68rem;
   font-weight: 700;
-  color: #9ca3af;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
-  border-bottom: 1px solid #f3f4f6;
-  white-space: nowrap;
+  letter-spacing: 0.07em;
+  color: var(--ink-3);
+  border-bottom: 1px solid var(--rule);
+  text-align: left;
+  background: var(--surface);
 }
 
-.th-right {
+.th-r {
   text-align: right;
 }
 
-/* Skeleton */
-@keyframes shimmer {
-  0% {
-    background-position: -600px 0;
-  }
-
-  100% {
-    background-position: 600px 0;
-  }
+.tbl-row td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--rule);
+  font-size: 0.84rem;
+  color: var(--ink-2);
+  vertical-align: middle;
 }
 
-.skel {
-  background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
-  background-size: 600px 100%;
-  animation: shimmer 1.4s infinite;
-  border-radius: 5px;
-}
-
-.skel-row td {
-  padding: 1rem 1.25rem;
-  border-bottom: 1px solid #f9fafb;
-}
-
-.skel-paper {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.skel-av {
-  width: 36px;
-  height: 36px;
-  border-radius: 9px;
-  flex-shrink: 0;
-}
-
-.skel-t1 {
-  height: 12px;
-  width: 180px;
-  margin-bottom: 5px;
-}
-
-.skel-t2 {
-  height: 10px;
-  width: 110px;
-}
-
-.skel-chip {
-  height: 20px;
-  width: 44px;
-  border-radius: 99px;
-}
-
-.skel-dept {
-  height: 20px;
-  width: 100px;
-}
-
-.skel-type {
-  height: 20px;
-  width: 72px;
-  border-radius: 99px;
-}
-
-/* Rows */
-.tbl-row {
-  border-bottom: 1px solid #f9fafb;
-  transition: background 0.1s;
-}
-
-.tbl-row:last-child {
+.tbl-row:last-child td {
   border-bottom: none;
 }
 
-.tbl-row:hover {
-  background: #fafff9;
+.tbl-row:hover td {
+  background: #fafaf8;
 }
 
-.tbl-row td {
-  padding: 1rem 1.25rem;
-  vertical-align: middle;
+.td-muted {
+  color: var(--ink-3);
 }
 
 .td-paper {
   min-width: 260px;
 }
 
+.td-r {
+  text-align: right;
+}
+
 .paper-cell {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.65rem;
 }
 
 .paper-av {
-  width: 36px;
-  height: 36px;
-  border-radius: 9px;
+  width: 34px;
+  height: 34px;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  font-weight: 700;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-weight: 800;
-  font-size: 0.72rem;
   flex-shrink: 0;
-  letter-spacing: 0.4px;
 }
 
 .paper-av[data-t="blue"] {
@@ -2297,61 +1802,59 @@ watch(activeSection, (newSection) => {
 
 .paper-av[data-t="orange"] {
   background: #fff7ed;
-  color: #d97706;
+  color: #c2410c;
 }
 
-.paper-info {
-  display: flex;
-  flex-direction: column;
-  gap: 0.15rem;
-  min-width: 0;
-}
-
-.paper-title {
+.user-av {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  color: var(--ink-2);
+  font-size: 0.78rem;
   font-weight: 700;
-  font-size: 0.875rem;
-  color: #111;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 340px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.paper-name {
+  display: block;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.35;
 }
 
 .paper-author {
-  font-size: 0.75rem;
-  color: #9ca3af;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 300px;
+  display: block;
+  font-size: 0.74rem;
+  color: var(--ink-3);
 }
 
 .year-chip {
-  background: #f3f4f6;
-  color: #374151;
-  font-size: 0.75rem;
-  font-weight: 700;
-  padding: 0.2rem 0.55rem;
-  border-radius: 99px;
-  white-space: nowrap;
-}
-
-.dept-badge {
-  background: #f0fdf4;
-  color: #059669;
+  background: var(--surface);
+  border: 1px solid var(--rule);
   font-size: 0.72rem;
   font-weight: 700;
-  padding: 0.2rem 0.6rem;
-  border-radius: 5px;
-  white-space: nowrap;
+  padding: 0.18rem 0.5rem;
+  border-radius: 4px;
+}
+
+.dept-chip {
+  font-size: 0.74rem;
+  color: var(--ink-3);
 }
 
 .type-badge {
-  font-size: 0.7rem;
+  font-size: 0.62rem;
   font-weight: 700;
-  padding: 0.2rem 0.6rem;
-  border-radius: 99px;
-  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.2rem 0.5rem;
+  border-radius: 3px;
 }
 
 .type-badge.blue {
@@ -2361,1507 +1864,370 @@ watch(activeSection, (newSection) => {
 
 .type-badge.orange {
   background: #fff7ed;
-  color: #d97706;
+  color: #c2410c;
 }
 
-.td-right {
-  text-align: right;
+.type-badge.green {
+  background: var(--green-dim);
+  color: var(--green-dk);
 }
 
-/* Edit / Delete buttons */
-.edit-btn-row {
-  background: white;
-  border: 1px solid #e5e7eb;
-  width: 30px;
-  height: 30px;
-  border-radius: 7px;
+.type-badge.purple {
+  background: #f5f3ff;
+  color: #7c3aed;
+}
+
+.row-btn {
+  background: none;
+  border: 1px solid var(--rule);
+  color: var(--ink-3);
+  cursor: pointer;
+  border-radius: 5px;
+  padding: 0.3rem 0.45rem;
+  margin-left: 0.25rem;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  color: #6b7280;
-  transition: all 0.15s;
-  margin-right: 0.4rem;
+  transition: all 0.13s;
 }
 
-.edit-btn-row:hover {
-  border-color: #10b981;
-  color: #10b981;
+.row-btn:hover {
+  border-color: var(--green);
+  color: var(--green-dk);
+  background: var(--green-dim);
 }
 
-.del-btn {
-  background: #1f1f1f;
-  border: none;
-  width: 30px;
-  height: 30px;
-  border-radius: 7px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  color: #fff;
-  transition: background 0.15s;
+.row-btn.danger:hover {
+  border-color: #ef4444;
+  color: #ef4444;
+  background: #fef2f2;
 }
 
-.del-btn:hover {
-  background: #111;
-}
-
-/* Workspace Overlay (Full Screen) */
-.workspace-overlay {
-  position: fixed;
-  inset: 0;
-  background: #f8fafc;
-  z-index: 2000;
+.tbl-empty {
   display: flex;
   flex-direction: column;
-  animation: workspaceIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-@keyframes workspaceIn {
-  from {
-    opacity: 0;
-    transform: scale(1.02);
-  }
-
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-/* Workspace Header */
-.workspace-header {
-  height: 64px;
-  background: white;
-  border-bottom: 1px solid #e2e8f0;
-  display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 1.5rem;
-  flex-shrink: 0;
-}
-
-.workspace-header-left {
-  display: flex;
-  align-items: center;
-  gap: 1.25rem;
-  min-width: 0;
-}
-
-.workspace-back-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  border: 1px solid #e2e8f0;
-  background: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  color: #64748b;
-  transition: all 0.2s;
-}
-
-.workspace-back-btn:hover {
-  background: #f1f5f9;
-  color: #0f172a;
-  border-color: #cbd5e1;
-}
-
-.workspace-title-group {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.workspace-breadcrumb {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: #94a3b8;
-  margin-bottom: 0.1rem;
-}
-
-.workspace-breadcrumb .active {
-  color: #00a651;
-}
-
-.workspace-title {
-  font-size: 1rem;
-  font-weight: 800;
-  color: #0f172a;
-  margin: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 500px;
-}
-
-.workspace-header-right {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.id-badge {
-  background: #f1f5f9;
-  color: #64748b;
-  font-size: 0.7rem;
-  font-weight: 700;
-  padding: 0.4rem 0.75rem;
-  border-radius: 8px;
-  letter-spacing: 0.5px;
-}
-
-.workspace-cancel-btn {
-  padding: 0.55rem 1rem;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: #64748b;
-  background: transparent;
-  border: 1px solid transparent;
-  cursor: pointer;
-  border-radius: 8px;
-}
-
-.workspace-cancel-btn:hover {
-  background: #f1f5f9;
-  color: #0f172a;
-}
-
-.workspace-save-btn {
-  padding: 0.55rem 1.25rem;
-  background: #00a651;
-  color: white;
-  border: none;
-  border-radius: 10px;
-  font-size: 0.85rem;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  cursor: pointer;
-  transition: all 0.2s;
-  box-shadow: 0 4px 12px rgba(0, 166, 81, 0.2);
-}
-
-.workspace-save-btn:hover {
-  background: #009247;
-  transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(0, 166, 81, 0.3);
-}
-
-.workspace-save-btn:disabled {
-  opacity: 0.6;
-  transform: none;
-  cursor: not-allowed;
-}
-
-/* Workspace Body */
-.workspace-body {
-  flex: 1;
-  overflow: hidden;
-  padding: 1.5rem;
-}
-
-.workspace-grid {
-  height: 100%;
-  max-width: 800px;
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-}
-
-/* Form Side */
-.workspace-form-side {
-  background: white;
-  border-radius: 20px;
-  border: 1px solid #e2e8f0;
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  overflow: hidden;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-}
-
-.form-header {
-  padding: 1.5rem;
-  border-bottom: 1px solid #f1f5f9;
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.form-icon {
-  width: 40px;
-  height: 40px;
-  background: #f0fdf4;
-  color: #00a651;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.form-header h3 {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 700;
-  color: #0f172a;
-}
-
-.form-header p {
-  margin: 0.1rem 0 0;
-  font-size: 0.75rem;
-  color: #64748b;
-}
-
-.actual-form {
-  padding: 2rem;
-  overflow-y: auto;
-  flex: 1;
-}
-
-.form-group {
-  margin-bottom: 1.5rem;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.6rem;
-  width: 100%;
-}
-
-.form-group label {
-  display: block;
-  font-size: 0.75rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  color: #64748b;
-  letter-spacing: 0.6px;
-  margin: 0;
-  padding: 0;
-}
-
-.form-row-2 {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1.25rem;
-}
-
-.input-with-icon {
-  position: relative;
-  display: flex;
-  align-items: center;
-  width: 100%;
-}
-
-.input-with-icon svg {
-  position: absolute;
-  left: 1rem;
-  color: #94a3b8;
-  pointer-events: none;
-  z-index: 5;
-}
-
-input,
-textarea,
-select {
-  width: 100%;
-  padding: 0.8rem 1rem;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  font-size: 0.95rem;
-  color: #0f172a;
-  outline: none;
-  transition: all 0.2s;
-  box-sizing: border-box;
-}
-
-.input-with-icon input {
-  padding-left: 2.8rem;
-}
-
-input:focus,
-textarea:focus,
-select:focus {
-  border-color: #00a651;
-  background: #fff;
-  box-shadow: 0 0 0 4px rgba(0, 166, 81, 0.08);
-}
-
-textarea {
-  resize: vertical;
-  min-height: 90px;
-  line-height: 1.6;
-  font-family: inherit;
-}
-
-/* Insight Side */
-.workspace-insight-side {
-  height: 100%;
-}
-
-.insight-container {
-  height: 100%;
-  background: white;
-  border-radius: 20px;
-  border: 1px solid #e2e8f0;
-  padding: 2rem;
-  display: flex;
-  flex-direction: column;
-  gap: 2rem;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
-}
-
-.insight-header {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.insight-icon {
-  width: 40px;
-  height: 40px;
-  background: #eff6ff;
-  color: #3b82f6;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.insight-header h3 {
-  margin: 0;
-  font-size: 1rem;
-  font-weight: 700;
-  color: #0f172a;
-}
-
-.insight-header p {
-  margin: 0.1rem 0 0;
-  font-size: 0.75rem;
-  color: #64748b;
-}
-
-.insight-stats {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1rem;
-}
-
-.insight-stat-card {
-  background: #f8fafc;
-  padding: 1.25rem;
-  border-radius: 16px;
-  border: 1px solid #f1f5f9;
-}
-
-.stat-main {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  margin-top: 0.5rem;
-}
-
-.stat-num {
-  font-size: 1.75rem;
-  font-weight: 800;
-  color: #0f172a;
-}
-
-.stat-trend {
-  color: #94a3b8;
-}
-
-.stat-trend.highlight {
-  color: #f59e0b;
-}
-
-.insight-keywords {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.keyword-cloud {
-  display: flex;
-  flex-wrap: wrap;
   gap: 0.5rem;
-  padding: 1rem;
-  background: #f8fafc;
-  border: 1px dashed #e2e8f0;
-  border-radius: 12px;
-  min-height: 100px;
-}
-
-.cloud-tag {
-  background: white;
-  color: #00a651;
-  font-size: 0.75rem;
-  font-weight: 700;
-  padding: 0.3rem 0.6rem;
-  border-radius: 6px;
-  border: 1px solid #dcfce7;
-}
-
-.no-tags {
-  color: #94a3b8;
-  font-size: 0.8rem;
-  font-style: italic;
-  margin: auto;
-}
-
-.insight-alert {
-  margin-top: auto;
-  background: #fefce8;
-  border: 1px solid #fef08a;
-  padding: 1.25rem;
-  border-radius: 12px;
-  display: flex;
-  gap: 1rem;
-  color: #854d0e;
-}
-
-.insight-alert strong {
-  display: block;
-  font-size: 0.85rem;
-  margin-bottom: 0.25rem;
-}
-
-.insight-alert p {
-  margin: 0;
-  font-size: 0.75rem;
-  line-height: 1.5;
-  opacity: 0.8;
-}
-
-/* Modal styles removed in favor of Workspace */
-
-/* Empty state */
-.empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 3.5rem 2rem;
+  padding: 3rem;
+  color: var(--rule);
   text-align: center;
 }
 
-.empty h3 {
+.tbl-empty h3 {
   font-size: 1rem;
-  font-weight: 700;
-  color: #374151;
-  margin: 0.75rem 0 0.35rem;
-}
-
-.empty p {
-  color: #9ca3af;
-  font-size: 0.875rem;
+  color: var(--ink-3);
   margin: 0;
 }
 
-.empty-btn {
-  margin-top: 1rem;
-  background: #10b981;
-  color: white;
+.tbl-empty p {
+  font-size: 0.84rem;
+  color: var(--ink-3);
+  margin: 0;
+}
+
+.empty-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: var(--green);
+  color: #fff;
   border: none;
-  padding: 0.6rem 1.1rem;
-  border-radius: 8px;
-  font-weight: 700;
-  font-size: 0.85rem;
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
+  border-radius: 5px;
+  padding: 0.45rem 1rem;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 600;
   cursor: pointer;
+  margin-top: 0.5rem;
 }
 
-/* ── Footer notice ──────────────────────────────────────────── */
-.notice {
+/* Skeleton */
+.skel {
+  background: linear-gradient(90deg, #f0f0ec 25%, #e8e8e4 50%, #f0f0ec 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s infinite;
+  border-radius: 4px;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0
+  }
+
+  100% {
+    background-position: -200% 0
+  }
+}
+
+.skel-paper {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.skel-av {
+  width: 34px;
+  height: 34px;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.skel-t1 {
+  width: 180px;
+  height: 13px;
+  margin-bottom: 5px;
+}
+
+.skel-t2 {
+  width: 100px;
+  height: 10px;
+}
+
+.skel-chip {
+  width: 44px;
+  height: 22px;
+}
+
+.skel-dept {
+  width: 110px;
+  height: 13px;
+}
+
+.skel-type {
+  width: 70px;
+  height: 20px;
+}
+
+/* ══ DASHBOARD ═════════════════════════════════════════════════ */
+.dash-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+.panel {
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.panel-label {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  color: #9ca3af;
-  font-size: 0.78rem;
-  margin-top: 1.25rem;
-}
-
-/* ── Status Badges (Borrow / Penalty tables) ─────────────────── */
-.status-badge {
-  display: inline-block;
-  font-size: 0.7rem;
+  font-size: 0.72rem;
   font-weight: 700;
-  padding: 0.22rem 0.65rem;
-  border-radius: 99px;
-  text-transform: capitalize;
-  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--ink-3);
 }
 
-.status-badge.borrowed {
+.panel-link {
+  background: none;
+  border: none;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.78rem;
+  color: var(--green-dk);
+  cursor: pointer;
+  font-weight: 600;
+  padding: 0;
+}
+
+.panel-link:hover {
+  text-decoration: underline;
+}
+
+.panel-body {
+  padding: 0.25rem 0;
+}
+
+.panel-loading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1.5rem 1rem;
+  color: var(--ink-3);
+  font-size: 0.84rem;
+}
+
+.panel-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 2.5rem;
+  color: var(--rule);
+}
+
+.panel-empty p {
+  font-size: 0.84rem;
+  color: var(--ink-3);
+  margin: 0;
+}
+
+.dash-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.65rem 1rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.dash-row:last-child {
+  border-bottom: none;
+}
+
+.dash-av {
+  width: 32px;
+  height: 32px;
+  border-radius: 5px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.dash-av[data-t="blue"] {
   background: #eff6ff;
   color: #2563eb;
 }
 
-.status-badge.returned {
-  background: #f0fdf4;
-  color: #16a34a;
-}
-
-.status-badge.overdue {
-  background: #fef2f2;
-  color: #dc2626;
-}
-
-.status-badge.unpaid {
+.dash-av[data-t="orange"] {
   background: #fff7ed;
-  color: #d97706;
+  color: #c2410c;
 }
 
-.status-badge.paid {
-  background: #f0fdf4;
-  color: #16a34a;
-}
-
-.health-badge.error {
-  background: #fef2f2;
-  color: #dc2626;
-}
-
-.action-btn-mini {
-  background: #f3f4f6;
-  border: 1px solid #e5e7eb;
-  color: #374151;
-  font-size: 0.75rem;
-  font-weight: 600;
-  padding: 0.3rem 0.7rem;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.15s;
-  white-space: nowrap;
-}
-
-.action-btn-mini:hover {
-  background: #10b981;
-  border-color: #10b981;
-  color: #fff;
-}
-
-/* ── Search Lab ─────────────────────────────────────────────── */
-.lab-panel {
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 14px;
-  padding: 1.25rem 1.5rem;
-  margin-bottom: 1rem;
-}
-
-.lab-input-row {
-  display: flex;
-  gap: 0.75rem;
-  align-items: center;
-  margin-bottom: 1rem;
-}
-
-.lab-controls {
-  display: flex;
-  gap: 2rem;
-  flex-wrap: wrap;
-  align-items: flex-start;
-}
-
-.lab-control-item {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  min-width: 200px;
-}
-
-.lab-control-item label {
-  font-size: 0.75rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: #6b7280;
-}
-
-.lab-slider {
-  width: 200px;
-  accent-color: #10b981;
-  cursor: pointer;
-}
-
-.lab-slider-labels {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.65rem;
-  color: #9ca3af;
-  width: 200px;
-}
-
-.lab-log {
-  background: #0f172a;
-  border-radius: 10px;
-  padding: 0.75rem 1rem;
-  margin-bottom: 1rem;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-}
-
-.lab-log-header {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  margin-bottom: 0.4rem;
-}
-
-.lab-log-icon {
-  color: #10b981;
-  font-size: 0.65rem;
-}
-
-.lab-log-method {
-  color: #10b981;
-  font-size: 0.72rem;
-  font-weight: 700;
-  background: rgba(16, 185, 129, 0.1);
-  padding: 0.1rem 0.4rem;
-  border-radius: 4px;
-}
-
-.lab-log-url {
-  color: #94a3b8;
-  font-size: 0.7rem;
-  word-break: break-all;
-}
-
-.lab-log-meta {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.lab-meta-chip {
-  font-size: 0.65rem;
-  font-weight: 700;
-  padding: 0.15rem 0.5rem;
-  border-radius: 4px;
-}
-
-.lab-meta-chip.green {
-  background: rgba(16, 185, 129, 0.15);
-  color: #10b981;
-}
-
-.lab-meta-chip.gray {
-  background: rgba(148, 163, 184, 0.15);
-  color: #94a3b8;
-}
-
-.lab-error {
-  background: #fef2f2;
-  color: #dc2626;
-  border: 1px solid #fecaca;
-  border-radius: 8px;
-  padding: 0.75rem 1rem;
-  font-size: 0.85rem;
-  margin-bottom: 1rem;
-}
-
-.lab-results {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.lab-result-card {
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  padding: 1rem 1.25rem;
-  display: flex;
-  gap: 1rem;
-  align-items: flex-start;
-  transition: border-color 0.15s;
-}
-
-.lab-result-card:hover {
-  border-color: #10b981;
-}
-
-.lab-result-rank {
-  font-size: 0.85rem;
-  font-weight: 800;
-  color: #d1d5db;
-  min-width: 28px;
-  padding-top: 2px;
-}
-
-.lab-result-body {
+.dash-info {
   flex: 1;
   min-width: 0;
 }
 
-.lab-result-top {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.4rem;
-}
-
-.lab-score-badge {
-  font-size: 0.7rem;
-  font-weight: 800;
-  padding: 0.2rem 0.6rem;
-  border-radius: 99px;
-}
-
-.lab-score-badge.high {
-  background: #f0fdf4;
-  color: #16a34a;
-}
-
-.lab-score-badge.mid {
-  background: #fffbeb;
-  color: #d97706;
-}
-
-.lab-score-badge.low {
-  background: #fef2f2;
-  color: #dc2626;
-}
-
-.lab-result-title {
-  font-size: 0.9rem;
-  font-weight: 700;
-  color: #111;
-  margin-bottom: 0.2rem;
-  line-height: 1.35;
-}
-
-.lab-result-meta {
-  font-size: 0.75rem;
-  color: #9ca3af;
-  margin-bottom: 0.5rem;
-}
-
-.lab-result-abstract {
+.dash-title {
+  display: block;
   font-size: 0.82rem;
-  color: #6b7280;
-  line-height: 1.55;
-  margin-bottom: 0.5rem;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.lab-raw-score {
+.dash-meta {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--ink-3);
+}
+
+.type-chip {
+  font-size: 0.6rem;
+  font-weight: 700;
+  padding: 0.15rem 0.4rem;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.type-chip.blue {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.type-chip.orange {
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.stat-tile {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
-  font-size: 0.68rem;
-  color: #9ca3af;
+  gap: 0.65rem;
+  padding: 1rem;
+  border-bottom: 1px solid var(--rule);
+  border-right: 1px solid var(--rule);
 }
 
-.lab-raw-score code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  background: #f3f4f6;
-  padding: 0.1rem 0.35rem;
-  border-radius: 4px;
-  color: #374151;
-  font-size: 0.7rem;
+.stat-tile:nth-child(even) {
+  border-right: none;
 }
 
-.lab-intro {
+.stat-tile:nth-last-child(-n+2) {
+  border-bottom: none;
+}
+
+.stat-data {
+  flex: 1;
+}
+
+.stat-split {
   display: flex;
-  flex-direction: column;
   align-items: center;
   gap: 0.75rem;
-  padding: 3rem 2rem;
-  color: #9ca3af;
-  text-align: center;
-  font-size: 0.9rem;
 }
 
-.lab-intro strong {
-  color: #374151;
-}
-
-/* Spin animation for loader */
-.spin,
-.spinner {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-/* ── Role Preview ── */
-.role-preview {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-top: 1.5rem;
-  padding: 0.75rem 1rem;
-  background: #f8fafc;
-  border-radius: 12px;
-  border: 1px solid #e2e8f0;
-}
-
-/* ── System Health Grid ── */
-.system-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-}
-
-.health-node {
-  position: relative;
-  overflow: hidden;
-  transition: transform 0.2s, border-color 0.2s;
-}
-
-.health-node:hover {
-  transform: translateY(-2px);
-  border-color: #10b981;
-}
-
-.node-status {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-}
-
-.node-status[data-status="online"] {
-  background: #10b981;
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
-}
-
-.node-info {
-  display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
-}
-
-.node-name {
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: #1e293b;
-}
-
-.node-meta {
-  font-size: 0.7rem;
-  color: #64748b;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-}
-
-.health-badge {
-  margin-left: auto;
-  font-size: 0.65rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: #10b981;
-  padding: 0.25rem 0.6rem;
-  background: #f0fdf4;
-  border-radius: 20px;
-}
-
-.placeholder-card {
-  border-style: dashed;
-  background: rgba(255, 255, 255, 0.5);
-}
-
-/* ══════════════════════════════════════════════════════════════
-   Mobile Sidebar Backdrop
-   z-index 1050 → above global navbar drawer (999) but below
-   the management sidebar drawer (1100) so taps are isolated.
-══════════════════════════════════════════════════════════════ */
-.mobile-sidebar-backdrop {
-  display: none;
-  position: fixed;
-  inset: 0;
-  top: 64px;
-  /* sit below the global navbar */
-  background: rgba(0, 0, 0, 0.45);
-  z-index: 1050;
-}
-
-.backdrop-fade-enter-active,
-.backdrop-fade-leave-active {
-  transition: opacity 0.25s ease;
-}
-
-.backdrop-fade-enter-from,
-.backdrop-fade-leave-to {
-  opacity: 0;
-}
-
-/* ══════════════════════════════════════════════════════════════
-   Responsive — Tablet ≤768px
-══════════════════════════════════════════════════════════════ */
-@media (max-width: 768px) {
-
-  /* Show the backdrop when sidebar is open */
-  .mobile-sidebar-backdrop {
-    display: block;
-  }
-
-  /* Sidebar becomes a fixed left drawer on mobile.
-     It slides in from the left when .mobile-open is applied.
-     z-index 1100 keeps it above both the navbar menu (999)
-     and the backdrop (1050) with no conflict. */
-  .sidebar {
-    position: fixed;
-    top: 64px;
-    left: 0;
-    height: calc(100vh - 64px);
-    width: 240px !important;
-    /* always full width when shown as drawer */
-    z-index: 1100;
-    transform: translateX(-100%);
-    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1),
-      width 0.22s cubic-bezier(0.4, 0, 0.2, 1);
-    /* Override the sticky positioning from desktop */
-    overflow-y: auto;
-  }
-
-  /* When the mobile drawer is open */
-  .sidebar.mobile-open {
-    transform: translateX(0);
-  }
-
-  /* Show all text labels inside the mobile drawer regardless of collapsed state */
-  .sidebar.mobile-open .brand-text,
-  .sidebar.mobile-open .sidebar-section-label,
-  .sidebar.mobile-open .sidebar-item-text,
-  .sidebar.mobile-open .sidebar-item-arrow,
-  .sidebar.mobile-open .sidebar-logout span {
-    opacity: 1;
-    width: auto;
-    overflow: visible;
-    pointer-events: auto;
-  }
-
-  .sidebar.mobile-open .sidebar-item {
-    justify-content: flex-start;
-    padding: 0.6rem 0.6rem 0.6rem 0.7rem;
-    gap: 0.6rem;
-  }
-
-  .sidebar.mobile-open .sidebar-brand {
-    justify-content: flex-start;
-    padding: 1rem 1rem 0.9rem;
-    gap: 0.6rem;
-  }
-
-  /* The hamburger in the topbar now controls the mobile drawer */
-  .sidebar-toggle {
-    display: flex;
-  }
-
-  .content {
-    padding: 1rem;
-  }
-
-  /* Stats: 2 columns on tablet */
-  .stats-row {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 0.75rem;
-  }
-
-  .topbar {
-    padding: 0 1rem;
-  }
-
-  .topbar-link {
-    font-size: 0.75rem;
-    padding: 0.35rem 0.55rem;
-  }
-
-  .topbar-cta {
-    font-size: 0.75rem;
-    padding: 0.38rem 0.7rem;
-  }
-
-  .paper-title {
-    max-width: 180px;
-  }
-
-  .paper-author {
-    max-width: 160px;
-  }
-
-  /* Dashboard grid: single column */
-  .dash-grid {
-    grid-template-columns: 1fr;
-  }
-
-  /* Upload review: stack vertically */
-  .review-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .review-header {
-    flex-direction: column;
-    align-items: flex-start;
-    padding: 1rem 1.25rem;
-    gap: 0.75rem;
-  }
-
-  .header-right {
-    width: 100%;
-    justify-content: space-between;
-    flex-wrap: wrap;
-    gap: 0.65rem;
-  }
-
-  /* Step rail — hide labels on mobile to keep topbar compact */
-  .step-label {
-    display: none;
-  }
-
-  .step-line {
-    width: 20px;
-    margin: 0 0.3rem;
-  }
-
-  /* Workspace header: stack on mobile */
-  .workspace-header {
-    height: auto;
-    flex-direction: column;
-    align-items: flex-start;
-    padding: 0.85rem 1rem;
-    gap: 0.75rem;
-  }
-
-  .workspace-header-right {
-    width: 100%;
-    justify-content: flex-end;
-    flex-wrap: wrap;
-  }
-
-  .workspace-title {
-    font-size: 0.875rem;
-    max-width: 240px;
-  }
-
-  .id-badge {
-    display: none;
-  }
-
-  .workspace-body {
-    padding: 0.85rem;
-  }
-
-  .form-row-2 {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* ══════════════════════════════════════════════════════════════
-   Responsive — Phone ≤480px (Android 360–412px)
-══════════════════════════════════════════════════════════════ */
-@media (max-width: 480px) {
-  .content {
-    padding: 0.85rem;
-  }
-
-  .content-title {
-    font-size: 1.3rem;
-  }
-
-  .stats-row {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 0.65rem;
-  }
-
-  .stat-card {
-    padding: 0.85rem 1rem;
-  }
-
-  .stat-val {
-    font-size: 1.1rem;
-  }
-
-  .topbar {
-    padding: 0 0.75rem;
-    height: 48px;
-  }
-
-  .topbar-link:not(:first-child) {
-    display: none;
-  }
-
-  .breadcrumb-root {
-    display: none;
-  }
-
-  .breadcrumb-sep {
-    display: none;
-  }
-
-  .toolbar {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .filter-chips {
-    justify-content: flex-start;
-    flex-wrap: wrap;
-  }
-
-  .tbl th,
-  .tbl-row td {
-    padding: 0.75rem 0.85rem;
-    font-size: 0.8rem;
-  }
-
-  .paper-title {
-    max-width: 130px;
-    font-size: 0.8rem;
-  }
-
-  .paper-author {
-    max-width: 110px;
-  }
-
-  /* Hide department column on very small screens */
-  .tbl th:nth-child(3),
-  .tbl-row td:nth-child(3) {
-    display: none;
-  }
-
-  /* Compact upload card on phone */
-  .upload-card {
-    padding: 1.5rem 1.1rem 1.25rem;
-  }
-
-  .upload-title {
-    font-size: 1.25rem;
-  }
-
-  .drop-zone {
-    padding: 2rem 1.25rem;
-  }
-
-  /* Steps: slightly smaller circles on phone */
-  .step-num {
-    width: 24px;
-    height: 24px;
-    font-size: 0.7rem;
-  }
-
-  /* Thumbnails: 2 columns on phone */
-  .thumbnails-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 0.65rem;
-  }
-
-  /* File name truncation */
-  .file-name {
-    max-width: 140px;
-  }
-
-  /* Confirm button full width on smallest screens */
-  .confirm-btn {
-    width: 100%;
-    justify-content: center;
-  }
-
-  .header-right {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .file-stack {
-    align-items: flex-start;
-  }
-
-  /* Warning banner stacks */
-  .imrad-warning-banner {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .warning-buttons {
-    width: 100%;
-    justify-content: flex-end;
-  }
-}
-
-/* ── Health Enhancements ────────────────────────────────────── */
-.health-latency-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  background: #ecfdf5;
-  color: #10b981;
-  padding: 0.15rem 0.5rem;
-  border-radius: 99px;
-  font-size: 0.65rem;
-  font-weight: 800;
-  margin-top: 0.25rem;
-  border: 1px solid rgba(16, 185, 129, 0.2);
-  width: fit-content;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-}
-
-@keyframes pulse-online {
-  0% {
-    transform: scale(1);
-    opacity: 1;
-  }
-
-  50% {
-    transform: scale(1.3);
-    opacity: 0.8;
-  }
-
-  100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-}
-
-.node-status[data-status="online"] {
-  background: #10b981;
-  box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
-  animation: pulse-online 2.5s infinite ease-in-out;
-}
-
-.node-status[data-status="offline"] {
-  background: #ef4444;
-  box-shadow: 0 0 8px rgba(239, 68, 68, 0.4);
-}
-
-/* ══════════════════════════════════════════════════════════════
-   Upload Section
-══════════════════════════════════════════════════════════════ */
-.upload-section {
-  padding: 1rem 0;
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-}
-
-/* ── Step Indicator — lives in the topbar ────────────────── */
-.steps-rail {
-  display: flex;
-  align-items: center;
-  gap: 0;
-}
-
-.step-item {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: #94a3b8;
-  flex-shrink: 0;
-}
-
-.step-num {
-  width: 28px;
+.stat-divider {
+  width: 1px;
   height: 28px;
-  border-radius: 50%;
-  background: #f1f5f9;
-  border: 2px solid #e2e8f0;
+  background: var(--rule);
+}
+
+/* ══ UPLOAD ════════════════════════════════════════════════════ */
+
+.upload-center {
   display: flex;
-  align-items: center;
   justify-content: center;
-  font-weight: 700;
-  font-size: 0.78rem;
-  position: relative;
-  flex-shrink: 0;
-  transition: all 0.3s;
-}
-
-.active .step-num {
-  background: #fff;
-  border-color: #10b981;
-  color: #10b981;
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.12);
-}
-
-.completed .step-num {
-  background: #10b981;
-  border-color: #10b981;
-  color: white;
-}
-
-.step-label {
-  font-size: 0.72rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
-  white-space: nowrap;
-  color: #94a3b8;
-}
-
-.active .step-label {
-  color: #10b981;
-}
-
-.completed .step-label {
-  color: #374151;
-}
-
-/* Horizontal connector line between steps */
-.step-line {
-  width: 32px;
-  height: 2px;
-  background: #e2e8f0;
-  border-radius: 2px;
-  margin: 0 0.5rem;
-  flex-shrink: 0;
-}
-
-/* Pulse ring on active step */
-.pulse-ring {
-  position: absolute;
-  inset: -4px;
-  border-radius: 50%;
-  border: 2px solid #10b981;
-  animation: pulse-step 2s ease-out infinite;
-  opacity: 0;
-}
-
-@keyframes pulse-step {
-  0% {
-    transform: scale(0.85);
-    opacity: 0.6;
-  }
-
-  100% {
-    transform: scale(1.6);
-    opacity: 0;
-  }
-}
-
-.standard-container {
-  max-width: 650px;
-  margin: 0 auto;
+  padding: 3rem 1rem;
 }
 
 .upload-card {
-  background: white;
-  padding: 3rem;
-  border-radius: 20px;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  padding: 2.5rem;
+  width: 100%;
+  max-width: 520px;
+}
+
+.upload-card-head {
   text-align: center;
-  border: 1px solid #eef2f6;
+  margin-bottom: 1.75rem;
 }
 
-.card-header {
-  margin-bottom: 2.5rem;
-}
-
-.icon-circle {
-  width: 64px;
-  height: 64px;
-  background: #f0fdf4;
-  border-radius: 50%;
+.upload-card-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 10px;
+  background: var(--green-dim);
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 0 auto 1.5rem;
+  margin: 0 auto 1rem;
 }
 
-.upload-title {
-  font-size: 1.75rem;
-  margin-bottom: 0.75rem !important;
-  color: #0f172a;
-  font-weight: 800;
+.upload-card-title {
+  font-family: 'Lora', serif;
+  font-size: 1.4rem;
+  font-weight: 600;
+  margin: 0 0 0.5rem;
 }
 
-.card-header p {
-  font-size: 0.9rem;
-  color: #64748b;
+.upload-card p {
+  font-size: 0.88rem;
+  color: var(--ink-3);
   margin: 0;
-}
-
-.drop-zone {
-  border: 2px dashed #e2e8f0;
-  border-radius: 16px;
-  padding: 4rem 2rem;
-  cursor: pointer;
-  transition: all 0.2s;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.75rem;
-}
-
-.drop-zone:hover:not(.is-processing) {
-  border-color: #10b981;
-  background: #f0fdf4;
-}
-
-.drop-text {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  font-size: 0.9rem;
-  color: #64748b;
-}
-
-.drop-text strong {
-  color: #0f172a;
-}
-
-.drop-text span {
-  font-size: 0.78rem;
-  color: #94a3b8;
-}
-
-.loading-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.75rem;
-  text-align: center;
-}
-
-.loading-state h3 {
-  margin: 0.5rem 0 0.25rem;
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: #0f172a;
-}
-
-.loading-state p {
-  margin: 0;
-  font-size: 0.85rem;
-  color: #64748b;
-}
-
-.success-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1rem;
-}
-
-.success-state h2 {
-  margin: 0;
-  font-size: 1.5rem;
-  font-weight: 800;
-  color: #0f172a;
-}
-
-.success-state p {
-  margin: 0;
-  font-size: 0.9rem;
-  color: #64748b;
 }
 
 .error-banner {
@@ -3871,283 +2237,524 @@ textarea {
   background: #fef2f2;
   border: 1px solid #fecaca;
   color: #dc2626;
-  padding: 0.75rem 1rem;
-  border-radius: 10px;
-  font-size: 0.875rem;
+  font-size: 0.84rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 6px;
   margin-bottom: 1rem;
 }
 
-/* Review UI */
-.review-container {
-  max-width: 1400px;
-  margin: 0 auto;
+.drop-zone {
+  border: 2px dashed var(--rule);
+  border-radius: 8px;
+  padding: 2.5rem 1.5rem;
+  cursor: pointer;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  transition: border-color 0.14s, background 0.14s;
+}
+
+.drop-zone:hover:not(.processing) {
+  border-color: var(--green);
+  background: var(--green-dim);
+}
+
+.drop-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.drop-loading h3 {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--ink);
+}
+
+.drop-loading p {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--ink-3);
+}
+
+.drop-text {
+  font-size: 0.88rem;
+  color: var(--ink-3);
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.drop-text strong {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.upload-success {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+  text-align: center;
+}
+
+.upload-success h2 {
+  font-family: 'Lora', serif;
+  margin: 0;
+}
+
+.upload-success p {
+  font-size: 0.88rem;
+  color: var(--ink-3);
+  margin: 0;
+}
+
+/* Review */
+.review-wrap {
   display: flex;
   flex-direction: column;
   gap: 1rem;
 }
 
-.review-header {
+.review-bar {
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  align-items: center;
-  background: white;
-  padding: 1.25rem 2rem;
-  border-radius: 16px;
-  border: 1px solid #eef2f6;
+  gap: 1rem;
+  flex-wrap: wrap;
 }
 
-.header-left {
+.review-bar-left {
   display: flex;
   align-items: center;
-  gap: 1.25rem;
+  gap: 0.85rem;
 }
 
-.header-icon {
-  background: #ecfdf5;
-  width: 50px;
-  height: 50px;
-  border-radius: 12px;
+.review-bar-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: var(--green-dim);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
 }
 
-.header-titles {
-  display: flex;
-  flex-direction: column;
+.review-bar-title {
+  font-family: 'Lora', serif;
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0 0 0.15rem;
 }
 
-.review-title {
-  font-size: 1.5rem;
+.review-bar-sub {
+  font-size: 0.78rem;
+  color: var(--ink-3);
   margin: 0;
-  font-weight: 800;
-  color: #0f172a;
 }
 
-.header-subtext {
-  margin: 0.25rem 0 0;
-  font-size: 0.85rem;
-  color: #64748b;
-}
-
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 1.5rem;
-}
-
-.file-stack {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0.2rem;
-}
-
-.file-info-row {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-
-.file-label {
-  font-size: 0.65rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  color: #94a3b8;
-  letter-spacing: 0.5px;
-}
-
-.file-name {
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: #1e293b;
-  max-width: 300px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.selection-count {
-  color: #10b981;
-  font-weight: 700;
-  font-size: 0.85rem;
-}
-
-.review-grid {
-  display: grid;
-  grid-template-columns: 420px 1fr;
-  gap: 1.5rem;
-  flex: 1;
-  align-items: start;
-}
-
-.metadata-form {
-  background: white;
-  padding: 1.75rem;
-  border-radius: 16px;
-  border: 1px solid #eef2f6;
-}
-
-.section-banner {
+.review-bar-right {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
 }
 
-.step-badge {
-  background: #0f172a;
-  color: white;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
+.file-pill {
   display: flex;
   align-items: center;
-  justify-content: center;
-  font-size: 0.75rem;
-  font-weight: 700;
+  gap: 0.5rem;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.76rem;
 }
 
-.section-banner h4 {
+.file-pill-label {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.62rem;
+  color: var(--ink-3);
+}
+
+.file-pill-name {
+  color: var(--ink);
+  font-weight: 600;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-pill-count strong {
+  color: var(--green-dk);
+}
+
+.confirm-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: var(--green);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 0.5rem 1.1rem;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.14s;
+  flex-shrink: 0;
+}
+
+.confirm-btn:hover:not(:disabled) {
+  background: var(--green-dk);
+}
+
+.confirm-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.notice-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+  padding: 0.9rem 1.1rem;
+  border-radius: 8px;
+  border: 1px solid;
+  flex-wrap: wrap;
+}
+
+.notice-banner.amber {
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+.notice-banner.blue {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.notice-icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.notice-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.notice-title {
+  font-size: 0.86rem;
+  font-weight: 700;
+  margin: 0 0 0.25rem;
+}
+
+.notice-desc {
+  font-size: 0.80rem;
   margin: 0;
-  font-size: 1rem;
-  font-weight: 700;
-  color: #0f172a;
 }
 
-.banner-title {
+.notice-actions {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   flex-wrap: wrap;
+  margin-top: 0.25rem;
 }
 
-.required-badge {
-  background: #fef2f2;
-  color: #ef4444;
-  font-size: 0.65rem;
-  font-weight: 700;
-  padding: 0.15rem 0.5rem;
-  border-radius: 6px;
-}
-
-.input-group {
-  margin-bottom: 1.5rem;
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-}
-
-.input-group label {
-  display: block;
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: #4b5563;
-  margin-bottom: 0.4rem;
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
-}
-
-.metadata-form textarea,
-.metadata-form input,
-.metadata-form select {
-  width: 100%;
-  padding: 0.75rem;
-  border: 1px solid #e5e7eb;
-  border-radius: 12px;
-  font-size: 0.95rem;
-  background: #f9fafb;
-  box-sizing: border-box;
-  transition: border-color 0.2s, box-shadow 0.2s;
-  font-family: inherit;
-  color: #0f172a;
-}
-
-.metadata-form textarea:focus,
-.metadata-form input:focus,
-.metadata-form select:focus {
-  outline: none;
-  border-color: #10b981;
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
-}
-
-.metadata-form textarea.abstract-area {
-  height: 280px;
-  resize: none;
-  font-family: inherit;
-  line-height: 1.5;
-}
-
-.row {
-  display: flex;
-  gap: 1.5rem;
-  width: 100%;
-  align-items: flex-start;
-}
-
-.row .input-group {
-  flex: 1;
-}
-
-.authors-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.author-input-row {
-  display: flex;
-  gap: 0.5rem;
+.notice-btn {
+  display: inline-flex;
   align-items: center;
-}
-
-.remove-btn {
-  background: #fee2e2;
-  color: #ef4444;
+  gap: 0.35rem;
+  color: #fff;
   border: none;
-  width: 38px;
-  height: 38px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  border-radius: 5px;
+  padding: 0.35rem 0.8rem;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.76rem;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
+  background: #b45309;
+}
+
+.notice-btn.ghost {
+  background: transparent;
+  border: 1.5px solid #b45309;
+  color: #b45309;
+}
+
+.missing-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-top: 0.4rem;
+}
+
+.missing-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: #fef9c3;
+  color: #78350f;
+  border: 1px solid #fde68a;
+  padding: 0.2rem 0.55rem;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  width: fit-content;
+  text-transform: capitalize;
+}
+
+.missing-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #f59e0b;
   flex-shrink: 0;
 }
 
-.remove-btn:hover {
-  background: #fecaca;
-  color: #dc2626;
+.review-grid {
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  gap: 1.25rem;
+  align-items: start;
 }
 
-.add-author-btn {
-  background: #f0fdf4;
-  color: #10b981;
-  border: 1px dashed #10b981;
-  padding: 0.5rem;
-  border-radius: 10px;
-  font-size: 0.85rem;
-  font-weight: 600;
+/* Form groups (shared between upload and edit) */
+.fg {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-bottom: 0.9rem;
+}
+
+.fg label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-3);
+}
+
+.fg input,
+.fg select,
+.fg textarea {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+  padding: 0.5rem 0.7rem;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.88rem;
+  color: var(--ink);
+  outline: none;
+  transition: border-color 0.13s;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.fg input:focus,
+.fg select:focus,
+.fg textarea:focus {
+  border-color: var(--green);
+  background: var(--paper);
+}
+
+.fg textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.abstract-area {
+  min-height: 180px !important;
+}
+
+.fg-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.authors-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.author-row {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.author-row input {
+  flex: 1;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+  padding: 0.45rem 0.65rem;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.86rem;
+  color: var(--ink);
+  outline: none;
+}
+
+.author-row input:focus {
+  border-color: var(--green);
+}
+
+.icon-btn {
+  background: none;
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+  padding: 0.35rem;
   cursor: pointer;
+  color: var(--ink-3);
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 0.4rem;
-  margin-top: 0.25rem;
-  transition: all 0.2s;
+  transition: all 0.13s;
 }
 
-.add-author-btn:hover {
-  background: #dcfce7;
+.icon-btn.red:hover {
+  border-color: #ef4444;
+  color: #ef4444;
+  background: #fef2f2;
+}
+
+.add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: none;
+  border: 1.5px dashed var(--rule);
+  border-radius: 5px;
+  padding: 0.4rem 0.7rem;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.78rem;
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: all 0.13s;
+}
+
+.add-btn:hover {
+  border-color: var(--green);
+  color: var(--green-dk);
+}
+
+.meta-panel {
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: 1.25rem;
+}
+
+.meta-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.meta-panel-head h4 {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.step-badge {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--hero);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.page-panel {
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: 1.25rem;
+}
+
+.page-panel-head {
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.page-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.page-panel-title h4 {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.req-badge {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: var(--green-dim);
+  color: var(--green-dk);
+  padding: 0.15rem 0.45rem;
+  border-radius: 3px;
+}
+
+.page-panel-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.selector-hint {
+  font-size: 0.78rem;
+  color: var(--ink-3);
+  margin: 0;
+}
+
+.selector-btns {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .text-btn {
   background: none;
   border: none;
-  color: #10b981;
-  font-size: 0.85rem;
+  color: var(--green-dk);
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.78rem;
   font-weight: 600;
   cursor: pointer;
   padding: 0;
@@ -4157,707 +2764,720 @@ textarea {
   text-decoration: underline;
 }
 
-.dot {
-  width: 4px;
-  height: 4px;
-  background: #cbd5e1;
+.dot-sep {
+  width: 3px;
+  height: 3px;
   border-radius: 50%;
+  background: var(--rule);
 }
 
-.page-selector {
-  background: white;
-  padding: 1.75rem;
-  border-radius: 16px;
-  display: flex;
-  flex-direction: column;
-  border: 1px solid #eef2f6;
-}
-
-.selector-header {
-  margin-bottom: 1rem;
-}
-
-.selector-title-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1rem;
-}
-
-.selector-hint {
-  font-size: 0.85rem;
-  color: #64748b;
-  margin: 0;
-}
-
-.selector-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.thumbnails-grid {
+.thumbs-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 1.25rem;
-  overflow-y: auto;
-  padding: 0.25rem;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 0.75rem;
 }
 
-.page-card {
+.thumb-card {
   cursor: pointer;
-  border-radius: 10px;
-  border: 2px solid #f1f5f9;
-  background: #fff;
-  transition: all 0.2s;
-  position: relative;
+  border-radius: 6px;
   overflow: hidden;
-  display: flex;
-  flex-direction: column;
+  border: 2px solid var(--rule);
+  transition: border-color 0.14s;
 }
 
-.thumbnail-wrapper {
-  position: relative;
-  aspect-ratio: 1 / 1.41;
-  overflow: hidden;
-  background: #f8fafc;
+.thumb-card.selected {
+  border-color: var(--green);
 }
 
-.page-thumb-img {
+.thumb-wrap {
+  position: relative;
+}
+
+.thumb-img {
   width: 100%;
-  height: 100%;
-  object-fit: contain;
-  transition: transform 0.4s;
+  display: block;
 }
 
-.page-card:hover .page-thumb-img {
-  transform: scale(1.08);
-}
-
-.page-card.is-selected {
-  border-color: #10b981;
-}
-
-.selection-overlay {
+.thumb-num {
   position: absolute;
-  inset: 0;
-  background: rgba(16, 185, 129, 0.3);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  transition: opacity 0.2s;
-}
-
-.is-selected .selection-overlay {
-  opacity: 1;
-}
-
-.check-circle {
-  width: 28px;
-  height: 28px;
-  background: #10b981;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-}
-
-.page-num {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  background: rgba(15, 23, 42, 0.8);
-  color: white;
-  padding: 1px 6px;
-  border-radius: 4px;
-  font-size: 0.65rem;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 0.62rem;
   font-weight: 700;
-  z-index: 5;
+  text-align: center;
+  padding: 0.2rem;
 }
 
-.section-badges {
+.thumb-sec-badges {
   position: absolute;
-  top: 30px;
-  left: 8px;
+  top: 4px;
+  left: 4px;
   display: flex;
   flex-direction: column;
   gap: 2px;
-  z-index: 5;
 }
 
-.s-badge {
-  font-size: 0.6rem;
-  font-weight: 800;
-  color: white;
-  padding: 1px 4px;
-  border-radius: 3px;
+.sec-badge {
+  font-size: 0.55rem;
+  font-weight: 700;
   text-transform: uppercase;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+  padding: 0.1rem 0.3rem;
+  border-radius: 2px;
+  color: #fff;
 }
 
-.s-badge.introduction {
-  background: #3b82f6;
+.sec-badge.introduction {
+  background: #7c3aed;
 }
 
-.s-badge.methods {
-  background: #10b981;
+.sec-badge.methods {
+  background: #2563eb;
 }
 
-.s-badge.results {
-  background: #f59e0b;
+.sec-badge.results {
+  background: #059669;
 }
 
-.s-badge.discussion {
-  background: #8b5cf6;
+.sec-badge.discussion {
+  background: #d97706;
+}
+
+.sec-badge.abstract {
+  background: #be185d;
 }
 
 .zoom-trigger {
   position: absolute;
-  bottom: 8px;
-  right: 8px;
-  background: white;
-  color: #0f172a;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
+  top: 4px;
+  right: 4px;
+  background: rgba(0, 0, 0, 0.5);
+  border: none;
+  color: #fff;
+  border-radius: 4px;
+  padding: 0.2rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  opacity: 0;
+  transition: opacity 0.14s;
+}
+
+.thumb-wrap:hover .zoom-trigger {
+  opacity: 1;
+}
+
+.thumb-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 166, 81, 0.35);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
   opacity: 0;
-  transform: translateY(5px);
-  transition: all 0.2s;
-  border: none;
-  z-index: 10;
-  cursor: pointer;
+  transition: opacity 0.14s;
 }
 
-.page-card:hover .zoom-trigger {
+.thumb-card.selected .thumb-overlay {
   opacity: 1;
-  transform: translateY(0);
 }
 
-.zoom-trigger:hover {
-  background: #10b981;
-  color: white;
-}
-
-.confirm-btn {
-  padding: 0.6rem 1.25rem;
-  border-radius: 10px;
-  font-weight: 700;
+.thumb-check {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #fff;
+  color: var(--green);
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  justify-content: center;
+}
+
+/* ══ EDIT OVERLAY ══════════════════════════════════════════════ */
+.edit-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--surface);
+  z-index: 500;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.edit-header {
+  background: var(--paper);
+  border-bottom: 1px solid var(--rule);
+  padding: 0.85rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.edit-header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.edit-back {
+  background: none;
+  border: 1px solid var(--rule);
+  color: var(--ink-3);
+  border-radius: 5px;
+  padding: 0.35rem 0.45rem;
   cursor: pointer;
-  border: none;
-  transition: all 0.2s;
-  background: #10b981;
-  color: white;
+  display: flex;
+  align-items: center;
+  transition: all 0.13s;
+}
+
+.edit-back:hover {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.edit-bc {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.72rem;
+  color: var(--ink-3);
+  margin-bottom: 0.15rem;
+}
+
+.edit-bc-active {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.edit-title {
+  font-family: 'Lora', serif;
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--ink);
+  max-width: 500px;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.confirm-btn:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
-}
-
-.confirm-btn.primary {
-  background: #10b981;
-}
-
-.confirm-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(4px);
+.edit-header-right {
   display: flex;
   align-items: center;
-  justify-content: center;
-  z-index: 10000;
-  padding: 2rem;
+  gap: 0.6rem;
 }
 
-.drop-zone {
-  border: 2px dashed #e2e8f0;
-  border-radius: 16px;
-  padding: 4rem 2rem;
-  cursor: pointer;
-  transition: all 0.2s;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-}
-
-.drop-zone:hover:not(.is-processing) {
-  border-color: #10b981;
-  background: #f0fdf4;
-}
-
-.loading-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.75rem;
-  text-align: center;
-}
-
-.loading-state h3 {
-  margin: 0.5rem 0 0.25rem;
-  font-size: 1.1rem;
+.id-badge {
+  font-size: 0.68rem;
   font-weight: 700;
-  color: #0f172a;
+  color: var(--ink-3);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  padding: 0.2rem 0.55rem;
+  border-radius: 4px;
 }
 
-.loading-state p {
-  margin: 0;
-  font-size: 0.85rem;
-  color: #64748b;
-}
-
-.page-card {
-  display: flex;
-  flex-direction: column;
+.ghost-btn {
+  background: none;
+  border: 1.5px solid var(--rule);
+  color: var(--ink-3);
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 0.4rem 0.85rem;
+  border-radius: 5px;
   cursor: pointer;
-  border-radius: 10px;
-  border: 2px solid #f1f5f9;
-  background: #fff;
-  transition: all 0.2s;
-  position: relative;
-  overflow: hidden;
+  transition: all 0.13s;
 }
 
-.page-preview-text {
-  padding: 0.75rem;
-  font-size: 0.7rem;
-  color: #64748b;
-  height: 54px;
-  overflow: hidden;
-  line-height: 1.4;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  line-clamp: 3;
-  -webkit-box-orient: vertical;
-  background: #fcfcfc;
+.ghost-btn:hover {
+  border-color: var(--ink);
+  color: var(--ink);
 }
 
-.strategy-modal {
-  background: white;
-  width: 90%;
-  max-width: 500px;
-  border-radius: 24px;
-  padding: 2.5rem 2rem;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-  position: relative;
-  animation: modalSlide 0.3s ease-out;
+.save-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: #1a3020;
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  padding: 0.45rem 1rem;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.14s;
 }
 
-@keyframes modalSlide {
-  from {
-    transform: translateY(20px);
-    opacity: 0;
-  }
-
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
+.save-btn:hover:not(:disabled) {
+  background: #00a651;
+  color: #fff;
 }
 
-.modal-header {
+.save-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.edit-body {
+  padding: 2rem;
+  display: flex;
+  justify-content: center;
+}
+
+.edit-form-wrap {
+  width: 100%;
+  max-width: 680px;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: 1.75rem;
+}
+
+.edit-form-head {
   display: flex;
   align-items: flex-start;
-  gap: 1rem;
-  margin-bottom: 2rem;
-  position: relative;
+  gap: 0.75rem;
+  margin-bottom: 1.75rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--rule);
 }
 
-.header-icon {
-  background: #f0fdf4;
-  padding: 0.75rem;
-  border-radius: 12px;
+.edit-form-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-3);
   flex-shrink: 0;
 }
 
-.header-text h3 {
+.edit-form-head h3 {
+  margin: 0 0 0.15rem;
+  font-size: 0.96rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.edit-form-head p {
   margin: 0;
-  font-size: 1.25rem;
-  font-weight: 800;
-  color: #0f172a;
+  font-size: 0.8rem;
+  color: var(--ink-3);
 }
 
-.header-text p {
-  margin: 0.25rem 0 0;
-  color: #64748b;
-  font-size: 0.95rem;
-  line-height: 1.5;
+.edit-form .fg:last-child textarea {
+  min-height: 240px;
 }
 
-.close-modal {
-  position: absolute;
-  top: -0.5rem;
-  right: -0.5rem;
-  background: #f1f5f9;
-  border: none;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
+.foot-notice {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.74rem;
+  color: var(--ink-3);
+  margin-top: 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--rule);
+}
+
+/* ══ MODALS ════════════════════════════════════════════════════ */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 2000;
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 1rem;
+}
+
+.modal-card {
+  background: #ffffff;
+  border-radius: 10px;
+  width: 100%;
+  max-width: 460px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  opacity: 1;
+}
+
+.modal-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+  padding: 1.25rem;
+  border-bottom: 1px solid #e5e7eb;
+  background: #ffffff;
+}
+
+.modal-head-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: var(--green-dim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.modal-head h3 {
+  margin: 0 0 0.15rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.modal-head p {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--ink-3);
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  color: var(--ink-3);
   cursor: pointer;
-  color: #64748b;
-  transition: all 0.2s;
+  padding: 0.2rem;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+  flex-shrink: 0;
 }
 
-.close-modal:hover {
-  background: #e2e8f0;
-  color: #0f172a;
-  transform: rotate(90deg);
+.modal-close:hover {
+  color: var(--ink);
 }
 
-.strategy-options {
+.modal-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.6rem;
+  padding: 1rem 1.25rem;
+  border-top: 1px solid #e5e7eb;
+  background: #ffffff;
+}
+
+.strategy-modal {
+  max-width: 420px;
+}
+
+.strategy-opts {
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: 0.75rem;
+  padding: 1.25rem;
 }
 
 .strategy-card {
   display: flex;
-  align-items: center;
-  gap: 1.25rem;
-  padding: 1.5rem;
-  border: 2px solid #f1f5f9;
-  border-radius: 18px;
-  background: white;
+  align-items: flex-start;
+  gap: 1rem;
+  background: var(--surface);
+  border: 2px solid var(--rule);
+  border-radius: 8px;
+  padding: 1rem 1.1rem;
   cursor: pointer;
-  transition: all 0.2s;
-  width: 100%;
   text-align: left;
+  transition: border-color 0.14s, background 0.14s;
   position: relative;
 }
 
-.strategy-card:hover {
-  border-color: #10b981;
-  background: #f0fdf4;
-  transform: translateX(6px);
+.strategy-card.smart:hover {
+  border-color: var(--green);
+  background: var(--green-dim);
 }
 
-.strategy-icon {
-  width: 54px;
-  height: 54px;
-  background: #f8fafc;
-  border-radius: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.strategy-card.manual:hover {
+  border-color: var(--ink-3);
+}
+
+.strategy-ico {
+  color: var(--green);
   flex-shrink: 0;
-  color: #64748b;
-  transition: all 0.3s;
 }
 
-.smart .strategy-icon {
-  background: #ecfdf5;
-  color: #10b981;
-}
-
-.manual .strategy-icon {
-  background: #eff6ff;
-  color: #3b82f6;
+.strategy-card.manual .strategy-ico {
+  color: var(--ink-3);
 }
 
 .strategy-info h4 {
-  margin: 0;
-  font-size: 1.05rem;
-  font-weight: 800;
-  color: #0f172a;
+  margin: 0 0 0.25rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--ink);
 }
 
 .strategy-info p {
-  margin: 0.25rem 0 0;
-  font-size: 0.9rem;
-  color: #64748b;
-  line-height: 1.4;
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--ink-3);
 }
 
 .strategy-badge {
   position: absolute;
-  top: -12px;
-  right: 24px;
-  background: #10b981;
-  color: white;
-  font-size: 0.65rem;
-  font-weight: 800;
-  padding: 0.25rem 0.75rem;
-  border-radius: 20px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.2);
-}
-
-.success-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1rem;
-}
-
-/* Zoom Modal */
-.zoom-modal {
-  background: white;
-  width: 95%;
-  max-width: 700px;
-  max-height: 90vh;
-  border-radius: 24px;
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  animation: modalSlide 0.3s ease-out;
-}
-
-.modal-content {
-  height: 100%;
-  overflow-y: auto;
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  background: #f1f5f9;
-  padding: 1rem;
-}
-
-/* Custom Webkit Scrollbar for the zoom modal */
-.modal-content::-webkit-scrollbar {
-  width: 8px;
-}
-
-.modal-content::-webkit-scrollbar-track {
-  background: #f1f5f9;
-  border-radius: 4px;
-}
-
-.modal-content::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 4px;
-}
-
-.modal-content::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
-}
-
-.modal-close {
-  position: absolute;
-  top: 1.25rem;
-  right: 1.25rem;
-  background: white;
-  border: 1px solid #e2e8f0;
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 50;
-  cursor: pointer;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-  transition: all 0.2s;
-}
-
-.modal-close:hover {
-  background: #f8fafc;
-  color: #ef4444;
-}
-
-.full-page-img {
-  width: 100%;
-  height: auto;
-  min-height: 100%;
-  object-fit: contain;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-  background: white;
-}
-
-/* IMRAD Warning Banner */
-.imrad-warning-banner {
-  background: #fffbeb;
-  border: 1px solid #fde68a;
-  border-left: 4px solid #f59e0b;
-  padding: 1rem 1.25rem;
-  border-radius: 12px;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1.25rem;
-  animation: slideDown 0.35s ease-out;
-}
-
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    transform: translateY(-8px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.warning-main {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.85rem;
-  flex: 1;
-  min-width: 0;
-}
-
-.warning-icon-wrap {
-  width: 34px;
-  height: 34px;
-  background: #fef3c7;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  margin-top: 0.1rem;
-}
-
-.warning-body {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  min-width: 0;
-}
-
-.warning-title {
+  top: 0.6rem;
+  right: 0.7rem;
+  font-size: 0.6rem;
   font-weight: 700;
-  color: #78350f;
-  font-size: 0.875rem;
-  margin: 0;
-  line-height: 1.3;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  background: var(--green);
+  color: #fff;
+  padding: 0.12rem 0.45rem;
+  border-radius: 3px;
 }
 
-.warning-desc {
-  color: #92400e;
-  font-size: 0.78rem;
-  margin: 0;
-  line-height: 1.5;
+.zoom-modal {
+  position: relative;
+  max-width: 90vw;
+  max-height: 90vh;
 }
 
-/* Vertical list of missing section pills */
-.missing-sections-list {
+.zoom-close {
+  position: absolute;
+  top: -14px;
+  right: -14px;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  color: var(--ink);
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  cursor: pointer;
+}
+
+.zoom-label {
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 0.76rem;
+  font-weight: 700;
+  padding: 0.3rem 0.75rem;
+  text-align: center;
+  border-radius: 4px 4px 0 0;
+}
+
+.zoom-img {
+  display: block;
+  max-width: 90vw;
+  max-height: 85vh;
+  border-radius: 0 0 6px 6px;
+}
+
+/* Role modal */
+.role-opts {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
-  margin-top: 0.5rem;
-}
-
-.missing-s-badge {
-  display: inline-flex;
-  align-items: center;
+  padding: 1rem 1.25rem;
+  background: #ffffff;
   gap: 0.5rem;
-  background: #fef9c3;
-  color: #78350f;
-  border: 1px solid #fde68a;
-  padding: 0.28rem 0.65rem;
-  border-radius: 6px;
-  font-weight: 600;
-  font-size: 0.75rem;
-  text-transform: capitalize;
-  width: fit-content;
 }
 
-.missing-s-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #f59e0b;
-  flex-shrink: 0;
-}
-
-.warning-buttons {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.65rem;
-  flex-shrink: 0;
-  padding-top: 0.1rem;
-}
-
-.warning-action {
+.role-opt {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.5rem 0.9rem;
-  border-radius: 8px;
-  font-size: 0.82rem;
-  font-weight: 600;
+  gap: 0.85rem;
+  padding: 0.9rem 0.85rem;
+  border-radius: 7px;
   cursor: pointer;
-  transition: all 0.2s;
+  border: 2px solid #e5e7eb;
+  background: #ffffff;
+  transition: background 0.13s, border-color 0.13s;
 }
 
-.warning-action.fallback {
-  background: #92400e;
-  color: #fff;
-  border: none;
+.role-opt input {
+  display: none;
 }
 
-.warning-action.fallback:hover {
-  background: #78350f;
-  transform: translateY(-1px);
+.role-opt:hover {
+  background: #f9fafb;
+  border-color: #d1d5db;
 }
 
-.warning-action.decline {
-  background: transparent;
-  color: #dc2626;
-  border: 1px solid #fca5a5;
+.role-opt.selected {
+  border-color: var(--green);
+  background: var(--green-dim);
 }
 
-.warning-action.decline:hover {
+.role-opt-ico {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.role-opt-ico.blue {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.role-opt-ico.green {
+  background: var(--green-dim);
+  color: var(--green-dk);
+}
+
+.role-opt-ico.purple {
+  background: #f5f3ff;
+  color: #7c3aed;
+}
+
+.role-opt-info {
+  flex: 1;
+}
+
+.role-opt-name {
+  display: block;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.role-opt-desc {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--ink-3);
+}
+
+.role-check {
+  color: var(--green-dk);
+  flex-shrink: 0;
+}
+
+.role-error {
+  font-size: 0.8rem;
+  color: #991b1b;
   background: #fef2f2;
+  border: 1px solid #fee2e2;
+  border-radius: 5px;
+  padding: 0.6rem 0.75rem;
+  margin: 0.25rem 1.25rem 0.75rem;
 }
 
-/* Responsive adjustments for banner */
-@media (max-width: 768px) {
-  .imrad-warning-banner {
-    flex-direction: column;
-    align-items: flex-start;
-  }
+/* ══ SPINNER ═══════════════════════════════════════════════════ */
+.spin {
+  animation: spin 0.9s linear infinite;
+}
 
-  .warning-buttons {
-    width: 100%;
-    justify-content: flex-end;
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 
-/* ── Responsive: tablet 1024px ── */
+/* ══ TRANSITIONS ══════════════════════════════════════════════ */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+/* ══ RESPONSIVE ════════════════════════════════════════════════ */
 @media (max-width: 1024px) {
   .review-grid {
+    grid-template-columns: 320px 1fr;
+  }
+
+  .dash-grid {
     grid-template-columns: 1fr;
   }
 }
 
-.zoom-label {
-  position: absolute;
-  top: 1rem;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(16, 185, 129, 0.9);
-  color: white;
-  padding: 0.5rem 1.25rem;
-  border-radius: 99px;
-  font-size: 0.9rem;
-  font-weight: 700;
-  z-index: 10;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+@media (max-width: 860px) {
+  .review-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .stat-card {
+    min-width: calc(50% - 0.5rem);
+  }
+}
+
+@media (max-width: 768px) {
+  .content {
+    padding: 1.25rem 1rem 3rem;
+  }
+
+  .topbar {
+    padding: 0 1rem;
+  }
+
+  .edit-header {
+    padding: 0.75rem 1rem;
+  }
+
+  .edit-body {
+    padding: 1rem;
+  }
+
+  .upload-card {
+    padding: 1.5rem;
+  }
+
+  .edit-form-wrap {
+    padding: 1.25rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .content {
+    padding: 1rem 0.75rem 2.5rem;
+  }
+
+  .stats-row .stat-card {
+    min-width: 100%;
+  }
+
+  .fg-row {
+    grid-template-columns: 1fr;
+  }
+
+  .review-bar-right {
+    width: 100%;
+  }
+
+  .file-pill-name {
+    max-width: 100px;
+  }
+
+  .edit-title {
+    max-width: 180px;
+    font-size: 0.9rem;
+  }
+
+  .tbl {
+    min-width: 460px;
+  }
+
+  .thumbs-grid {
+    grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+  }
 }
 </style>
