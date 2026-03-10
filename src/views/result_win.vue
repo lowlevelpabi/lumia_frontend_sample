@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Filter, SlidersHorizontal, ArrowRight, User } from 'lucide-vue-next'
+import { Filter, SlidersHorizontal, ArrowRight, User, Search, X } from 'lucide-vue-next'
 import { api, type SearchResult, type SearchParams } from '../services/api'
 
 const route = useRoute()
@@ -10,6 +10,8 @@ const query = ref('')
 const results = ref<SearchResult[]>([])
 const loading = ref(false)
 const showFilters = ref(false)
+const showMobileSearch = ref(false)
+const mobileSearchInput = ref('')
 const windowWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1024)
 const isDesktop = computed(() => windowWidth.value > 768)
 
@@ -58,6 +60,17 @@ watch(
 )
 
 const viewDetail = (id: number) => router.push({ name: 'detail', params: { id } })
+
+const submitMobileSearch = () => {
+  if (!mobileSearchInput.value.trim()) return
+  router.push({ name: 'results', query: { q: mobileSearchInput.value.trim() } })
+  showMobileSearch.value = false
+}
+
+const openMobileSearch = () => {
+  mobileSearchInput.value = query.value
+  showMobileSearch.value = true
+}
 </script>
 
 <template>
@@ -76,11 +89,36 @@ const viewDetail = (id: number) => router.push({ name: 'detail', params: { id } 
           <span v-else class="topbar-count topbar-searching">Searching the archives&hellip;</span>
         </div>
 
-        <!-- Mobile filter toggle -->
-        <button class="filter-toggle-btn" @click="showFilters = !showFilters" :class="{ active: showFilters }">
-          <SlidersHorizontal :size="14" />
-          <span>Filters</span>
-        </button>
+        <div class="topbar-actions">
+          <!-- Mobile search toggle -->
+          <button class="mobile-search-btn" @click="openMobileSearch" :class="{ active: showMobileSearch }"
+            title="Search">
+            <Search :size="15" />
+          </button>
+          <!-- Mobile filter toggle -->
+          <button class="filter-toggle-btn" @click="showFilters = !showFilters" :class="{ active: showFilters }">
+            <SlidersHorizontal :size="14" />
+            <span>Filters</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Mobile search bar — expands below topbar -->
+      <div class="mobile-search-bar" :class="{ open: showMobileSearch }">
+        <div class="mobile-search-inner">
+          <div class="mobile-search-field">
+            <Search :size="15" class="ms-icon" />
+            <input v-model="mobileSearchInput" type="text" placeholder="Search the archive…"
+              @keyup.enter="submitMobileSearch" autocomplete="off" spellcheck="false" />
+            <button v-if="mobileSearchInput" class="ms-clear" @click="mobileSearchInput = ''">
+              <X :size="13" />
+            </button>
+          </div>
+          <button class="ms-submit" @click="submitMobileSearch">Search</button>
+          <button class="ms-cancel" @click="showMobileSearch = false">
+            <X :size="15" />
+          </button>
+        </div>
       </div>
     </div>
 
@@ -101,13 +139,9 @@ const viewDetail = (id: number) => router.push({ name: 'detail', params: { id } 
             <div class="filter-group">
               <p class="filter-label">Project Type</p>
               <div class="filter-options">
-                <button
-                  v-for="pt in ['All', 'Capstone Project', 'Thesis']"
-                  :key="pt"
-                  class="filter-tag"
+                <button v-for="pt in ['All', 'Capstone Project', 'Thesis']" :key="pt" class="filter-tag"
                   :class="{ active: (pt === 'All' && selectedProjectType === '') || selectedProjectType === pt }"
-                  @click="selectedProjectType = pt === 'All' ? '' : pt"
-                >{{ pt }}</button>
+                  @click="selectedProjectType = pt === 'All' ? '' : pt">{{ pt }}</button>
               </div>
             </div>
 
@@ -115,13 +149,9 @@ const viewDetail = (id: number) => router.push({ name: 'detail', params: { id } 
             <div class="filter-group">
               <p class="filter-label">Degree Program</p>
               <div class="filter-options">
-                <button
-                  v-for="deg in ['All', 'BSCS', 'BSIT', 'BSIS', 'BSCpE']"
-                  :key="deg"
-                  class="filter-tag"
+                <button v-for="deg in ['All', 'BSCS', 'BSIT', 'BSIS', 'BSCpE']" :key="deg" class="filter-tag"
                   :class="{ active: (deg === 'All' && selectedDegree === '') || selectedDegree === deg }"
-                  @click="selectedDegree = deg === 'All' ? '' : deg"
-                >{{ deg }}</button>
+                  @click="selectedDegree = deg === 'All' ? '' : deg">{{ deg }}</button>
               </div>
             </div>
 
@@ -129,13 +159,11 @@ const viewDetail = (id: number) => router.push({ name: 'detail', params: { id } 
             <div class="filter-group">
               <p class="filter-label">Search Target</p>
               <div class="filter-options">
-                <button
-                  v-for="s in ['Full Text', 'introduction', 'methods', 'results', 'discussion']"
-                  :key="s"
+                <button v-for="s in ['Full Text', 'introduction', 'methods', 'results', 'discussion']" :key="s"
                   class="filter-tag"
                   :class="{ active: (s === 'Full Text' && selectedSection === '') || selectedSection === s }"
-                  @click="selectedSection = s === 'Full Text' ? '' : s"
-                >{{ s === 'Full Text' ? 'Full Text' : s.charAt(0).toUpperCase() + s.slice(1) }}</button>
+                  @click="selectedSection = s === 'Full Text' ? '' : s">{{ s === 'Full Text' ? 'Full Text' :
+                    s.charAt(0).toUpperCase() + s.slice(1) }}</button>
               </div>
             </div>
           </div>
@@ -210,21 +238,14 @@ const viewDetail = (id: number) => router.push({ name: 'detail', params: { id } 
 
           <!-- Results list -->
           <ol v-else class="paper-list">
-            <li
-              v-for="(res, idx) in results"
-              :key="res.id"
-              class="paper-item"
-              @click="viewDetail(res.id)"
-            >
+            <li v-for="(res, idx) in results" :key="res.id" class="paper-item" @click="viewDetail(res.id)">
               <span class="item-num">{{ String(idx + 1).padStart(2, '0') }}</span>
 
               <div class="item-body">
                 <div class="item-tags">
                   <span class="type-tag">{{ res.payload.project_type }}</span>
-                  <span
-                    v-if="res.payload.degree_program && res.payload.degree_program !== 'N/A'"
-                    class="degree-tag"
-                  >{{ res.payload.degree_program }}</span>
+                  <span v-if="res.payload.degree_program && res.payload.degree_program !== 'N/A'" class="degree-tag">{{
+                    res.payload.degree_program }}</span>
                   <span class="score-tag">{{ (res.score * 100).toFixed(0) }}% match</span>
                 </div>
 
@@ -260,14 +281,14 @@ const viewDetail = (id: number) => router.push({ name: 'detail', params: { id } 
 
 /* ── Design tokens ───────────────────────────────────────── */
 .results-page {
-  --ink:       #181c18;
-  --ink-2:     #3d4239;
-  --ink-3:     #7a7f75;
-  --rule:      #dfe0db;
-  --surface:   #f5f5f2;
-  --paper:     #ffffff;
-  --green:     #00a651;
-  --green-dk:  #007d3d;
+  --ink: #181c18;
+  --ink-2: #3d4239;
+  --ink-3: #7a7f75;
+  --rule: #dfe0db;
+  --surface: #f5f5f2;
+  --paper: #ffffff;
+  --green: #00a651;
+  --green-dk: #007d3d;
   --green-dim: #e6f4ed;
 
   min-height: 100vh;
@@ -342,6 +363,33 @@ const viewDetail = (id: number) => router.push({ name: 'detail', params: { id } 
 }
 
 /* Filter toggle (mobile) */
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.mobile-search-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1.5px solid var(--ink);
+  border-radius: 4px;
+  width: 32px;
+  height: 32px;
+  color: var(--ink);
+  cursor: pointer;
+  transition: background 0.14s, color 0.14s;
+  flex-shrink: 0;
+}
+
+.mobile-search-btn:hover,
+.mobile-search-btn.active {
+  background: var(--ink);
+  color: var(--paper);
+}
+
 .filter-toggle-btn {
   display: none;
   align-items: center;
@@ -363,6 +411,108 @@ const viewDetail = (id: number) => router.push({ name: 'detail', params: { id } 
 .filter-toggle-btn.active {
   background: var(--ink);
   color: var(--paper);
+}
+
+/* Mobile search bar */
+.mobile-search-bar {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.22s ease, border-color 0.22s;
+  border-top: 0px solid var(--rule);
+}
+
+.mobile-search-bar.open {
+  max-height: 80px;
+  border-top: 1px solid var(--rule);
+}
+
+.mobile-search-inner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.65rem 1rem;
+}
+
+.mobile-search-field {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--surface);
+  border: 1.5px solid var(--rule);
+  border-radius: 6px;
+  padding: 0 0.75rem;
+  transition: border-color 0.14s;
+}
+
+.mobile-search-field:focus-within {
+  border-color: var(--green);
+}
+
+.ms-icon {
+  color: var(--ink-3);
+  flex-shrink: 0;
+}
+
+.mobile-search-field input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.9rem;
+  color: var(--ink);
+  padding: 0.6rem 0;
+}
+
+.mobile-search-field input::placeholder {
+  color: var(--ink-3);
+}
+
+.ms-clear {
+  background: none;
+  border: none;
+  color: var(--ink-3);
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.ms-submit {
+  background: var(--green);
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  padding: 0.55rem 1rem;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background 0.14s;
+}
+
+.ms-submit:hover {
+  background: var(--green-dk);
+}
+
+.ms-cancel {
+  background: none;
+  border: none;
+  color: var(--ink-3);
+  cursor: pointer;
+  padding: 0.25rem;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  transition: color 0.14s;
+}
+
+.ms-cancel:hover {
+  color: var(--ink);
 }
 
 /* ══ LAYOUT ══════════════════════════════════════════════ */
@@ -686,8 +836,13 @@ const viewDetail = (id: number) => router.push({ name: 'detail', params: { id } 
 
 /* ── Skeleton loader ────────────────────────────────────── */
 @keyframes shimmer {
-  0%   { background-position: -500px 0; }
-  100% { background-position:  500px 0; }
+  0% {
+    background-position: -500px 0;
+  }
+
+  100% {
+    background-position: 500px 0;
+  }
 }
 
 .skeleton {
@@ -706,11 +861,32 @@ const viewDetail = (id: number) => router.push({ name: 'detail', params: { id } 
   margin-bottom: 0.5rem;
 }
 
-.sk-num     { width: 22px;  height: 13px; margin-top: 0.22rem; }
-.sk-tag     { width: 66px;  height: 15px; }
-.sk-title   { width: 84%;   height: 18px; }
-.sk-meta    { width: 48%;   height: 12px; }
-.sk-abstract{ width: 100%;  height: 54px; margin-bottom: 0; }
+.sk-num {
+  width: 22px;
+  height: 13px;
+  margin-top: 0.22rem;
+}
+
+.sk-tag {
+  width: 66px;
+  height: 15px;
+}
+
+.sk-title {
+  width: 84%;
+  height: 18px;
+}
+
+.sk-meta {
+  width: 48%;
+  height: 12px;
+}
+
+.sk-abstract {
+  width: 100%;
+  height: 54px;
+  margin-bottom: 0;
+}
 
 /* ── Responsive ─────────────────────────────────────────── */
 @media (max-width: 860px) {
@@ -727,6 +903,10 @@ const viewDetail = (id: number) => router.push({ name: 'detail', params: { id } 
 }
 
 @media (max-width: 768px) {
+  .mobile-search-btn {
+    display: flex;
+  }
+
   .filter-toggle-btn {
     display: flex;
   }

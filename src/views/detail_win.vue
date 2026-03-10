@@ -26,7 +26,6 @@ const pdfUrl = computed(() => {
 })
 
 // Section page viewer state
-// Cache so each section only fetches once per page load
 const sectionPageCache = ref<Record<string, { pages: { page_num: number; thumbnail: string }[], loading: boolean, shown: boolean }>>({
   introduction: { pages: [], loading: false, shown: false },
   methods: { pages: [], loading: false, shown: false },
@@ -37,8 +36,8 @@ const sectionPageCache = ref<Record<string, { pages: { page_num: number; thumbna
 const toggleSectionPages = async (section: string) => {
   const s = sectionPageCache.value[section]
   if (!s) return
-  if (s.shown) { s.shown = false; return }     // hide if already visible
-  if (s.pages.length > 0) { s.shown = true; return }  // already fetched, just show
+  if (s.shown) { s.shown = false; return }
+  if (s.pages.length > 0) { s.shown = true; return }
   if (!paper.value) return
 
   s.loading = true
@@ -57,7 +56,6 @@ const toggleSectionPages = async (section: string) => {
   }
 }
 
-// Document preview toggle
 const showFullAbstract = ref(false)
 const ABSTRACT_PREVIEW_LIMIT = 400
 
@@ -72,10 +70,8 @@ const loadPaperData = async (id: number) => {
       viewCount.value = paper.value.view_count || 0
       citationCount.value = paper.value.citation_count || 0
 
-      // Record view (fire-and-forget)
       api.viewPaper(id).then(res => { viewCount.value = res.view_count }).catch(() => { })
 
-      // Check citation status if logged in
       if (isLoggedIn.value) {
         api.getCiteStatus(id)
           .then(res => {
@@ -93,13 +89,8 @@ const loadPaperData = async (id: number) => {
   }
 }
 
-onMounted(() => {
-  loadPaperData(Number(route.params.id))
-})
-
-watch(() => route.params.id, (newId) => {
-  if (newId) loadPaperData(Number(newId))
-})
+onMounted(() => { loadPaperData(Number(route.params.id)) })
+watch(() => route.params.id, (newId) => { if (newId) loadPaperData(Number(newId)) })
 
 const goBack = () => router.back()
 const viewDetail = (id: number) => router.push({ name: 'detail', params: { id } })
@@ -112,25 +103,18 @@ const handleCite = async () => {
     hasCited.value = res.has_cited
     citationCount.value = res.citation_count
   } catch {
-    // 409 means already cited (race condition guard), treat as success
     hasCited.value = true
   } finally {
     citeLoading.value = false
   }
 }
 
-// Split authors intelligently:
-// 1. If pipe-separated → split by |
-// 2. Filipino ALL-CAPS format: "SURNAME, FIRSTNAME M." repeated
-//    Split on boundary: after a period, before next ALL-CAPS word + comma
 const authorList = computed(() => {
   if (!paper.value?.author) return []
   const raw = paper.value.author.trim()
   if (raw.includes('|')) {
     return raw.split('|').map((a: string) => a.trim()).filter(Boolean)
   }
-  // Split on ", " after a period, before an ALL-CAPS surname+comma
-  // e.g. "BILLONES, PRINCE ISIAH R., ORANG, ..." → 3 separate authors
   const parts = raw.split(/(?<=\.),\s+(?=[A-Z]{2,},)/)
   if (parts.length > 1) {
     return parts.map((a: string) => {
@@ -151,121 +135,124 @@ const abstractPreview = computed(() => {
 
 <template>
   <div class="detail-page" v-if="!loading && paper">
-    <!-- Header sits above the 3-col layout so left sidebar aligns to tabs -->
+
+    <!-- ══ HEADER ═════════════════════════════════════════════════ -->
     <div class="paper-header-wrap">
-      <!-- Breadcrumb nav — matches manage_win topbar style -->
-      <div class="paper-header-inner">
-        <div class="paper-breadcrumb">
+      <div class="header-inner">
+
+        <!-- Breadcrumb -->
+        <nav class="breadcrumb">
           <RouterLink :to="{ name: 'home' }" class="bc-link">Home</RouterLink>
-          <ChevronRight :size="13" class="bc-sep" />
+          <ChevronRight :size="12" class="bc-sep" />
           <button @click="goBack" class="bc-link">Results</button>
-          <ChevronRight :size="13" class="bc-sep" />
-          <span class="bc-active">{{ paper.title.length > 60 ? paper.title.substring(0, 60) + '…' : paper.title
-          }}</span>
-        </div>
-      </div>
-      <div class="paper-header-inner">
+          <ChevronRight :size="12" class="bc-sep" />
+          <span class="bc-active">{{ paper.title.length > 55 ? paper.title.substring(0, 55) + '…' : paper.title
+            }}</span>
+        </nav>
+
+        <!-- Badges -->
         <div class="header-badges">
           <span class="badge badge-dept">{{ paper.department }}</span>
           <span class="badge badge-type">{{ paper.project_type }}</span>
           <span v-if="paper.degree_program !== 'N/A'" class="badge badge-degree">{{ paper.degree_program }}</span>
         </div>
-        <h1>{{ paper.title }}</h1>
-        <div class="metadata-grid">
-          <div class="meta-item">
-            <User :size="15" /><span>{{ paper.author }}</span>
-          </div>
-          <div class="meta-item">
-            <Calendar :size="15" /><span>{{ paper.year }}</span>
-          </div>
+
+        <!-- Title -->
+        <h1 class="paper-title">{{ paper.title }}</h1>
+
+        <!-- Metadata -->
+        <div class="meta-row">
+          <span class="meta-item">
+            <User :size="13" />
+            {{ paper.author }}
+          </span>
+          <span class="meta-dot">·</span>
+          <span class="meta-item">
+            <Calendar :size="13" />
+            {{ paper.year }}
+          </span>
         </div>
+
+        <!-- Engagement -->
         <div class="engagement-row">
-          <div class="stat-chip">
-            <Eye :size="14" /><span>{{ viewCount.toLocaleString() }} views</span>
-          </div>
-          <div class="stat-chip">
-            <Award :size="14" /><span>{{ citationCount.toLocaleString() }} citations</span>
-          </div>
+          <span class="stat-chip">
+            <Eye :size="13" />{{ viewCount.toLocaleString() }} views
+          </span>
+          <span class="stat-chip">
+            <Award :size="13" />{{ citationCount.toLocaleString() }} citations
+          </span>
           <button v-if="isLoggedIn" class="cite-btn" :class="{ cited: hasCited, loading: citeLoading }"
             :disabled="hasCited || citeLoading" @click="handleCite">
-            <CheckCircle v-if="hasCited" :size="15" />
-            <Award v-else :size="15" />
-            {{ hasCited ? 'You Cited This' : citeLoading ? 'Citing...' : 'Cite this study' }}
+            <CheckCircle v-if="hasCited" :size="14" />
+            <Award v-else :size="14" />
+            {{ hasCited ? 'Cited' : citeLoading ? 'Citing…' : 'Cite this study' }}
           </button>
-          <span v-else class="cite-hint">Authentication required to cite</span>
+          <span v-else class="cite-hint">Sign in to cite</span>
         </div>
+
       </div>
     </div>
 
-    <!-- 3-column content row -->
+    <!-- ══ BODY ════════════════════════════════════════════════════ -->
     <div class="detail-layout">
 
-      <!-- Left: Document Content sidebar -->
-      <aside class="doc-content-aside">
-        <p class="doc-content-title">Document Content</p>
-        <nav class="doc-content-nav">
-          <button class="dcn-item" :class="{ active: activeTab === 'abstract' }" @click="activeTab = 'abstract'">
+      <!-- Left: Document nav sidebar -->
+      <aside class="doc-nav-aside">
+        <p class="aside-group-label">Document Content</p>
+        <nav class="aside-nav">
+          <button class="aside-item" :class="{ active: activeTab === 'abstract' }" @click="activeTab = 'abstract'">
             Abstract
           </button>
-          <button v-if="paper.introduction" class="dcn-item" :class="{ active: activeTab === 'introduction' }"
+          <button v-if="paper.introduction" class="aside-item" :class="{ active: activeTab === 'introduction' }"
             @click="activeTab = 'introduction'">
             Introduction
           </button>
-          <button v-if="paper.methods" class="dcn-item" :class="{ active: activeTab === 'methods' }"
+          <button v-if="paper.methods" class="aside-item" :class="{ active: activeTab === 'methods' }"
             @click="activeTab = 'methods'">
             Methods
           </button>
-          <button v-if="paper.results" class="dcn-item" :class="{ active: activeTab === 'results' }"
+          <button v-if="paper.results" class="aside-item" :class="{ active: activeTab === 'results' }"
             @click="activeTab = 'results'">
             Results
           </button>
-          <button v-if="paper.discussion" class="dcn-item" :class="{ active: activeTab === 'discussion' }"
+          <button v-if="paper.discussion" class="aside-item" :class="{ active: activeTab === 'discussion' }"
             @click="activeTab = 'discussion'">
             Discussion
           </button>
         </nav>
-        <p class="doc-content-title" style="margin-top:1.5rem">Authors</p>
-        <nav class="doc-content-nav">
-          <button class="dcn-item" :class="{ active: activeTab === 'authors' }" @click="activeTab = 'authors'">
-            Author(s)
+
+        <p class="aside-group-label" style="margin-top: 1.5rem">Study Info</p>
+        <nav class="aside-nav">
+          <button class="aside-item" :class="{ active: activeTab === 'authors' }" @click="activeTab = 'authors'">
+            Authors
           </button>
         </nav>
       </aside>
 
       <!-- Center: Main content -->
       <main class="paper-main">
-        <!-- Tab Toggle -->
+
+        <!-- Tabs (horizontal, visible on all sizes) -->
         <div class="doc-tabs">
-          <button class="doc-tab" :class="{ active: activeTab === 'abstract' }" @click="activeTab = 'abstract'">
-            Abstract
-          </button>
+          <button class="doc-tab" :class="{ active: activeTab === 'abstract' }"
+            @click="activeTab = 'abstract'">Abstract</button>
           <button v-if="paper.introduction" class="doc-tab" :class="{ active: activeTab === 'introduction' }"
-            @click="activeTab = 'introduction'">
-            Introduction
-          </button>
+            @click="activeTab = 'introduction'">Introduction</button>
           <button v-if="paper.methods" class="doc-tab" :class="{ active: activeTab === 'methods' }"
-            @click="activeTab = 'methods'">
-            Methods
-          </button>
+            @click="activeTab = 'methods'">Methods</button>
           <button v-if="paper.results" class="doc-tab" :class="{ active: activeTab === 'results' }"
-            @click="activeTab = 'results'">
-            Results
-          </button>
+            @click="activeTab = 'results'">Results</button>
           <button v-if="paper.discussion" class="doc-tab" :class="{ active: activeTab === 'discussion' }"
-            @click="activeTab = 'discussion'">
-            Discussion
-          </button>
-          <button class="doc-tab" :class="{ active: activeTab === 'authors' }" @click="activeTab = 'authors'">
-            Authors
-          </button>
+            @click="activeTab = 'discussion'">Discussion</button>
+          <button class="doc-tab" :class="{ active: activeTab === 'authors' }"
+            @click="activeTab = 'authors'">Authors</button>
         </div>
 
-        <!-- Abstract Tab -->
+        <!-- ── Abstract Tab ─────────────────────────────────────── -->
         <div v-if="activeTab === 'abstract'">
-          <!-- Abstract Section -->
           <section class="paper-section">
-            <h3>
-              <FileText :size="17" /> Abstract
+            <h3 class="section-heading">
+              <FileText :size="15" /> Abstract
             </h3>
             <p class="body-text">{{ abstractPreview }}</p>
             <button v-if="paper.abstract && paper.abstract.length > ABSTRACT_PREVIEW_LIMIT" class="read-more-btn"
@@ -274,59 +261,54 @@ const abstractPreview = computed(() => {
             </button>
           </section>
 
-          <!-- Keywords -->
           <section class="paper-section" v-if="paper.keywords">
-            <h3>
-              <BookOpen :size="17" /> Keywords
+            <h3 class="section-heading">
+              <BookOpen :size="15" /> Keywords
             </h3>
             <div class="tags">
-              <span v-for="tag in paper.keywords.split(',')" :key="tag" class="tag">
-                {{ tag.trim() }}
-              </span>
+              <RouterLink v-for="tag in paper.keywords.split(',')" :key="tag"
+                :to="{ name: 'results', query: { q: tag.trim() } }" class="tag">{{ tag.trim() }}</RouterLink>
             </div>
           </section>
         </div>
 
-        <!-- IMRAD Sections — Hybrid: readable text + on-demand page images -->
+        <!-- ── IMRAD Sections ───────────────────────────────────── -->
         <template v-for="(cfg, key) in {
           introduction: { label: 'Introduction', icon: 'BookOpen', content: paper.introduction },
           methods: { label: 'Methodology', icon: 'Sparkles', content: paper.methods },
           results: { label: 'Results & Findings', icon: 'TrendingUp', content: paper.results },
           discussion: { label: 'Discussion', icon: 'MessageSquare', content: paper.discussion },
         }" :key="key">
-          <div v-if="activeTab === key" class="paper-section imrad-hybrid">
+          <div v-if="activeTab === key" class="paper-section imrad-section">
 
-            <!-- Section header + View Pages toggle -->
-            <div class="imrad-section-header">
-              <h3>
-                <BookOpen v-if="key === 'introduction'" :size="17" />
-                <Sparkles v-else-if="key === 'methods'" :size="17" />
-                <TrendingUp v-else-if="key === 'results'" :size="17" />
-                <MessageSquare v-else :size="17" />
+            <div class="imrad-header">
+              <h3 class="section-heading">
+                <BookOpen v-if="key === 'introduction'" :size="15" />
+                <Sparkles v-else-if="key === 'methods'" :size="15" />
+                <TrendingUp v-else-if="key === 'results'" :size="15" />
+                <MessageSquare v-else :size="15" />
                 {{ cfg.label }}
               </h3>
               <button class="view-pages-btn" :class="{ active: sectionPageCache[key]?.shown }"
-                @click="toggleSectionPages(key)" title="Toggle original PDF pages for this section">
-                <Loader2 v-if="sectionPageCache[key]?.loading" :size="14" class="spin" />
-                <ImageIcon v-else :size="14" />
-                {{ sectionPageCache[key]?.shown ? 'Hide Page(s)' : 'View Page(s)' }}
+                @click="toggleSectionPages(key)" title="Toggle original PDF pages">
+                <Loader2 v-if="sectionPageCache[key]?.loading" :size="13" class="spin" />
+                <ImageIcon v-else :size="13" />
+                {{ sectionPageCache[key]?.shown ? 'Hide pages' : 'View pages' }}
               </button>
             </div>
 
-            <!-- Extracted text (always visible, selectable, copyable) -->
             <div v-if="cfg.content" class="section-text-outer">
               <div class="section-text-wrap">
                 <pre class="section-text">{{ cfg.content }}</pre>
               </div>
             </div>
-            <p v-else class="no-content-note">No extracted text available for this section.</p>
+            <p v-else class="no-content">No extracted text available for this section.</p>
 
-            <!-- On-demand PDF page thumbnails -->
-            <div v-if="sectionPageCache[key]?.shown" class="section-pages-viewer">
-              <div v-if="sectionPageCache[key]?.loading" class="pages-loading">
-                <Loader2 :size="22" class="spin" /> Loading pages...
+            <div v-if="sectionPageCache[key]?.shown" class="pages-viewer">
+              <div v-if="sectionPageCache[key]?.loading" class="pages-state">
+                <Loader2 :size="18" class="spin" /> Loading pages…
               </div>
-              <div v-else-if="sectionPageCache[key]?.pages.length === 0" class="pages-empty">
+              <div v-else-if="sectionPageCache[key]?.pages.length === 0" class="pages-state">
                 No page images available for this section.
               </div>
               <div v-else class="pages-stack">
@@ -340,124 +322,144 @@ const abstractPreview = computed(() => {
           </div>
         </template>
 
-        <!-- Authors Tab -->
-        <div v-if="activeTab === 'authors'" class="paper-section authors-tab">
-          <h3>
-            <User :size="17" /> Authors
+        <!-- ── Authors Tab ──────────────────────────────────────── -->
+        <div v-if="activeTab === 'authors'" class="paper-section">
+          <h3 class="section-heading">
+            <User :size="15" /> Authors
           </h3>
           <div v-if="authorList.length > 0" class="authors-list">
-            <div v-for="(author, idx) in authorList" :key="idx" class="author-card">
-              <div class="author-avatar">{{ author.charAt(0).toUpperCase() }}</div>
+            <div v-for="(author, idx) in authorList" :key="idx" class="author-row">
+              <div class="author-initial">{{ author.charAt(0).toUpperCase() }}</div>
               <div class="author-info">
                 <p class="author-name">{{ author }}</p>
                 <p class="author-label">Author {{ idx + 1 }}</p>
               </div>
             </div>
           </div>
-          <p v-else class="no-content-note">No author information available.</p>
+          <p v-else class="no-content">No author information available.</p>
         </div>
 
-        <!-- Full Document Tab -->
+        <!-- ── Full Document Tab ────────────────────────────────── -->
         <div v-if="activeTab === 'document'" class="pdf-viewer-wrap">
           <iframe :src="pdfUrl" class="pdf-iframe" title="Full Research Document" allowfullscreen />
         </div>
+
       </main>
 
-      <!-- Sidebar: Related Studies -->
-      <aside class="recommendations-aside">
-        <h3>Related Studies</h3>
-        <p class="aside-info">Based on semantic similarity of the study you've picked</p>
+      <!-- Right: Related Studies -->
+      <aside class="rec-aside">
+        <div class="rec-head">
+          <p class="aside-group-label">Related Studies</p>
+          <p class="rec-sub">Based on semantic similarity</p>
+        </div>
+
         <div class="rec-list">
           <div v-for="rec in recommendations" :key="rec.id" class="rec-card" @click="viewDetail(rec.id)">
-            <div class="rec-badges">
-              <span class="rec-badge">{{ rec.payload.degree_program || '' }}</span>
-            </div>
-            <h4>{{ rec.payload.title }}</h4>
-            <p>{{ rec.payload.author }} ({{ rec.payload.year }})</p>
-            <div class="score">Match: {{ (rec.score * 100).toFixed(0) }}%</div>
+            <span v-if="rec.payload.degree_program" class="rec-badge">{{ rec.payload.degree_program }}</span>
+            <p class="rec-title">{{ rec.payload.title }}</p>
+            <p class="rec-meta">{{ rec.payload.author }} · {{ rec.payload.year }}</p>
+            <div class="rec-score">{{ (rec.score * 100).toFixed(0) }}% match</div>
           </div>
-          <div v-if="recommendations.length === 0" class="no-recs">
-            No related studies found yet.
-          </div>
+
+          <p v-if="recommendations.length === 0" class="no-content" style="text-align:center; padding: 2rem 0">
+            No related studies found.
+          </p>
         </div>
       </aside>
+
     </div>
   </div>
+
+  <!-- Loading state -->
   <div v-else-if="loading" class="loading-full">
-    Loading paper details...
+    <Loader2 :size="24" class="spin" />
+    <span>Loading paper…</span>
   </div>
 </template>
 
 <style scoped>
+@import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400;1,600&family=Source+Sans+3:wght@400;500;600;700&display=swap');
+
+/* ── Tokens ──────────────────────────────────────────────── */
 .detail-page {
-  background: #f9fafb;
+  --ink: #181c18;
+  --ink-2: #3d4239;
+  --ink-3: #7a7f75;
+  --rule: #dfe0db;
+  --surface: #f5f5f2;
+  --paper: #ffffff;
+  --green: #00a651;
+  --green-dk: #007d3d;
+  --green-dim: #e6f4ed;
+  --hero-bg: #0d1f12;
+
+  background: var(--surface);
   min-height: 100vh;
-  font-family: 'Inter', -apple-system, sans-serif;
+  font-family: 'Source Sans 3', sans-serif;
+  color: var(--ink);
 }
 
+/* ══ HEADER ══════════════════════════════════════════════ */
 .paper-header-wrap {
-  background: white;
-  border-bottom: 1px solid #e5e7eb;
-  padding-top: 1.25rem;
-  padding-bottom: 2rem;
+  background: var(--hero-bg);
+  border-bottom: 3px solid var(--green);
+  padding: 2rem 2rem 2.5rem;
+  position: relative;
 }
 
-/* ── Breadcrumb inside header-wrap ───────────────────────────── */
-.paper-breadcrumb {
+/* dot-grid texture — same as hero/footer */
+.paper-header-wrap::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
+  background-size: 28px 28px;
+  pointer-events: none;
+}
+
+.header-inner {
+  max-width: 1300px;
+  margin: 0 auto;
+  position: relative;
+  z-index: 1;
+}
+
+/* Breadcrumb */
+.breadcrumb {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  padding-bottom: 1.25rem;
-  border-bottom: 1px solid #f0f0f0;
-  margin-bottom: 1.75rem;
+  gap: 0.35rem;
+  margin-bottom: 1.5rem;
 }
 
 .bc-link {
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   font-weight: 500;
-  color: #9ca3af;
+  color: rgba(255, 255, 255, 0.35);
   background: none;
   border: none;
   cursor: pointer;
   padding: 0;
   text-decoration: none;
-  transition: color 0.15s;
+  transition: color 0.14s;
+  font-family: 'Source Sans 3', sans-serif;
 }
 
 .bc-link:hover {
-  color: #00a651;
+  color: rgba(255, 255, 255, 0.75);
 }
 
 .bc-sep {
-  color: #d1d5db;
+  color: rgba(255, 255, 255, 0.18);
 }
 
 .bc-active {
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: #374151;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.55);
 }
 
-.paper-header-inner {
-  max-width: 1300px;
-  margin: 0 auto;
-}
-
-.detail-layout {
-  display: flex;
-  max-width: 1300px;
-  margin: 0 auto;
-  padding: 2rem 2rem;
-  gap: 2rem;
-  align-items: flex-start;
-}
-
-.paper-main {
-  flex: 1 1 0;
-  min-width: 0;
-}
-
-/* Header Badges */
+/* Badges */
 .header-badges {
   display: flex;
   flex-wrap: wrap;
@@ -466,95 +468,107 @@ const abstractPreview = computed(() => {
 }
 
 .badge {
-  font-size: 0.7rem;
+  font-size: 0.62rem;
   font-weight: 700;
-  padding: 0.25rem 0.6rem;
-  border-radius: 4px;
+  padding: 0.22rem 0.55rem;
+  border-radius: 3px;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
 }
 
 .badge-dept {
-  background: #f0fdf4;
-  color: #059669;
+  background: rgba(0, 166, 81, 0.18);
+  color: #6ee7aa;
 }
 
 .badge-type {
-  background: #eff6ff;
-  color: #2563eb;
+  background: rgba(96, 165, 250, 0.15);
+  color: #93c5fd;
 }
 
 .badge-degree {
-  background: #fff7ed;
-  color: #c2410c;
+  background: rgba(251, 191, 36, 0.15);
+  color: #fcd34d;
 }
 
-.paper-header-inner h1 {
-  font-size: 2rem;
-  margin: 0 0 1.2rem 0;
+/* Title */
+.paper-title {
+  font-family: 'Lora', Georgia, serif;
+  font-size: clamp(1.5rem, 3vw, 2.1rem);
+  font-weight: 600;
   line-height: 1.25;
-  color: #111;
-  font-weight: 800;
+  color: #fff;
+  margin: 0 0 1.1rem;
+  max-width: 900px;
 }
 
-.metadata-grid {
+/* Metadata */
+.meta-row {
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
-  gap: 1rem 2rem;
-  color: #555;
-  margin-bottom: 1.5rem;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
 }
 
 .meta-item {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  font-size: 0.9rem;
+  font-size: 0.84rem;
+  color: rgba(255, 255, 255, 0.5);
 }
 
-/* Engagement Row */
+.meta-dot {
+  color: rgba(255, 255, 255, 0.2);
+  font-size: 0.8rem;
+}
+
+/* Engagement */
 .engagement-row {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 0.75rem;
-  margin-bottom: 1.5rem;
+  gap: 0.6rem;
 }
 
 .stat-chip {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  background: #f3f4f6;
-  color: #555;
-  font-size: 0.8rem;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.76rem;
   font-weight: 600;
-  padding: 0.35rem 0.75rem;
-  border-radius: 999px;
+  padding: 0.3rem 0.7rem;
+  border-radius: 4px;
 }
 
 .cite-btn {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  background: #10b981;
-  color: white;
+  background: var(--green);
+  color: #fff;
   border: none;
-  padding: 0.45rem 1.1rem;
-  border-radius: 999px;
-  font-size: 0.85rem;
-  font-weight: 700;
+  padding: 0.38rem 1rem;
+  border-radius: 5px;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.8rem;
+  font-weight: 600;
   cursor: pointer;
-  transition: background 0.15s, opacity 0.15s;
+  transition: background 0.14s;
 }
 
 .cite-btn:hover:not(:disabled) {
-  background: #059669;
+  background: var(--green-dk);
 }
 
 .cite-btn.cited {
-  background: #d1fae5;
-  color: #065f46;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.5);
   cursor: default;
 }
 
@@ -564,52 +578,154 @@ const abstractPreview = computed(() => {
 }
 
 .cite-hint {
-  font-size: 0.8rem;
-  color: #999;
+  font-size: 0.76rem;
+  color: rgba(255, 255, 255, 0.28);
 }
 
-.divider {
-  display: none;
+/* ══ BODY ════════════════════════════════════════════════ */
+.detail-layout {
+  display: flex;
+  max-width: 1300px;
+  margin: 0 auto;
+  padding: 2.5rem 2rem;
+  gap: 2rem;
+  align-items: flex-start;
 }
 
-/* Paper Sections */
-.paper-section {
-  margin-bottom: 2rem;
+/* ── Left doc nav sidebar ─────────────────────────────── */
+.doc-nav-aside {
+  width: 180px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 1.5rem;
+  align-self: flex-start;
 }
 
-.paper-section h3 {
+.aside-group-label {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink-3);
+  margin: 0 0 0.4rem 0.5rem;
+}
+
+.aside-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+}
+
+.aside-item {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 1.05rem;
-  color: #1a3a6c;
-  margin-bottom: 0.85rem;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 0.42rem 0.6rem;
+  border-radius: 5px;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.84rem;
+  font-weight: 500;
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: background 0.13s, color 0.13s;
+}
+
+.aside-item:hover {
+  background: rgba(0, 0, 0, 0.04);
+  color: var(--ink);
+}
+
+.aside-item.active {
+  background: var(--green-dim);
+  color: var(--green-dk);
   font-weight: 700;
 }
 
+/* ── Main content ─────────────────────────────────────── */
+.paper-main {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* Tabs */
+.doc-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  border-bottom: 2px solid var(--rule);
+  margin-bottom: 2rem;
+}
+
+.doc-tab {
+  padding: 0.6rem 1rem;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  cursor: pointer;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--ink-3);
+  transition: color 0.14s, border-color 0.14s;
+}
+
+.doc-tab:hover {
+  color: var(--ink);
+}
+
+.doc-tab.active {
+  color: var(--green-dk);
+  border-bottom-color: var(--green);
+}
+
+/* Paper sections */
+.paper-section {
+  margin-bottom: 2.25rem;
+}
+
+.section-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--ink-3);
+  margin: 0 0 1rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--rule);
+}
+
 .body-text {
-  line-height: 1.85;
-  color: #444;
-  font-size: 1rem;
-  margin-bottom: 0.5rem;
+  font-size: 0.96rem;
+  line-height: 1.9;
+  color: var(--ink-2);
   text-align: justify;
+  margin: 0 0 0.75rem;
 }
 
 .read-more-btn {
   background: none;
   border: none;
-  color: #10b981;
-  font-size: 0.9rem;
+  color: var(--green-dk);
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.84rem;
   font-weight: 600;
   cursor: pointer;
   padding: 0;
-  margin-top: 0.25rem;
 }
 
 .read-more-btn:hover {
   text-decoration: underline;
 }
 
+/* Keywords */
 .tags {
   display: flex;
   flex-wrap: wrap;
@@ -617,55 +733,178 @@ const abstractPreview = computed(() => {
 }
 
 .tag {
-  background: #fff;
-  border: 1px solid #ddd;
-  padding: 0.35rem 0.7rem;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  padding: 0.3rem 0.65rem;
   border-radius: 4px;
-  font-size: 0.82rem;
-  color: #555;
+  font-size: 0.78rem;
+  color: var(--ink-2);
+  text-decoration: none;
+  transition: border-color 0.13s, color 0.13s;
 }
 
-/* Document Tabs */
-.doc-tabs {
-  display: flex;
-  gap: 0.25rem;
-  border-bottom: 2px solid #e5e7eb;
-  margin-bottom: 1.75rem;
+.tag:hover {
+  border-color: var(--green);
+  color: var(--green-dk);
 }
 
-.doc-tab {
+/* IMRAD section */
+.imrad-header {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.65rem 1.1rem;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.imrad-header .section-heading {
+  margin: 0;
+  border: none;
+  padding: 0;
+}
+
+.view-pages-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.76rem;
+  font-weight: 600;
+  padding: 0.3rem 0.75rem;
+  border-radius: 5px;
+  border: 1.5px solid var(--rule);
+  background: var(--paper);
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: all 0.14s;
+  white-space: nowrap;
+}
+
+.view-pages-btn:hover {
+  border-color: var(--green);
+  color: var(--green-dk);
+}
+
+.view-pages-btn.active {
+  background: var(--green-dim);
+  border-color: var(--green);
+  color: var(--green-dk);
+}
+
+/* Section text */
+.section-text-outer {
+  position: relative;
+  margin-bottom: 1rem;
+  border-radius: 6px;
+}
+
+.section-text-outer::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: 6px;
+  border: 1.5px solid rgba(0, 166, 81, 0.5);
+  animation: border-ripple 2.6s cubic-bezier(0.2, 0.6, 0.4, 1) infinite;
+  pointer-events: none;
+  z-index: 1;
+}
+
+@keyframes border-ripple {
+  0% {
+    inset: -1px;
+    border-color: rgba(0, 166, 81, 0.55);
+    opacity: 1;
+  }
+
+  100% {
+    inset: -14px;
+    border-color: rgba(0, 166, 81, 0);
+    opacity: 0;
+  }
+}
+
+.section-text-wrap {
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  padding: 1.25rem 1.5rem;
+  max-height: 480px;
+  overflow-y: auto;
+  position: relative;
+  z-index: 2;
+}
+
+.section-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.94rem;
+  line-height: 1.9;
+  color: var(--ink-2);
+  margin: 0;
+  padding: 0;
   background: none;
   border: none;
-  border-bottom: 3px solid transparent;
-  margin-bottom: -2px;
-  cursor: pointer;
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: #6b7280;
-  transition: color 0.15s, border-color 0.15s;
-  border-radius: 6px 6px 0 0;
+  text-align: justify;
 }
 
-.doc-tab:hover {
-  color: #111;
+.no-content {
+  font-size: 0.84rem;
+  color: var(--ink-3);
+  font-style: italic;
 }
 
-.doc-tab.active {
-  color: #10b981;
-  border-bottom-color: #10b981;
-  background: #f0fdf4;
+/* Pages viewer */
+.pages-viewer {
+  margin-top: 1.25rem;
+  border-top: 1px dashed var(--rule);
+  padding-top: 1.25rem;
 }
 
-/* PDF Iframe */
-.pdf-viewer-wrap {
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
+.pages-state {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--ink-3);
+  font-size: 0.84rem;
+  padding: 0.75rem 0;
+}
+
+.pages-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.page-card {
+  border: 1px solid var(--rule);
+  border-radius: 6px;
   overflow: hidden;
-  background: #f3f4f6;
+  background: var(--paper);
+}
+
+.page-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--ink-3);
+  padding: 0.35rem 0.75rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--rule);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.page-img {
+  width: 100%;
+  display: block;
+}
+
+/* PDF viewer */
+.pdf-viewer-wrap {
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  overflow: hidden;
 }
 
 .pdf-iframe {
@@ -675,348 +914,33 @@ const abstractPreview = computed(() => {
   display: block;
 }
 
-.preview-notice {
-  background: #fafafa;
-  border: 1px dashed #ddd;
-  border-radius: 8px;
-  padding: 1rem 1.25rem;
-}
-
-.preview-notice p {
-  font-size: 0.88rem;
-  color: #777;
-  margin: 0;
-}
-
-/* Recommendations Sidebar */
-.recommendations-aside {
-  width: 280px;
-  flex-shrink: 0;
-}
-
-.recommendations-aside h3 {
-  margin-bottom: 0.25rem;
-  font-size: 1rem;
-  color: #111;
-}
-
-.aside-info {
-  font-size: 0.8rem;
-  color: #888;
-  margin-bottom: 1.5rem;
-}
-
-.rec-list {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.rec-card {
-  background: white;
-  padding: 1rem;
-  border-radius: 8px;
-  border: 1px solid #eee;
-  cursor: pointer;
-  transition: border-color 0.15s;
-}
-
-.rec-card:hover {
-  border-color: #10b981;
-}
-
-.rec-badges {
-  margin-bottom: 0.4rem;
-}
-
-.rec-badge {
-  background: #fff7ed;
-  color: #c2410c;
-  font-size: 0.65rem;
-  font-weight: 700;
-  padding: 0.15rem 0.4rem;
-  border-radius: 3px;
-  text-transform: uppercase;
-}
-
-.rec-card h4 {
-  font-size: 0.88rem;
-  margin: 0 0 0.4rem 0;
-  line-height: 1.4;
-  color: #222;
-}
-
-.rec-card p {
-  font-size: 0.78rem;
-  color: #777;
-  margin-bottom: 0.6rem;
-}
-
-.score {
-  font-size: 0.7rem;
-  font-weight: 700;
-  color: #059669;
-}
-
-.loading-full {
-  display: flex;
-  height: 50vh;
-  align-items: center;
-  justify-content: center;
-  color: #888;
-}
-
-.no-recs {
-  font-size: 0.85rem;
-  color: #999;
-  text-align: center;
-  padding: 2rem;
-}
-
-/* ── Hybrid IMRAD section ──────────────────────────────────────── */
-.imrad-section-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 0.85rem;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.imrad-section-header h3 {
-  margin: 0;
-}
-
-.view-pages-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 0.8rem;
-  font-weight: 600;
-  padding: 0.35rem 0.85rem;
-  border-radius: 6px;
-  border: 1.5px solid #d1d5db;
-  background: white;
-  color: #555;
-  cursor: pointer;
-  transition: all 0.15s;
-  white-space: nowrap;
-}
-
-.view-pages-btn:hover {
-  border-color: #10b981;
-  color: #10b981;
-}
-
-.view-pages-btn.active {
-  background: #f0fdf4;
-  border-color: #10b981;
-  color: #059669;
-}
-
-/* Extracted text wrapper */
-/* Outer wrapper: holds the ripple, no overflow clipping */
-.section-text-outer {
-  position: relative;
-  margin-bottom: 1rem;
-  border-radius: 8px;
-}
-
-/* Ripple ring — sits on outer wrapper so overflow:auto can't clip it */
-.section-text-outer::after {
-  content: '';
-  position: absolute;
-  inset: -1px;
-  border-radius: 8px;
-  border: 1.5px solid rgba(16, 185, 129, 0.7);
-  animation: border-ripple 2.4s cubic-bezier(0.2, 0.6, 0.4, 1) infinite;
-  pointer-events: none;
-  z-index: 1;
-}
-
-@keyframes border-ripple {
-  0% {
-    inset: -1px;
-    border-color: rgba(16, 185, 129, 0.7);
-    opacity: 1;
-  }
-
-  100% {
-    inset: -14px;
-    border-color: rgba(16, 185, 129, 0);
-    opacity: 0;
-  }
-}
-
-/* Inner box: the actual scrollable text area */
-.section-text-wrap {
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 1.25rem 1.5rem;
-  max-height: 480px;
-  overflow-y: auto;
-  position: relative;
-  z-index: 2;
-}
-
-/* Extracted text — pre preserves paragraphs, wraps long lines */
-.section-text {
-  white-space: pre-wrap;
-  word-break: break-word;
-  font-family: inherit;
-  font-size: 0.97rem;
-  line-height: 1.9;
-  color: #374151;
-  margin: 0;
-  padding: 0;
-  background: none;
-  border: none;
-  text-align: justify;
-}
-
-.no-content-note {
-  color: #aaa;
-  font-style: italic;
-  font-size: 0.9rem;
-}
-
-/* Page viewer */
-.section-pages-viewer {
-  margin-top: 1.25rem;
-  border-top: 2px dashed #e5e7eb;
-  padding-top: 1.25rem;
-}
-
-.pages-loading,
-.pages-empty {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: #888;
-  font-size: 0.9rem;
-  padding: 1rem 0;
-}
-
-.pages-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-}
-
-.page-card {
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  overflow: hidden;
-  background: #f9fafb;
-}
-
-.page-label {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: #6b7280;
-  padding: 0.4rem 0.75rem;
-  background: #f3f4f6;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-.page-img {
-  width: 100%;
-  display: block;
-}
-
-/* Spinner animation */
-.spin {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-/* ── Left Document Content sidebar ──────────────────────────── */
-.doc-content-aside {
-  width: 190px;
-  flex-shrink: 0;
-  position: sticky;
-  top: 4.5rem;
-  align-self: flex-start;
-}
-
-.doc-content-title {
-  font-size: 0.7rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.09em;
-  color: #9ca3af;
-  margin: 0 0 0.4rem 0.5rem;
-}
-
-.doc-content-nav {
-  display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
-}
-
-.dcn-item {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  width: 100%;
-  text-align: left;
-  background: none;
-  border: none;
-  padding: 0.45rem 0.75rem;
-  border-radius: 6px;
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: #6b7280;
-  cursor: pointer;
-  transition: background 0.15s, color 0.15s;
-}
-
-.dcn-item:hover {
-  background: #f3f4f6;
-  color: #111;
-}
-
-.dcn-item.active {
-  background: #f0fdf4;
-  color: #059669;
-  font-weight: 700;
-}
-
-/* ── Authors tab ─────────────────────────────────────────────── */
+/* ── Authors tab ──────────────────────────────────────── */
 .authors-list {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.65rem;
 }
 
-.author-card {
+.author-row {
   display: flex;
   align-items: center;
   gap: 1rem;
   padding: 0.85rem 1rem;
-  background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
 }
 
-.author-avatar {
-  width: 42px;
-  height: 42px;
+.author-initial {
+  width: 38px;
+  height: 38px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #10b981, #059669);
-  color: white;
-  font-size: 1.1rem;
-  font-weight: 700;
+  background: var(--hero-bg);
+  border: 2px solid var(--green);
+  color: #fff;
+  font-family: 'Lora', Georgia, serif;
+  font-size: 1rem;
+  font-weight: 600;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1024,75 +948,170 @@ const abstractPreview = computed(() => {
 }
 
 .author-name {
-  font-size: 0.95rem;
+  font-size: 0.92rem;
   font-weight: 600;
-  color: #111;
-  margin: 0 0 0.15rem 0;
+  color: var(--ink);
+  margin: 0 0 0.1rem;
 }
 
 .author-label {
-  font-size: 0.78rem;
-  color: #9ca3af;
+  font-size: 0.75rem;
+  color: var(--ink-3);
   margin: 0;
 }
 
-/* ── Tablet (≤768px) ─────────────────────────────────────────── */
+/* ── Recommendations sidebar ──────────────────────────── */
+.rec-aside {
+  width: 256px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 1.5rem;
+  align-self: flex-start;
+}
+
+.rec-head {
+  border-top: 2px solid var(--ink);
+  padding-top: 0.85rem;
+  margin-bottom: 1.25rem;
+}
+
+.rec-sub {
+  font-size: 0.75rem;
+  color: var(--ink-3);
+  margin: 0.25rem 0 0;
+  line-height: 1.4;
+}
+
+.rec-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.rec-card {
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--rule);
+  cursor: pointer;
+  transition: padding-left 0.14s;
+}
+
+.rec-card:last-of-type {
+  border-bottom: none;
+}
+
+.rec-card:hover {
+  padding-left: 4px;
+}
+
+.rec-badge {
+  display: inline-block;
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--green-dk);
+  background: var(--green-dim);
+  padding: 0.12rem 0.4rem;
+  border-radius: 2px;
+  margin-bottom: 0.4rem;
+}
+
+.rec-title {
+  font-family: 'Lora', Georgia, serif;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.4;
+  margin: 0 0 0.35rem;
+}
+
+.rec-card:hover .rec-title {
+  color: var(--green-dk);
+}
+
+.rec-meta {
+  font-size: 0.74rem;
+  color: var(--ink-3);
+  margin: 0 0 0.4rem;
+}
+
+.rec-score {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--green-dk);
+}
+
+/* Loading */
+.loading-full {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  height: 50vh;
+  color: var(--ink-3);
+  font-size: 0.9rem;
+  font-family: 'Source Sans 3', sans-serif;
+}
+
+/* Spinner */
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ── Responsive ────────────────────────────────────────── */
+@media (max-width: 1024px) {
+  .rec-aside {
+    display: none;
+  }
+}
+
 @media (max-width: 768px) {
   .detail-layout {
     flex-direction: column;
     padding: 1.5rem 1.25rem;
-    gap: 2rem;
   }
 
-  .doc-content-aside {
+  .doc-nav-aside {
     display: none;
   }
 
-  .recommendations-aside {
-    width: 100%;
+  .paper-header-wrap {
+    padding: 1.5rem 1.25rem 2rem;
   }
 
-  .paper-header-inner h1 {
-    font-size: 1.6rem;
+  .paper-title {
+    font-size: 1.4rem;
   }
 }
 
-/* ── Phone (≤480px) — Primary Android target 360–412px ───────── */
 @media (max-width: 480px) {
   .detail-layout {
     padding: 1rem;
-    gap: 1.5rem;
   }
 
-  .paper-header-inner h1 {
-    font-size: 1.3rem;
+  .paper-title {
+    font-size: 1.2rem;
   }
 
-  .metadata-grid {
-    gap: 0.75rem 1rem;
+  .doc-tab {
+    font-size: 0.78rem;
+    padding: 0.5rem 0.7rem;
   }
 
-  .engagement-row {
-    gap: 0.5rem;
+  .meta-dot {
+    display: none;
   }
 
-  .recommendations-aside {
-    width: 100%;
-  }
-
-  .rec-list {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.75rem;
-  }
-
-  .body-text {
-    font-size: 0.95rem;
-    line-height: 1.75;
-  }
-
-  .paper-section h3 {
-    font-size: 0.98rem;
+  .meta-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.35rem;
   }
 }
 </style>
