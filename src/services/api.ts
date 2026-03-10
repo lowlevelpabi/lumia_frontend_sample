@@ -340,6 +340,16 @@ export const api = {
     return response.json()
   },
 
+  async changeUserRole(userId: number, role: string): Promise<UserResponse> {
+    const response = await apiFetch(`${BASE_URL}/users/${userId}/role`, {
+      method: 'PATCH',
+      headers: { ...getAuthHeaders(), 'Content-Type': 'application/json'},
+      body: JSON.stringify({ role}),
+    })
+    if (!response.ok) throw new Error('Failed to change user role')
+      return response.json()
+  },
+
   async getSystemHealth(): Promise<SystemHealth> {
     const response = await apiFetch(`${BASE_URL}/system/health`, {
       headers: getAuthHeaders(),
