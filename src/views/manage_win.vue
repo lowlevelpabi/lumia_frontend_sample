@@ -35,8 +35,19 @@ const closeMobileSidebar = () => {
 // Reactive mobile breakpoint check
 const isMobile = ref(window.innerWidth <= 768)
 const onResize = () => { isMobile.value = window.innerWidth <= 768 }
-onMounted(() => window.addEventListener('resize', onResize))
-onUnmounted(() => window.removeEventListener('resize', onResize))
+onMounted(() => {
+  window.addEventListener('resize', onResize)
+  window.addEventListener('dragover', handleDragOver)
+  window.addEventListener('drop', handleDrop)
+  window.addEventListener('dragleave', handleDragLeave)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', onResize)
+  window.removeEventListener('dragover', handleDragOver)
+  window.removeEventListener('drop', handleDrop)
+  window.removeEventListener('dragleave', handleDragLeave)
+})
 
 // ── Sidebar ─────────────────────────────────────────────────────
 type Section = 'dashboard' | 'repository' | 'users' | 'upload'
@@ -290,6 +301,33 @@ const handleFileChange = (e: Event) => {
   if (target.files && target.files[0]) { file.value = target.files[0]; showStrategyModal.value = true }
 }
 
+const isDragging = ref(false)
+
+const handleDrop = (e: DragEvent) => {
+  e.preventDefault()
+  isDragging.value = false
+  if (activeSection.value !== 'upload' || step.value !== 1) return
+  const dropped = e.dataTransfer?.files?.[0]
+  if (dropped && dropped.type === 'application/pdf') {
+    file.value = dropped
+    showStrategyModal.value = true
+  } else if (dropped) {
+    uploadError.value = 'Only PDF files are accepted. Please retry.'
+  }
+}
+
+const handleDragOver = (e: DragEvent) => {
+  e.preventDefault()
+  if (activeSection.value === 'upload' && step.value === 1) {
+    isDragging.value = true
+  }
+}
+
+const handleDragLeave = (e: DragEvent) => {
+  // Only clear when leaving the window entirely
+  if (e.relatedTarget === null) isDragging.value = false
+}
+
 const selectStrategy = async (auto: boolean) => {
   showStrategyModal.value = false
   setTimeout(() => { startInitialExtraction(auto) }, 100)
@@ -379,6 +417,16 @@ watch(activeSection, (newSection) => {
 
 <template>
   <div class="mgmt" :class="{ 'sb-collapsed': sidebarCollapsed }">
+
+    <!-- Full page drag overlay -->
+    <transition name='fade'>
+      <div v-if="isDragging" class="drag-overlay">
+        <div class="drag-overlay-inner">
+          <FileUp :size="48" color="#00a651" />
+          <p>Drop your PDF here</p>
+        </div>
+      </div>
+    </transition>
 
     <!-- Mobile backdrop -->
     <transition name="fade">
@@ -582,7 +630,8 @@ watch(activeSection, (newSection) => {
                   <div v-if="uploadError" class="error-banner">
                     <AlertCircle :size="16" /> {{ uploadError }}
                   </div>
-                  <div class="drop-zone" @click="fileInput?.click()" :class="{ processing: processingDoc }">
+                  <div class="drop-zone" @click="fileInput?.click()" @drop="handleDrop" @dragover="handleDragOver"
+                    @dragleave="handleDragLeave" :class="{ processing: processingDoc, dragging: isDragging }">
                     <input type="file" ref="fileInput" @change="handleFileChange" style="display:none"
                       accept="application/pdf" />
                     <div v-if="processingDoc" class="drop-loading">
@@ -659,7 +708,7 @@ watch(activeSection, (newSection) => {
                   <p class="notice-desc">The following sections could not be found. Search accuracy may be reduced.</p>
                   <div class="missing-list">
                     <span v-for="s in missingSections" :key="s" class="missing-badge"><span class="missing-dot" />{{ s
-                    }}</span>
+                      }}</span>
                   </div>
                 </div>
                 <div class="notice-actions">
@@ -2260,6 +2309,11 @@ watch(activeSection, (newSection) => {
   transition: border-color 0.14s, background 0.14s;
 }
 
+.drop-zone.dragging {
+  border-color: #00a651;
+  background: var(--green-dim);
+}
+
 .drop-zone:hover:not(.processing) {
   border-color: var(--green);
   background: var(--green-dim);
@@ -2897,6 +2951,36 @@ watch(activeSection, (newSection) => {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.drag-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 166, 81, 0.08);
+  border: 3px dashed #00a651;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.drag-overlay-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  background: #fff;
+  border-radius: 16px;
+  padding: 2rem 3rem;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+}
+
+.drag-overlay-inner p {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #00a651;
+  margin: 0;
 }
 
 /* ══ EDIT OVERLAY ══════════════════════════════════════════════ */

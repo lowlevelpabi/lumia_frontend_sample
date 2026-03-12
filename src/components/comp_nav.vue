@@ -48,7 +48,7 @@ const logout = () => {
         <div class="logo-icon">
           <BookOpen :size="20" color="#fff" />
         </div>
-        <span class="logo-text">LUMIA MAGIC</span>
+        <span class="logo-text">LUMIA</span>
       </RouterLink>
 
       <!-- Center: Search Bar (Hidden on home and management pages to avoid redundancy) -->

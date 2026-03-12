@@ -43,7 +43,7 @@ const handleSearch = () => {
         </div>
 
         <h1 class="hero-heading">
-          Lumia <em>Magic</em>
+          Lumia System
         </h1>
 
         <p class="hero-sub">
