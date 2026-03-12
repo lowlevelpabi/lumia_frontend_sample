@@ -59,7 +59,7 @@ const toggleSectionPages = async (section: string) => {
 const showFullAbstract = ref(false)
 const ABSTRACT_PREVIEW_LIMIT = 400
 
-const loadPaperData = async (id: number) => {
+const loadPaperData = async (id: string) => {
   loading.value = true
   try {
     const details = await api.getPaperDetails(id)
@@ -89,11 +89,11 @@ const loadPaperData = async (id: number) => {
   }
 }
 
-onMounted(() => { loadPaperData(Number(route.params.id)) })
-watch(() => route.params.id, (newId) => { if (newId) loadPaperData(Number(newId)) })
+onMounted(() => { loadPaperData(String(route.params.id)) })
+watch(() => route.params.id, (newId) => { if (newId) loadPaperData(String(newId)) })
 
 const goBack = () => router.back()
-const viewDetail = (id: number) => router.push({ name: 'detail', params: { id } })
+const viewDetail = (id: string) => router.push({ name: 'detail', params: { id } })
 
 const handleCite = async () => {
   if (!isLoggedIn.value || hasCited.value || citeLoading.value || !paper.value) return
@@ -147,7 +147,7 @@ const abstractPreview = computed(() => {
           <button @click="goBack" class="bc-link">Results</button>
           <ChevronRight :size="12" class="bc-sep" />
           <span class="bc-active">{{ paper.title.length > 55 ? paper.title.substring(0, 55) + '…' : paper.title
-            }}</span>
+          }}</span>
         </nav>
 
         <!-- Badges -->
@@ -187,7 +187,7 @@ const abstractPreview = computed(() => {
             <Award v-else :size="14" />
             {{ hasCited ? 'Cited' : citeLoading ? 'Citing…' : 'Cite this study' }}
           </button>
-          <span v-else class="cite-hint">Sign in to cite</span>
+          <span v-else class="cite-hint">Sign in with your student account to cite this study</span>
         </div>
 
       </div>
@@ -267,7 +267,7 @@ const abstractPreview = computed(() => {
             </h3>
             <div class="tags">
               <RouterLink v-for="tag in paper.keywords.split(',')" :key="tag"
-                :to="{ name: 'results', query: { q: tag.trim() } }" class="tag">{{ tag.trim() }}</RouterLink>
+                :to="{ name: 'explore', query: { q: tag.trim() } }" class="tag">{{ tag.trim() }}</RouterLink>
             </div>
           </section>
         </div>

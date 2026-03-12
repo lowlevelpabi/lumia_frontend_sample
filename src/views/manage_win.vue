@@ -148,7 +148,7 @@ const handleUpdate = async () => {
 }
 
 // ── Actions ───────────────────────────────────────────────────────
-const handleDelete = async (id: number) => {
+const handleDelete = async (id: string) => {
   if (!confirm('Delete this paper? This cannot be undone.')) return
   try { await api.deletePaper(id); await fetchPapers() }
   catch { alert('Failed to delete. Are you logged in as admin?') }
@@ -365,7 +365,11 @@ const handleFinalConfirm = async () => {
 
 const goBackToStep1 = () => { step.value = 1; file.value = null; showStrategyModal.value = false }
 
-const recentPapers = computed(() => papers.value.slice().sort((a, b) => b.id - a.id).slice(0, 6))
+const recentPapers = computed(() => [...papers.value].sort((a, b) => {
+  // Assuming string IDs can be lexicographically sorted if they represent time
+  // or falling back to database order.
+  return String(b.id).localeCompare(String(a.id))
+}).slice(0, 6))
 
 watch(activeSection, (newSection) => {
   if (newSection === 'repository') fetchPapers()

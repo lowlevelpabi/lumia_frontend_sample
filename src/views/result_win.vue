@@ -2,12 +2,13 @@
 import { ref, onMounted, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Filter, SlidersHorizontal, ArrowRight, User, Search, X } from 'lucide-vue-next'
-import { api, type SearchResult, type SearchParams } from '../services/api'
+import { api, type SearchResult, type SearchParams, type Paper } from '../services/api'
 
 const route = useRoute()
 const router = useRouter()
 const query = ref('')
 const results = ref<SearchResult[]>([])
+const allPapers = ref<Paper[]>([])
 const loading = ref(false)
 const showFilters = ref(false)
 const showMobileSearch = ref(false)
@@ -15,16 +16,65 @@ const mobileSearchInput = ref('')
 const windowWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1024)
 const isDesktop = computed(() => windowWidth.value > 768)
 
-// Advanced Filters
+// Filters
 const threshold = ref(0.2)
 const minYear = ref<number | undefined>(undefined)
 const maxYear = ref<number | undefined>(undefined)
 const selectedProjectType = ref('')
 const selectedDegree = ref('')
 const selectedSection = ref('')
+const sortBy = ref<'newest' | 'oldest' | 'cited'>('newest')
+
+// True when no search query — show full archive
+const browseMode = computed(() => !query.value.trim())
+
+// Filtered + sorted papers for browse mode
+const filteredPapers = computed(() => {
+  let list = [...allPapers.value]
+  if (selectedProjectType.value) list = list.filter(p => p.project_type === selectedProjectType.value)
+  if (selectedDegree.value) list = list.filter(p => p.degree_program === selectedDegree.value)
+  if (minYear.value) list = list.filter(p => parseInt(p.year) >= minYear.value!)
+  if (maxYear.value) list = list.filter(p => parseInt(p.year) <= maxYear.value!)
+  if (sortBy.value === 'newest') list.sort((a, b) => (b.year ?? '').localeCompare(a.year ?? ''))
+  else if (sortBy.value === 'oldest') list.sort((a, b) => (a.year ?? '').localeCompare(b.year ?? ''))
+  else if (sortBy.value === 'cited') list.sort((a, b) => (b.citation_count ?? 0) - (a.citation_count ?? 0))
+  return list
+})
+
+// Map Paper → SearchResult shape so template stays unified
+const browseAsResults = computed((): SearchResult[] =>
+  filteredPapers.value.map(p => ({
+    id: p.id,
+    score: 1,
+    payload: {
+      title: p.title,
+      author: p.author,
+      year: p.year,
+      abstract: p.abstract,
+      department: p.department,
+      project_type: p.project_type,
+      degree_program: p.degree_program,
+      citation_count: p.citation_count,
+    }
+  }))
+)
+
+// What the template actually renders
+const displayResults = computed(() => browseMode.value ? browseAsResults.value : results.value)
+
+const loadAllPapers = async () => {
+  loading.value = true
+  try {
+    allPapers.value = await api.listAllPapers()
+  } catch {
+    console.error('Failed to load papers')
+  } finally {
+    loading.value = false
+  }
+}
 
 const performSearch = async () => {
-  if (!query.value) return
+  if (!query.value.trim()) return
   loading.value = true
   try {
     const params: SearchParams = {
@@ -44,26 +94,36 @@ const performSearch = async () => {
   }
 }
 
+const load = () => {
+  if (browseMode.value) loadAllPapers()
+  else performSearch()
+}
+
 onMounted(() => {
   query.value = (route.query.q as string) || ''
-  performSearch()
+  load()
   const onResize = () => { windowWidth.value = window.innerWidth }
   window.addEventListener('resize', onResize)
 })
 
 watch(
-  [() => route.query.q, threshold, minYear, maxYear, selectedProjectType, selectedDegree, selectedSection],
-  () => {
-    query.value = (route.query.q as string) || query.value
-    performSearch()
+  () => route.query.q,
+  (q) => {
+    query.value = (q as string) || ''
+    load()
   }
 )
 
-const viewDetail = (id: number) => router.push({ name: 'detail', params: { id } })
+watch(
+  [threshold, minYear, maxYear, selectedProjectType, selectedDegree, selectedSection],
+  () => { if (!browseMode.value) performSearch() }
+)
+
+const viewDetail = (id: string) => router.push({ name: 'detail', params: { id } })
 
 const submitMobileSearch = () => {
   if (!mobileSearchInput.value.trim()) return
-  router.push({ name: 'results', query: { q: mobileSearchInput.value.trim() } })
+  router.push({ name: 'explore', query: { q: mobileSearchInput.value.trim() } })
   showMobileSearch.value = false
 }
 
@@ -80,13 +140,15 @@ const openMobileSearch = () => {
     <div class="results-topbar">
       <div class="topbar-inner">
         <div class="topbar-left">
-          <span class="topbar-label">Search Results</span>
+          <span class="topbar-label">{{ browseMode ? 'Browse Archive' : 'Search Results' }}</span>
           <span class="topbar-rule"></span>
           <span v-if="!loading" class="topbar-count">
-            <strong>{{ results.length }}</strong> record{{ results.length !== 1 ? 's' : '' }}
+            <strong>{{ displayResults.length }}</strong> record{{ displayResults.length !== 1 ? 's' : '' }}
             <span v-if="query" class="topbar-query"> for &ldquo;{{ query }}&rdquo;</span>
           </span>
-          <span v-else class="topbar-count topbar-searching">Searching the archives&hellip;</span>
+          <span v-else class="topbar-count topbar-searching">
+            {{ browseMode ? 'Loading the archives&hellip;' : 'Searching the archives&hellip;' }}
+          </span>
         </div>
 
         <div class="topbar-actions">
@@ -149,14 +211,14 @@ const openMobileSearch = () => {
             <div class="filter-group">
               <p class="filter-label">Degree Program</p>
               <div class="filter-options">
-                <button v-for="deg in ['All', 'BSCS', 'BSIT', 'BSIS', 'BSCpE']" :key="deg" class="filter-tag"
+                <button v-for="deg in ['All', 'BSCS', 'BSIT']" :key="deg" class="filter-tag"
                   :class="{ active: (deg === 'All' && selectedDegree === '') || selectedDegree === deg }"
                   @click="selectedDegree = deg === 'All' ? '' : deg">{{ deg }}</button>
               </div>
             </div>
 
-            <!-- Search Target -->
-            <div class="filter-group">
+            <!-- Search Target (search mode only) -->
+            <div class="filter-group" v-if="!browseMode">
               <p class="filter-label">Search Target</p>
               <div class="filter-options">
                 <button v-for="s in ['Full Text', 'introduction', 'methods', 'results', 'discussion']" :key="s"
@@ -186,8 +248,8 @@ const openMobileSearch = () => {
             </div>
           </div>
 
-          <!-- Similarity Threshold -->
-          <div class="sb-panel">
+          <!-- Similarity Threshold (search mode only) -->
+          <div class="sb-panel" v-if="!browseMode">
             <div class="sb-title">
               <span>Similarity Threshold</span>
             </div>
@@ -203,6 +265,18 @@ const openMobileSearch = () => {
             </div>
           </div>
 
+          <!-- Sort (browse mode only) -->
+          <div class="sb-panel" v-if="browseMode">
+            <div class="sb-title">
+              <span>Sort By</span>
+            </div>
+            <div class="filter-options">
+              <button v-for="s in [['newest', 'Newest'], ['oldest', 'Oldest'], ['cited', 'Most Cited']]" :key="s[0]"
+                class="filter-tag" :class="{ active: sortBy === s[0] }"
+                @click="sortBy = s[0] as 'newest' | 'oldest' | 'cited'">{{ s[1] }}</button>
+            </div>
+          </div>
+
         </aside>
 
         <!-- ── RESULTS FEED ─────────────────────────────────────── -->
@@ -210,10 +284,10 @@ const openMobileSearch = () => {
 
           <header class="feed-head">
             <div class="feed-head-left">
-              <span>Records</span>
+              <span>{{ browseMode ? 'Archive' : 'Records' }}</span>
             </div>
             <span v-if="!loading" class="feed-head-count">
-              {{ results.length }} found
+              {{ displayResults.length }} found
             </span>
           </header>
 
@@ -231,14 +305,18 @@ const openMobileSearch = () => {
           </div>
 
           <!-- Empty state -->
-          <div v-else-if="results.length === 0" class="empty-state">
-            <p class="empty-heading">No records found</p>
-            <p class="empty-sub">No matches for &ldquo;{{ query }}&rdquo;. Try broader terms or adjust your filters.</p>
+          <div v-else-if="displayResults.length === 0" class="empty-state">
+            <p class="empty-heading">{{ browseMode ? 'No papers found' : 'No records found' }}</p>
+            <p class="empty-sub">
+              <template v-if="browseMode">The archive appears to be empty or no papers match your filters.</template>
+              <template v-else>No matches for &ldquo;{{ query }}&rdquo;. Try broader terms or adjust your
+                filters.</template>
+            </p>
           </div>
 
           <!-- Results list -->
           <ol v-else class="paper-list">
-            <li v-for="(res, idx) in results" :key="res.id" class="paper-item" @click="viewDetail(res.id)">
+            <li v-for="(res, idx) in displayResults" :key="res.id" class="paper-item" @click="viewDetail(res.id)">
               <span class="item-num">{{ String(idx + 1).padStart(2, '0') }}</span>
 
               <div class="item-body">
@@ -246,7 +324,7 @@ const openMobileSearch = () => {
                   <span class="type-tag">{{ res.payload.project_type }}</span>
                   <span v-if="res.payload.degree_program && res.payload.degree_program !== 'N/A'" class="degree-tag">{{
                     res.payload.degree_program }}</span>
-                  <span class="score-tag">{{ (res.score * 100).toFixed(0) }}% match</span>
+                  <span v-if="!browseMode" class="score-tag">{{ (res.score * 100).toFixed(0) }}% match</span>
                 </div>
 
                 <span class="item-title">{{ res.payload.title }}</span>
@@ -665,7 +743,6 @@ const openMobileSearch = () => {
   min-width: 0;
 }
 
-/* Feed header — 2px top rule editorial style */
 .feed-head {
   display: flex;
   align-items: center;

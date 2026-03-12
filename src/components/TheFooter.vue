@@ -27,13 +27,13 @@ import { BookOpen } from 'lucide-vue-next'
           <h4 class="col-title">Collection</h4>
           <ul class="col-links">
             <li>
-              <RouterLink :to="{ name: 'results', query: { q: '' } }">Browse All</RouterLink>
+              <RouterLink :to="{ name: 'explore', query: { q: '' } }">Browse All</RouterLink>
             </li>
             <li>
-              <RouterLink :to="{ name: 'results', query: { q: 'Thesis' } }">Theses</RouterLink>
+              <RouterLink :to="{ name: 'explore', query: { q: 'Thesis' } }">Thesis</RouterLink>
             </li>
             <li>
-              <RouterLink :to="{ name: 'results', query: { q: 'Capstone' } }">Capstone Projects</RouterLink>
+              <RouterLink :to="{ name: 'explore', query: { q: 'Capstone' } }">Capstone Projects</RouterLink>
             </li>
           </ul>
         </div>

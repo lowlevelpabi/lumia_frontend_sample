@@ -27,7 +27,7 @@ watch(() => route.path, () => {
 
 const handleSearch = () => {
   if (searchQuery.value.trim()) {
-    router.push({ name: 'results', query: { q: searchQuery.value } })
+    router.push({ name: 'explore', query: { q: searchQuery.value } })
     searchQuery.value = ''
     showMobileMenu.value = false
   }
@@ -48,7 +48,7 @@ const logout = () => {
         <div class="logo-icon">
           <BookOpen :size="20" color="#fff" />
         </div>
-        <span class="logo-text">LUMIA</span>
+        <span class="logo-text">LUMIA MAGIC</span>
       </RouterLink>
 
       <!-- Center: Search Bar (Hidden on home and management pages to avoid redundancy) -->
@@ -64,7 +64,7 @@ const logout = () => {
 
       <!-- Right: Links & Actions -->
       <div class="nav-actions" :class="{ 'mobile-open': showMobileMenu }">
-        <RouterLink :to="{ name: 'results', query: { q: '' } }" class="nav-item">Explore</RouterLink>
+        <RouterLink :to="{ name: 'explore' }" class="nav-item">Explore</RouterLink>
 
         <template v-if="isLoggedIn">
           <RouterLink v-if="isStaff" :to="{ name: 'management' }" class="nav-item">

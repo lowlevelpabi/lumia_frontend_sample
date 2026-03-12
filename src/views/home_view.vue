@@ -13,7 +13,7 @@ onMounted(async () => {
   try {
     const allPapers = await api.listAllPapers()
     recentPapers.value = allPapers
-      .sort((a, b) => (b.id || 0) - (a.id || 0))
+      .sort((a, b) => String(b.id).localeCompare(String(a.id)))
       .slice(0, 6)
   } catch (e) {
     console.error('Failed to fetch recent papers:', e)
@@ -24,7 +24,7 @@ onMounted(async () => {
 
 const handleSearch = () => {
   if (searchQuery.value.trim()) {
-    router.push({ name: 'results', query: { q: searchQuery.value } })
+    router.push({ name: 'explore', query: { q: searchQuery.value } })
   }
 }
 </script>
@@ -43,7 +43,7 @@ const handleSearch = () => {
         </div>
 
         <h1 class="hero-heading">
-          Lumia Retrieval System
+          Lumia <em>Magic</em>
         </h1>
 
         <p class="hero-sub">
@@ -62,10 +62,10 @@ const handleSearch = () => {
 
         <div class="browse-chips">
           <span class="chips-label">Browse for:</span>
-          <RouterLink :to="{ name: 'results', query: { q: 'thesis article' } }" class="chip">thesis article</RouterLink>
-          <RouterLink :to="{ name: 'results', query: { q: 'capstone project' } }" class="chip">capstone project
+          <RouterLink :to="{ name: 'explore', query: { q: 'thesis article' } }" class="chip">thesis article</RouterLink>
+          <RouterLink :to="{ name: 'explore', query: { q: 'capstone project' } }" class="chip">capstone project
           </RouterLink>
-          <RouterLink :to="{ name: 'results', query: { q: 'computer science topic' } }" class="chip">computer science
+          <RouterLink :to="{ name: 'explore', query: { q: 'computer science topic' } }" class="chip">computer science
             topic
           </RouterLink>
         </div>
@@ -85,7 +85,7 @@ const handleSearch = () => {
               <Clock :size="13" />
               <span>Recently Added</span>
             </div>
-            <RouterLink :to="{ name: 'results', query: { q: '' } }" class="head-link">
+            <RouterLink :to="{ name: 'explore', query: { q: '' } }" class="head-link">
               All records
               <ArrowRight :size="12" />
             </RouterLink>
@@ -106,8 +106,8 @@ const handleSearch = () => {
 
           <!-- Papers list -->
           <ol v-else class="paper-list">
-            <li v-for="(paper, idx) in recentPapers" :key="paper.id" class="paper-item">
-              <span class="item-num">{{ String(idx + 1).padStart(2, '0') }}</span>
+            <li v-for="(paper) in recentPapers" :key="paper.id" class="paper-item">
+              <span class="item-num"></span>
 
               <div class="item-body">
                 <div class="item-tags">
@@ -137,7 +137,7 @@ const handleSearch = () => {
             </li>
           </ol>
 
-          <RouterLink :to="{ name: 'results', query: { q: '' } }" class="view-more">
+          <RouterLink :to="{ name: 'explore' }" class="view-more">
             View the full repository
             <ArrowRight :size="14" />
           </RouterLink>
@@ -155,15 +155,15 @@ const handleSearch = () => {
 
             <div class="sb-group">
               <p class="sb-group-label">By Document Type</p>
-              <RouterLink :to="{ name: 'results', query: { q: 'Thesis' } }" class="sb-link">Thesis / Research
+              <RouterLink :to="{ name: 'explore', query: { q: 'Thesis' } }" class="sb-link">Thesis / Research
               </RouterLink>
-              <RouterLink :to="{ name: 'results', query: { q: 'Capstone Project' } }" class="sb-link">Capstone Project
+              <RouterLink :to="{ name: 'explore', query: { q: 'Capstone Project' } }" class="sb-link">Capstone Project
               </RouterLink>
             </div>
 
             <div class="sb-group">
               <p class="sb-group-label">By Department</p>
-              <RouterLink :to="{ name: 'results', query: { q: 'computer science' } }" class="sb-link">Department of
+              <RouterLink :to="{ name: 'explore', query: { q: 'computer science' } }" class="sb-link">Department of
                 Computer
                 Studies
               </RouterLink>
