@@ -1,7 +1,7 @@
 const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api/v1'
 
 export interface Paper {
-  id: number
+  id: string
   title: string
   author: string
   year: string
@@ -25,7 +25,7 @@ export type PaperMetadata = Omit<Paper, 'id' | 'view_count' | 'citation_count'>
 export type PartialPaperMetadata = Partial<PaperMetadata>
 
 export interface SearchResult {
-  id: number
+  id: string
   score: number
   payload: {
     title: string
@@ -135,7 +135,7 @@ export interface SearchParams {
 
 export interface BorrowRecord {
   id: number
-  paper_id: number
+  paper_id: string
   user_id: number
   borrow_date: string
   due_date: string
@@ -210,13 +210,13 @@ export const api = {
     return response.json()
   },
 
-  async getRecommendations(paperId: number): Promise<SearchResult[]> {
+  async getRecommendations(paperId: string): Promise<SearchResult[]> {
     const response = await fetch(`${BASE_URL}/papers/${paperId}/recommendations`)
     if (!response.ok) throw new Error('Failed to fetch recommendations')
     return response.json()
   },
 
-  async getPaperDetails(id: number): Promise<Paper | undefined> {
+  async getPaperDetails(id: string): Promise<Paper | undefined> {
     const response = await fetch(`${BASE_URL}/papers/${id}`)
     if (!response.ok) return undefined
     return response.json()
@@ -286,7 +286,7 @@ export const api = {
     return response.json()
   },
 
-  async updatePaper(id: number, updates: PaperUpdate) {
+  async updatePaper(id: string, updates: PaperUpdate) {
     const response = await apiFetch(`${BASE_URL}/papers/${id}`, {
       method: 'PUT',
       headers: {
@@ -299,7 +299,7 @@ export const api = {
     return response.json()
   },
 
-  async deletePaper(id: number) {
+  async deletePaper(id: string) {
     const response = await apiFetch(`${BASE_URL}/papers/${id}`, {
       method: 'DELETE',
       headers: getAuthHeaders(),
@@ -309,13 +309,13 @@ export const api = {
   },
 
   // Engagement
-  async viewPaper(id: number): Promise<{ view_count: number }> {
+  async viewPaper(id: string): Promise<{ view_count: number }> {
     const response = await fetch(`${BASE_URL}/papers/${id}/view`, { method: 'POST' })
     if (!response.ok) throw new Error('View record failed')
     return response.json()
   },
 
-  async getCiteStatus(id: number): Promise<{ has_cited: boolean; citation_count: number }> {
+  async getCiteStatus(id: string): Promise<{ has_cited: boolean; citation_count: number }> {
     const response = await apiFetch(`${BASE_URL}/papers/${id}/cite-status`, {
       headers: getAuthHeaders(),
     })
@@ -323,7 +323,7 @@ export const api = {
     return response.json()
   },
 
-  async citePaper(id: number): Promise<{ has_cited: boolean; citation_count: number }> {
+  async citePaper(id: string): Promise<{ has_cited: boolean; citation_count: number }> {
     const response = await apiFetch(`${BASE_URL}/papers/${id}/cite`, {
       method: 'POST',
       headers: getAuthHeaders(),
@@ -367,7 +367,7 @@ export const api = {
     return response.json()
   },
 
-  async createBorrowRecord(data: { paper_id: number; user_id: number; due_date: string }) {
+  async createBorrowRecord(data: { paper_id: string; user_id: number; due_date: string }) {
     const response = await apiFetch(`${BASE_URL}/borrowing/`, {
       method: 'POST',
       headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },

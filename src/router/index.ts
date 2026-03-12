@@ -22,8 +22,8 @@ const router = createRouter({
       meta: { title: 'Home - Lumia' }
     },
     {
-      path: '/results',
-      name: 'results',
+      path: '/explore',
+      name: 'explore',
       component: ResultsView,
       meta: { title: 'Search Results - Lumia' }
     },
