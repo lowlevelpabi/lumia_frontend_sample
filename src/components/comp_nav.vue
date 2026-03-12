@@ -53,7 +53,7 @@ const logout = () => {
 
       <!-- Center: Search Bar (Hidden on home and management pages to avoid redundancy) -->
       <transition name="fade">
-        <div v-if="!['home', 'management'].includes(route.name as string)" class="nav-search-wrap">
+        <div v-if="!['home', 'management', 'login', 'register'].includes(route.name as string)" class="nav-search-wrap">
           <div class="nav-search">
             <Search :size="16" class="search-icon" />
             <input v-model="searchQuery" type="text" placeholder="Search publications, authors, topics..."

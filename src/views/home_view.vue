@@ -47,7 +47,7 @@ const handleSearch = () => {
         </h1>
 
         <p class="hero-sub">
-          Full-text retrieval across theses, capstone projects, and research
+          Full-text retrieval across thesis, capstone projects, and research
           from the institution's indexed collection.
         </p>
 

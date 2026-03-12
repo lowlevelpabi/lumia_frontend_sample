@@ -1,16 +1,20 @@
 <script setup lang="ts">
-import { RouterView } from 'vue-router'
+import { computed } from 'vue'
+import { RouterView, useRoute } from 'vue-router'
 import comp_nav from './components/comp_nav.vue'
 import TheFooter from './components/TheFooter.vue'
+
+const route = useRoute()
+const isAuthPage = computed(() => ['login', 'register'].includes(route.name as string))
 </script>
 
 <template>
   <div class="app-container">
-    <comp_nav />
-    <main class="main-content">
+    <comp_nav v-if="!isAuthPage" />
+    <main class="main-content" :class="{ 'no-nav': isAuthPage }">
       <RouterView />
     </main>
-    <TheFooter />
+    <TheFooter v-if="!isAuthPage" />
   </div>
 </template>
 
@@ -30,9 +34,13 @@ body {
 
 .main-content {
   margin-top: 64px;
-  /* Height of the navbar */
   flex: 1;
   display: flex;
   flex-direction: column;
+}
+
+/* Auth pages need no top margin since navbar is hidden */
+.main-content.no-nav {
+  margin-top: 0;
 }
 </style>

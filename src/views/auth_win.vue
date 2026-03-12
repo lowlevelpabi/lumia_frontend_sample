@@ -1,32 +1,41 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter, useRoute, RouterLink } from 'vue-router'
-import { LogIn, User, Lock, AlertCircle, BookOpen } from 'lucide-vue-next'
+import { LogIn, Eye, EyeOff, BookOpen } from 'lucide-vue-next'
 import { api } from '../services/api'
+import { useFormValidation } from '../composables/useformValidation'
+import FormError from '../components/formError.vue'
 
 const router = useRouter()
 const route = useRoute()
 const username = ref('')
 const password = ref('')
-const error = ref('')
 const loading = ref(false)
+const showPassword = ref(false)
+
+const { error, validate, rules } = useFormValidation()
 
 const handleLogin = async () => {
-  if (!username.value || !password.value) return
+  const ok = validate([
+    rules.allRequired([
+      { value: username.value, label: 'Username' },
+      { value: password.value, label: 'Password' },
+    ]),
+    rules.required(username.value, 'Username'),
+    rules.required(password.value, 'Password'),
+  ])
+  if (!ok) return
+
   loading.value = true
-  error.value = ''
-
-  const formData = new FormData()
-  formData.append('username', username.value)
-  formData.append('password', password.value)
-
   try {
+    const formData = new FormData()
+    formData.append('username', username.value)
+    formData.append('password', password.value)
     await api.login(formData)
-    // Redirect back to the originally requested page, or home
     const redirect = route.query.redirect as string | undefined
     router.push(redirect ? { path: redirect } : { name: 'home' })
   } catch {
-    error.value = 'Invalid username or password'
+    error.value = 'Invalid username or password.'
   } finally {
     loading.value = false
   }
@@ -36,227 +45,287 @@ const handleLogin = async () => {
 <template>
   <div class="auth-page">
     <div class="auth-card">
-      <div class="auth-header">
-        <div class="logo">
-          <BookOpen :size="32" color="#10b981" />
-          <span>Lumia Retrieval</span>
+
+      <RouterLink :to="{ name: 'home' }" class="auth-logo">
+        <div class="logo-icon">
+          <BookOpen :size="18" color="#fff" stroke-width="2.5" />
         </div>
-        <h1>Welcome Back</h1>
-        <p>Sign in to access research & management tools</p>
+        <span class="logo-text">LUMIA</span>
+      </RouterLink>
+
+      <div class="auth-header">
+        <h1>Welcome back</h1>
+        <p>Sign in to access research &amp; management tools.</p>
       </div>
 
       <form @submit.prevent="handleLogin" class="auth-form">
-        <div v-if="error" class="error-msg">
-          <AlertCircle :size="16" />
-          {{ error }}
+
+        <FormError :message="error" />
+
+        <div class="field">
+          <label for="username">Username</label>
+          <input v-model="username" id="username" type="text" autocomplete="username" placeholder="johndoe" />
         </div>
 
-        <div class="input-group">
-          <label for="username">
-            <User :size="14" /> Username
-          </label>
-          <input v-model="username" id="username" type="text" required placeholder="johndoe" />
+        <div class="field">
+          <label for="password">Password</label>
+          <div class="input-wrap">
+            <input v-model="password" id="password" :type="showPassword ? 'text' : 'password'"
+              autocomplete="current-password" placeholder="••••••••" />
+            <button type="button" class="eye-btn" @click="showPassword = !showPassword" tabindex="-1">
+              <Eye v-if="!showPassword" :size="14" />
+              <EyeOff v-else :size="14" />
+            </button>
+          </div>
         </div>
 
-        <div class="input-group">
-          <label for="password">
-            <Lock :size="14" /> Password
-          </label>
-          <input v-model="password" id="password" type="password" required placeholder="••••••••" />
-        </div>
-
-        <button type="submit" class="auth-btn" :disabled="loading">
-          <LogIn v-if="!loading" :size="18" />
-          <span v-else class="loader"></span>
-          {{ loading ? 'Signing in...' : 'Sign In' }}
+        <button type="submit" class="submit-btn" :disabled="loading">
+          <span v-if="loading" class="spinner"></span>
+          <LogIn v-else :size="15" />
+          {{ loading ? 'Signing in…' : 'Sign In' }}
         </button>
+
       </form>
 
-      <div class="auth-footer">
-        Don't have an account?
+      <p class="switch-link">
+        Don&rsquo;t have an account?
         <RouterLink :to="{ name: 'register' }">Register here</RouterLink>
-      </div>
+      </p>
+
     </div>
   </div>
 </template>
 
 <style scoped>
+@import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&family=Source+Sans+3:wght@400;500;600;700&display=swap');
+
 .auth-page {
+  --ink: #181c18;
+  --ink-2: #3d4239;
+  --ink-3: #7a7f75;
+  --rule: #dfe0db;
+  --surface: #f5f5f2;
+  --paper: #ffffff;
+  --green: #00a651;
+  --green-dk: #007d3d;
+
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #f9fafb;
+  background: var(--surface);
+  font-family: 'Source Sans 3', sans-serif;
+  color: var(--ink);
   padding: 2rem;
 }
 
 .auth-card {
-  background: white;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 2.5rem 2.25rem;
   width: 100%;
   max-width: 400px;
-  padding: 3rem;
-  border-radius: 12px;
-  border: 1px solid #eee;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.03);
 }
 
-.auth-header {
-  text-align: center;
-  margin-bottom: 2.5rem;
+.auth-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  text-decoration: none;
+  margin-bottom: 1.75rem;
 }
 
-.logo {
+.logo-icon {
+  width: 28px;
+  height: 28px;
+  background: var(--green);
+  border-radius: 5px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.75rem;
-  font-weight: 800;
-  font-size: 1.5rem;
-  margin-bottom: 1.5rem;
-  color: #111;
+  flex-shrink: 0;
+}
+
+.logo-text {
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--ink);
+}
+
+.auth-header {
+  margin-bottom: 1.75rem;
+  padding-bottom: 1.75rem;
+  border-bottom: 1px solid var(--rule);
 }
 
 .auth-header h1 {
-  font-size: 1.5rem;
-  margin-bottom: 0.5rem;
+  font-family: 'Lora', Georgia, serif;
+  font-size: 1.45rem;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0 0 0.3rem;
+  letter-spacing: -0.01em;
 }
 
 .auth-header p {
-  color: #666;
-  font-size: 0.9rem;
+  font-size: 0.84rem;
+  color: var(--ink-3);
+  margin: 0;
+  line-height: 1.5;
 }
 
 .auth-form {
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1.1rem;
+  margin-bottom: 1.25rem;
 }
 
-.error-msg {
+.field {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  background: #fef2f2;
-  color: #b91c1c;
-  padding: 0.75rem;
-  border-radius: 6px;
-  font-size: 0.85rem;
+  flex-direction: column;
+  gap: 0.35rem;
 }
 
-.input-group label {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.85rem;
-  font-weight: 600;
-  margin-bottom: 0.5rem;
-  color: #444;
-}
-
-.input-group input {
-  width: 100%;
-  padding: 0.75rem;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  font-size: 1rem;
-  transition: border-color 0.2s;
-}
-
-.input-group input:focus {
-  outline: none;
-  border-color: #10b981;
-}
-
-.auth-btn {
-  background: #10b981;
-  color: white;
-  border: none;
-  padding: 0.9rem;
-  border-radius: 6px;
+.field label {
+  font-size: 0.68rem;
   font-weight: 700;
-  font-size: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--ink-3);
+}
+
+.field input,
+.input-wrap input {
+  width: 100%;
+  padding: 0.65rem 0.8rem;
+  border: 1.5px solid var(--rule);
+  border-radius: 3px;
+  background: var(--paper);
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.9rem;
+  color: var(--ink);
+  transition: border-color 0.14s;
+  box-sizing: border-box;
+}
+
+.field input:focus,
+.input-wrap input:focus {
+  outline: none;
+  border-color: var(--green);
+}
+
+.field input::placeholder,
+.input-wrap input::placeholder {
+  color: var(--ink-3);
+  opacity: 0.5;
+}
+
+.field input:-webkit-autofill,
+.input-wrap input:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 9999px var(--paper) inset !important;
+  -webkit-text-fill-color: var(--ink) !important;
+}
+
+.input-wrap {
+  position: relative;
+}
+
+.input-wrap input {
+  padding-right: 2.4rem;
+}
+
+.eye-btn {
+  position: absolute;
+  right: 0.7rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--ink-3);
   cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  transition: color 0.13s;
+}
+
+.eye-btn:hover {
+  color: var(--ink);
+}
+
+.submit-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
+  gap: 0.4rem;
+  background: var(--green);
+  color: #fff;
+  border: none;
+  border-radius: 3px;
+  padding: 0.75rem;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.14s;
+  margin-top: 0.15rem;
+  width: 100%;
 }
 
-.auth-btn:hover {
-  background: #059669;
+.submit-btn:hover:not(:disabled) {
+  background: var(--green-dk);
 }
 
-.auth-btn:disabled {
-  background: #ccc;
+.submit-btn:disabled {
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
-.auth-footer {
-  margin-top: 2rem;
-  text-align: center;
-  font-size: 0.9rem;
-  color: #666;
-}
-
-.auth-footer a {
-  color: #10b981;
-  text-decoration: none;
-  font-weight: 600;
-}
-
-.loader {
-  width: 18px;
-  height: 18px;
-  border: 2px solid white;
-  border-bottom-color: transparent;
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: #fff;
   border-radius: 50%;
-  animation: rotation 1s linear infinite;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
 }
 
-@keyframes rotation {
-  0% {
-    transform: rotate(0deg);
-  }
-
-  100% {
+@keyframes spin {
+  to {
     transform: rotate(360deg);
   }
 }
 
-/* ── Tablet (≤768px) ─────────────────────────────────────────── */
-@media (max-width: 768px) {
-  .auth-page {
-    padding: 1.5rem;
-  }
-
-  .auth-card {
-    padding: 2.25rem;
-  }
+.switch-link {
+  font-size: 0.82rem;
+  color: var(--ink-3);
+  margin: 0;
+  text-align: center;
 }
 
-/* ── Phone (≤480px) — Primary Android target 360–412px ───────── */
+.switch-link a {
+  color: var(--green-dk);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.switch-link a:hover {
+  color: var(--green);
+}
+
 @media (max-width: 480px) {
   .auth-page {
-    padding: 1rem;
+    padding: 1.25rem;
     align-items: flex-start;
-    padding-top: 2.5rem;
+    padding-top: 3rem;
   }
 
   .auth-card {
-    padding: 1.75rem 1.25rem;
-    border-radius: 8px;
-  }
-
-  .logo {
-    font-size: 1.25rem;
-  }
-
-  .auth-header h1 {
-    font-size: 1.3rem;
-  }
-
-  .auth-header p {
-    font-size: 0.85rem;
+    padding: 2rem 1.5rem;
   }
 }
 </style>

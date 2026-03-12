@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter, RouterLink } from 'vue-router'
-import { UserPlus, User, Mail, Lock, BookOpen } from 'lucide-vue-next'
+import { UserPlus, Eye, EyeOff, BookOpen } from 'lucide-vue-next'
 import { api } from '../services/api'
+import { useFormValidation } from '../composables/useformValidation'
+import FormError from '../components/formError.vue'
 
 const router = useRouter()
 const username = ref('')
@@ -10,15 +12,31 @@ const email = ref('')
 const password = ref('')
 const confirmPassword = ref('')
 const loading = ref(false)
-const error = ref('')
+const showPassword = ref(false)
+const showConfirm = ref(false)
+
+const { error, validate, rules } = useFormValidation()
 
 const handleRegister = async () => {
-  if (password.value !== confirmPassword.value) {
-    error.value = 'Passwords do not match.'
-    return
-  }
+  const ok = validate([
+    rules.allRequired([
+    { value: username.value, label: 'Username' },
+    { value: email.value, label: 'Email' },
+    { value: password.value, label: 'Password' },
+    { value: confirmPassword.value, label: 'Confirm Password' },
+  ]),
+  rules.required(username.value, 'Username'),
+  rules.minLength(username.value, 3, 'Username'),
+  rules.required(email.value, 'Email Address'),
+  rules.email(email.value),
+  rules.required(password.value, 'Password'),
+  rules.minLength(password.value, 8, 'Password'),
+  rules.required(confirmPassword.value, 'Please confirm your password'),
+  rules.match(password.value, confirmPassword.value, 'Passwords'),
+])
+  if (!ok) return
+
   loading.value = true
-  error.value = ''
   try {
     await api.register({
       username: username.value,
@@ -26,10 +44,9 @@ const handleRegister = async () => {
       password: password.value,
       role: 'User'
     })
-    // Auto login or redirect to login
     router.push({ name: 'login' })
   } catch (err) {
-    error.value = (err as Error).message || 'Registration failed'
+    error.value = (err as Error).message || 'Registration failed.'
   } finally {
     loading.value = false
   }
@@ -39,231 +56,304 @@ const handleRegister = async () => {
 <template>
   <div class="auth-page">
     <div class="auth-card">
-      <div class="auth-header">
-        <div class="logo">
-          <BookOpen :size="32" color="#10b981" />
-          <span>Lumia Retrieval</span>
+
+      <RouterLink :to="{ name: 'home' }" class="auth-logo">
+        <div class="logo-icon">
+          <BookOpen :size="18" color="#fff" stroke-width="2.5" />
         </div>
-        <h1>Create Account</h1>
-        <p>Join the research community</p>
+        <span class="logo-text">LUMIA</span>
+      </RouterLink>
+
+      <div class="auth-header">
+        <h1>Create account</h1>
+        <p>Join the research community.</p>
       </div>
 
       <form @submit.prevent="handleRegister" class="auth-form">
-        <div v-if="error" class="error-msg">{{ error }}</div>
 
-        <div class="input-group">
-          <label>
-            <User :size="14" /> Username
-          </label>
-          <input v-model="username" id="username" type="text" autocomplete="username" required placeholder="johndoe" />
+        <FormError :message="error" />
+
+        <div class="field">
+          <label for="username">Username</label>
+          <input v-model="username" id="username" type="text" autocomplete="username" placeholder="johndoe" />
         </div>
 
-        <div class="input-group">
-          <label>
-            <Mail :size="14" /> Email Address
-          </label>
-          <input v-model="email" id="email" type="email" autocomplete="email" required placeholder="john@example.com" />
+        <div class="field">
+          <label for="email">Email Address</label>
+          <input v-model="email" id="email" type="email" autocomplete="email" placeholder="john@example.com" />
         </div>
 
-        <div class="input-group">
-          <label>
-            <Lock :size="14" /> Password
-          </label>
-          <input v-model="password" id="password" type="password" autocomplete="new-password" required
-            placeholder="••••••••" />
+        <div class="field">
+          <label for="password">Password</label>
+          <div class="input-wrap">
+            <input v-model="password" id="password" :type="showPassword ? 'text' : 'password'"
+              autocomplete="new-password" placeholder="••••••••" />
+            <button type="button" class="eye-btn" @click="showPassword = !showPassword" tabindex="-1">
+              <Eye v-if="!showPassword" :size="14" />
+              <EyeOff v-else :size="14" />
+            </button>
+          </div>
         </div>
 
-        <div class="input-group">
-          <label>
-            <Lock :size="14" /> Confirm Password
-          </label>
-          <input v-model="confirmPassword" id="confirmPassword" type="password" autocomplete="new-password" required
-            placeholder="••••••••" />
+        <div class="field">
+          <label for="confirmPassword">Confirm Password</label>
+          <div class="input-wrap">
+            <input v-model="confirmPassword" id="confirmPassword" :type="showConfirm ? 'text' : 'password'"
+              autocomplete="new-password" placeholder="••••••••" />
+            <button type="button" class="eye-btn" @click="showConfirm = !showConfirm" tabindex="-1">
+              <Eye v-if="!showConfirm" :size="14" />
+              <EyeOff v-else :size="14" />
+            </button>
+          </div>
         </div>
 
-        <button type="submit" class="auth-btn" :disabled="loading">
-          <UserPlus v-if="!loading" :size="18" />
-          <span v-else class="loader"></span>
-          {{ loading ? 'Creating Account...' : 'Register' }}
+        <button type="submit" class="submit-btn" :disabled="loading">
+          <span v-if="loading" class="spinner"></span>
+          <UserPlus v-else :size="15" />
+          {{ loading ? 'Creating account…' : 'Register' }}
         </button>
+
       </form>
 
-      <div class="auth-footer">
+      <p class="switch-link">
         Already have an account?
         <RouterLink :to="{ name: 'login' }">Sign in</RouterLink>
-      </div>
+      </p>
+
     </div>
   </div>
 </template>
 
 <style scoped>
-/* Resusing styles from LoginView for consistency */
+@import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400&family=Source+Sans+3:wght@400;500;600;700&display=swap');
+
 .auth-page {
+  --ink: #181c18;
+  --ink-2: #3d4239;
+  --ink-3: #7a7f75;
+  --rule: #dfe0db;
+  --surface: #f5f5f2;
+  --paper: #ffffff;
+  --green: #00a651;
+  --green-dk: #007d3d;
+
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #f9fafb;
+  background: var(--surface);
+  font-family: 'Source Sans 3', sans-serif;
+  color: var(--ink);
   padding: 2rem;
 }
 
 .auth-card {
-  background: white;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 2.5rem 2.25rem;
   width: 100%;
-  max-width: 450px;
-  padding: 3rem;
-  border-radius: 12px;
-  border: 1px solid #eee;
+  max-width: 420px;
 }
 
-.auth-header {
-  text-align: center;
-  margin-bottom: 2rem;
+.auth-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  text-decoration: none;
+  margin-bottom: 1.75rem;
 }
 
-.logo {
+.logo-icon {
+  width: 28px;
+  height: 28px;
+  background: var(--green);
+  border-radius: 5px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.75rem;
-  font-weight: 800;
-  font-size: 1.5rem;
-  margin-bottom: 1.5rem;
+  flex-shrink: 0;
+}
+
+.logo-text {
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--ink);
+}
+
+.auth-header {
+  margin-bottom: 1.75rem;
+  padding-bottom: 1.75rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.auth-header h1 {
+  font-family: 'Lora', Georgia, serif;
+  font-size: 1.45rem;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0 0 0.3rem;
+  letter-spacing: -0.01em;
+}
+
+.auth-header p {
+  font-size: 0.84rem;
+  color: var(--ink-3);
+  margin: 0;
+  line-height: 1.5;
 }
 
 .auth-form {
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: 1.1rem;
+  margin-bottom: 1.25rem;
 }
 
-.input-group label {
+.field {
   display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.85rem;
-  font-weight: 600;
-  margin-bottom: 0.5rem;
+  flex-direction: column;
+  gap: 0.35rem;
 }
 
-.input-group input {
+.field label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--ink-3);
+}
+
+.field input,
+.input-wrap input {
   width: 100%;
-  padding: 0.75rem;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  font-size: 1rem;
-  transition: border-color 0.2s;
-  background: white !important;
+  padding: 0.65rem 0.8rem;
+  border: 1.5px solid var(--rule);
+  border-radius: 3px;
+  background: var(--paper);
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.9rem;
+  color: var(--ink);
+  transition: border-color 0.14s;
   box-sizing: border-box;
 }
 
-.input-group input:not(:placeholder-shown) {
-  color: #111827;
-  -webkit-text-fill-color: #111827;
-}
-
-.input-group input:focus {
+.field input:focus,
+.input-wrap input:focus {
   outline: none;
-  border-color: #10b981;
+  border-color: var(--green);
 }
 
-
-
-/* Kill Chrome autofill green/yellow */
-.input-group input:-webkit-autofill,
-.input-group input:-webkit-autofill:hover,
-.input-group input:-webkit-autofill:focus,
-.input-group input:-webkit-autofill:active {
-  -webkit-box-shadow: 0 0 0 9999px white inset !important;
-  -webkit-text-fill-color: #111827 !important;
-  caret-color: #111827;
+.field input::placeholder,
+.input-wrap input::placeholder {
+  color: var(--ink-3);
+  opacity: 0.5;
 }
 
-.auth-btn {
-  background: #10b981;
-  color: white;
+.field input:-webkit-autofill,
+.input-wrap input:-webkit-autofill {
+  -webkit-box-shadow: 0 0 0 9999px var(--paper) inset !important;
+  -webkit-text-fill-color: var(--ink) !important;
+}
+
+.input-wrap {
+  position: relative;
+}
+
+.input-wrap input {
+  padding-right: 2.4rem;
+}
+
+.eye-btn {
+  position: absolute;
+  right: 0.7rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
   border: none;
-  padding: 0.9rem;
-  border-radius: 6px;
-  font-weight: 700;
+  color: var(--ink-3);
   cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  transition: color 0.13s;
+}
+
+.eye-btn:hover {
+  color: var(--ink);
+}
+
+.submit-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
-}
-
-.error-msg {
-  background: #fef2f2;
-  color: #b91c1c;
+  gap: 0.4rem;
+  background: var(--green);
+  color: #fff;
+  border: none;
+  border-radius: 3px;
   padding: 0.75rem;
-  border-radius: 6px;
-  font-size: 0.85rem;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.14s;
+  margin-top: 0.15rem;
+  width: 100%;
 }
 
-.auth-footer {
-  margin-top: 2rem;
-  text-align: center;
-  font-size: 0.9rem;
+.submit-btn:hover:not(:disabled) {
+  background: var(--green-dk);
 }
 
-.auth-footer a {
-  color: #10b981;
-  text-decoration: none;
-  font-weight: 600;
+.submit-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
-.loader {
-  width: 18px;
-  height: 18px;
-  border: 2px solid white;
-  border-bottom-color: transparent;
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  border-top-color: #fff;
   border-radius: 50%;
-  animation: rotation 1s linear infinite;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
 }
 
-@keyframes rotation {
-  0% {
-    transform: rotate(0deg);
-  }
-
-  100% {
+@keyframes spin {
+  to {
     transform: rotate(360deg);
   }
 }
 
-/* ── Tablet (≤768px) ─────────────────────────────────────────── */
-@media (max-width: 768px) {
-  .auth-page {
-    padding: 1.5rem;
-  }
-
-  .auth-card {
-    padding: 2.25rem;
-    max-width: 100%;
-  }
+.switch-link {
+  font-size: 0.82rem;
+  color: var(--ink-3);
+  margin: 0;
+  text-align: center;
 }
 
-/* ── Phone (≤480px) — Primary Android target 360–412px ───────── */
+.switch-link a {
+  color: var(--green-dk);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.switch-link a:hover {
+  color: var(--green);
+}
+
 @media (max-width: 480px) {
   .auth-page {
-    padding: 1rem;
+    padding: 1.25rem;
     align-items: flex-start;
-    padding-top: 2rem;
+    padding-top: 3rem;
   }
 
   .auth-card {
-    padding: 1.75rem 1.25rem;
-    border-radius: 8px;
-  }
-
-  .logo {
-    font-size: 1.25rem;
-  }
-
-  .auth-form {
-    gap: 1rem;
+    padding: 2rem 1.5rem;
   }
 }
 </style>
