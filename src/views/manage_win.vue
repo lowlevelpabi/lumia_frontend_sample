@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed, watch, reactive, type Component } from 'vue'
+import { ref, onMounted, onUnmounted, computed, watch, reactive, nextTick, type Component } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   Library, Trash2, Edit3,
@@ -7,7 +7,7 @@ import {
   FileText, Users, Calendar, ChevronRight,
   Settings, ArrowLeft, Save, BookOpen,
   UserCheck, Menu, X, Clock, TrendingUp,
-  FileUp, Sparkles, Eye, Settings2, ZoomIn, CheckCircle, AlertCircle, Check,
+  FileUp, Sparkles, Eye, Settings2, CheckCircle, AlertCircle, Check,
   AlertTriangle, RefreshCw, SquareArrowRight, ShieldAlert, ShieldCheck, UserCog
 } from 'lucide-vue-next'
 import { api, type Paper, type UserResponse, type PartialPaperMetadata } from '../services/api'
@@ -246,8 +246,13 @@ const uploadMetadata = reactive<PartialPaperMetadata>({
   keywords: '',
   project_type: 'Thesis',
   degree_program: 'N/A',
-  detected_subheadings: []
+  detected_subheadings: [],
+  trim_points: {}
 })
+const activeImradTab = ref<'introduction' | 'methods' | 'results' | 'discussion'>('introduction')
+
+type ImradKey = 'introduction' | 'methods' | 'results' | 'discussion'
+const ALL_IMRAD_TABS: ImradKey[] = ['introduction', 'methods', 'results', 'discussion']
 
 const imradSections = reactive({
   introduction: '',
@@ -255,6 +260,40 @@ const imradSections = reactive({
   results: '',
   discussion: ''
 })
+
+// Pre-generated summaries from the preview step — passed through to confirmUpload
+// so the backend doesn't re-run the summariser on every confirm
+const sectionsSummary = reactive<Record<string, string>>({
+  introduction: '',
+  methods: '',
+  results: '',
+  discussion: ''
+})
+
+const availableImradTabs = computed<ImradKey[]>(() =>
+  ALL_IMRAD_TABS.filter(t => imradSections[t] || sectionsSummary[t])
+)
+
+// Auto-resize the raw textarea to fit its content
+const imradTextarea = ref<HTMLTextAreaElement | null>(null)
+const autoResizeTextarea = (e?: Event) => {
+  const el = (e?.target as HTMLTextAreaElement) ?? imradTextarea.value
+  if (!el) return
+  el.style.height = 'auto'
+  el.style.height = Math.min(el.scrollHeight, 600) + 'px'
+}
+// Re-run resize whenever the active tab switches or content populates
+watch(activeImradTab, async () => {
+  await nextTick()
+  autoResizeTextarea()
+})
+watch(
+  () => imradSections[activeImradTab.value as ImradKey],
+  async () => {
+    await nextTick()
+    autoResizeTextarea()
+  }
+)
 
 const authors = ref<string[]>([''])
 const selectedPages = ref<number[]>([])
@@ -277,8 +316,13 @@ const triggerFallback = async () => {
     sessionId.value = preview.session_id
     Object.assign(uploadMetadata, preview.metadata)
     pages.value = preview.pages
+    if (preview.sections) Object.assign(imradSections, preview.sections)
+    sectionPages.value = preview.section_pages || {}
     selectedPages.value = preview.pages.map(p => p.page_num)
     isManuscript.value = false
+    const firstAvailable = ALL_IMRAD_TABS
+      .find(t => imradSections[t] || sectionsSummary[t])
+    if (firstAvailable) activeImradTab.value = firstAvailable
     setTimeout(() => { step.value = 2; processingDoc.value = false }, 400)
   } catch (err) {
     uploadError.value = (err as Error).message || 'Failed to trigger fallback.'
@@ -295,6 +339,12 @@ const showZoomModal = ref(false)
 const zoomedPage = ref<PageData | null>(null)
 const openZoom = (page: PageData) => { zoomedPage.value = page; showZoomModal.value = true }
 const closeZoom = () => { showZoomModal.value = false; zoomedPage.value = null }
+
+const thumbSrc = (thumbnail: string) => {
+  if (!thumbnail) return ''
+  if (thumbnail.startsWith('data:')) return thumbnail
+  return `data:image/jpeg;base64,${thumbnail}`
+}
 
 const handleFileChange = (e: Event) => {
   const target = e.target as HTMLInputElement
@@ -347,8 +397,13 @@ const startInitialExtraction = async (autoExtract: boolean = true) => {
     } else { authors.value = [''] }
     pages.value = preview.pages
     if (preview.sections) Object.assign(imradSections, preview.sections)
+    if (preview.sections_summary) Object.assign(sectionsSummary, preview.sections_summary)
     sectionPages.value = preview.section_pages || {}
     selectedPages.value = preview.pages.map(p => p.page_num)
+    // Set active tab to the first section that actually has content
+    const firstAvailable = ALL_IMRAD_TABS
+      .find(t => imradSections[t] || sectionsSummary[t])
+    if (firstAvailable) activeImradTab.value = firstAvailable
     setTimeout(() => { step.value = 2; processingDoc.value = false }, 400)
   } catch (err) {
     uploadError.value = (err as Error).message || 'Failed to parse PDF.'
@@ -357,7 +412,9 @@ const startInitialExtraction = async (autoExtract: boolean = true) => {
 }
 
 const togglePage = (pageNum: number, event: Event) => {
-  if ((event.target as HTMLElement).closest('.zoom-trigger')) return
+  // if a zoom-trigger/button or the image itself was clicked, do nothing
+  const tgt = (event.target as HTMLElement)
+  if (tgt.closest('.zoom-trigger') || tgt.closest('.thumb-img') || tgt.closest('.thumb-hover-hint')) return
   const index = selectedPages.value.indexOf(pageNum)
   if (index > -1) selectedPages.value.splice(index, 1)
   else selectedPages.value.push(pageNum)
@@ -384,15 +441,21 @@ const handleFinalConfirm = async () => {
   uploadingPaper.value = true
   uploadError.value = ''
   try {
-    const finalAuthorString = authors.value.map(a => a.trim()).filter(a => a.length > 0).join(', ')
+    const finalAuthorString = authors.value.map(a => a.trim()).filter(a => a.length > 0).join(' | ')
     await api.confirmUpload({
       session_id: sessionId.value,
-      metadata: { ...uploadMetadata, author: finalAuthorString || 'Unknown' },
+      metadata: {
+        ...uploadMetadata,
+        author: finalAuthorString || 'Unknown',
+        degree_program: uploadMetadata.degree_program || 'N/A',
+        keywords: uploadMetadata.keywords || '',
+      },
       selected_pages: selectedPages.value,
       introduction: imradSections.introduction,
       methods: imradSections.methods,
       results: imradSections.results,
-      discussion: imradSections.discussion
+      discussion: imradSections.discussion,
+      sections_summary: { ...sectionsSummary },
     })
     step.value = 3
     setTimeout(() => { setSection('repository'); step.value = 1; file.value = null }, 2000)
@@ -708,7 +771,7 @@ watch(activeSection, (newSection) => {
                   <p class="notice-desc">The following sections could not be found. Search accuracy may be reduced.</p>
                   <div class="missing-list">
                     <span v-for="s in missingSections" :key="s" class="missing-badge"><span class="missing-dot" />{{ s
-                      }}</span>
+                    }}</span>
                   </div>
                 </div>
                 <div class="notice-actions">
@@ -766,46 +829,125 @@ watch(activeSection, (newSection) => {
                       <option>College of Information Technology</option>
                     </select>
                   </div>
+                  <div class="fg">
+                    <label>Degree Program</label>
+                    <select v-model="uploadMetadata.degree_program">
+                      <option>N/A</option>
+                      <option>BSCS</option>
+                      <option>BSIT</option>
+                      <option>BSIS</option>
+                      <option>BSCpE</option>
+                    </select>
+                  </div>
+                  <div class="fg">
+                    <label>Keywords</label>
+                    <input v-model="uploadMetadata.keywords" type="text"
+                      placeholder="e.g. machine learning, NLP, deep learning" />
+                  </div>
                 </section>
 
-                <section class="page-panel">
-                  <div class="page-panel-head">
-                    <div class="page-panel-title">
+                <div class="review-main">
+                  <!-- IMRAD Section Analysis -->
+                  <section class="imrad-panel">
+                    <div class="meta-panel-head" style="margin-bottom: 1.5rem;">
                       <span class="step-badge">2</span>
-                      <h4>Select Pages to Index</h4>
+                      <h4>Refine IMRAD Sections</h4>
                     </div>
-                    <div class="page-panel-actions">
-                      <p class="selector-hint">IMRAD pages are pre-selected.</p>
-                      <div class="selector-btns">
-                        <button @click="selectAll" class="text-btn">Select All</button>
-                        <span class="dot-sep" />
-                        <button @click="deselectAll" class="text-btn">Uncheck All</button>
+
+                    <div v-if="uploadMetadata.detected_subheadings && uploadMetadata.detected_subheadings.length > 0"
+                      class="subheadings-preview">
+                      <label class="fg-label">Detected Methodology Components:</label>
+                      <div class="sub-tags">
+                        <span v-for="sub in uploadMetadata.detected_subheadings" :key="sub" class="sub-tag">
+                          <Check :size="12" /> {{ sub }}
+                        </span>
                       </div>
                     </div>
-                  </div>
-                  <div class="thumbs-grid">
-                    <div v-for="(p, idx) in pages" :key="p.label || p.page_num + '-' + idx" class="thumb-card"
-                      :class="{ selected: selectedPages.includes(p.page_num) }" @click="togglePage(p.page_num, $event)">
-                      <div class="thumb-wrap">
-                        <img :src="`data:image/jpeg;base64,${p.thumbnail}`" loading="lazy" class="thumb-img" />
-                        <div class="thumb-num">{{ p.label || 'P' + p.page_num }}</div>
-                        <div class="thumb-sec-badges" v-if="getSectionsForPage(p.page_num).length > 0">
-                          <span v-for="sec in getSectionsForPage(p.page_num)" :key="sec" class="sec-badge"
-                            :class="sec">{{
-                              sec.substring(0, 4) }}</span>
+
+                    <div class="imrad-tabs">
+                      <button v-for="tab in availableImradTabs" :key="tab" type="button" class="imrad-tab-btn"
+                        :class="{ active: activeImradTab === tab }" @click="activeImradTab = tab">
+                        {{ tab.charAt(0).toUpperCase() + tab.slice(1) }}
+                      </button>
+                    </div>
+
+                    <div class="imrad-content">
+                      <div v-if="uploadMetadata.trim_points && uploadMetadata.trim_points[activeImradTab]"
+                        class="trim-alert">
+                        <AlertCircle :size="16" />
+                        <span>
+                          <strong>Auto-Trimmed:</strong>
+                          This section was trimmed at <strong>"{{ uploadMetadata.trim_points[activeImradTab]
+                            }}"</strong>
+                          to avoid including sub-heading content.
+                        </span>
+                      </div>
+
+                      <!-- Summary preview (shown when a summary was pre-generated) -->
+                      <div v-if="sectionsSummary[activeImradTab]" class="imrad-summary-preview">
+                        <div class="imrad-summary-label">
+                          <Sparkles :size="13" />
+                          <span>AI Summary Preview</span>
+                          <span class="imrad-summary-hint">This is what will be shown in IMRAD view</span>
                         </div>
-                        <button class="zoom-trigger" @click.stop="openZoom(p)">
-                          <ZoomIn :size="18" />
-                        </button>
-                        <div class="thumb-overlay">
-                          <div class="thumb-check">
-                            <Check :size="14" />
+                        <div class="imrad-summary-body">{{ sectionsSummary[activeImradTab] }}</div>
+                      </div>
+
+                      <!-- Raw extracted text (always editable) -->
+                      <details class="imrad-raw-toggle" :open="!sectionsSummary[activeImradTab]">
+                        <summary class="imrad-raw-label">
+                          <FileText :size="13" />
+                          {{ sectionsSummary[activeImradTab] ? 'Edit raw extracted text' : 'Raw extracted text' }}
+                        </summary>
+                        <textarea v-model="imradSections[activeImradTab]" class="imrad-textarea"
+                          placeholder="No content detected for this section. You can manually paste it here if needed."
+                          @input="autoResizeTextarea" ref="imradTextarea"></textarea>
+                      </details>
+                    </div>
+                  </section>
+
+                  <section class="page-panel">
+                    <div class="page-panel-head">
+                      <div class="page-panel-title">
+                        <span class="step-badge">3</span>
+                        <h4>Select Pages to Index</h4>
+                      </div>
+                      <div class="page-panel-actions">
+                        <p class="selector-hint">IMRAD pages are pre-selected.</p>
+                        <div class="selector-btns">
+                          <button @click="selectAll" class="text-btn">Select All</button>
+                          <span class="dot-sep" />
+                          <button @click="deselectAll" class="text-btn">Uncheck All</button>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="thumbs-grid">
+                      <div v-for="(p, idx) in pages" :key="p.label || p.page_num + '-' + idx" class="thumb-card"
+                        :class="{ selected: selectedPages.includes(p.page_num) }"
+                        @click="togglePage(p.page_num, $event)">
+                        <div class="thumb-wrap">
+                          <img :src="thumbSrc(p.thumbnail)" loading="lazy" class="thumb-img" @click.stop="openZoom(p)"
+                            title="Click to preview" />
+                          <div class="thumb-num">{{ p.label || 'P' + p.page_num }}</div>
+                          <div class="thumb-sec-badges" v-if="getSectionsForPage(p.page_num).length > 0">
+                            <span v-for="sec in getSectionsForPage(p.page_num)" :key="sec" class="sec-badge"
+                              :class="sec">{{
+                                sec.substring(0, 4) }}</span>
+                          </div>
+                          <div class="thumb-hover-hint">
+                            <Eye :size="14" />
+                          </div>
+                          <!-- Checkbox now has its own click handler -->
+                          <div class="thumb-overlay">
+                            <div class="thumb-check">
+                              <Check :size="14" />
+                            </div>
                           </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                </section>
+                  </section>
+                </div>
               </div>
             </div>
           </div>
@@ -1139,11 +1281,12 @@ watch(activeSection, (newSection) => {
           <!-- Zoom modal -->
           <div v-if="showZoomModal" class="modal-overlay" @click="closeZoom">
             <div class="zoom-modal" @click.stop>
-              <button class="zoom-close" @click="closeZoom">
+              <!-- reuse modal-close styles so the icon sits inside the white box -->
+              <button class="modal-close" @click="closeZoom">
                 <X :size="22" />
               </button>
               <div v-if="zoomedPage?.label" class="zoom-label">{{ zoomedPage?.label }}</div>
-              <img :src="`data:image/jpeg;base64,${zoomedPage?.thumbnail}`" class="zoom-img" />
+              <img :src="thumbSrc(zoomedPage?.thumbnail ?? '')" class="zoom-img" />
             </div>
           </div>
 
@@ -2592,6 +2735,13 @@ watch(activeSection, (newSection) => {
   align-items: start;
 }
 
+.review-main {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  min-width: 0;
+}
+
 /* Form groups (shared between upload and edit) */
 .fg {
   display: flex;
@@ -2907,23 +3057,37 @@ watch(activeSection, (newSection) => {
   background: #be185d;
 }
 
-.zoom-trigger {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  background: rgba(0, 0, 0, 0.5);
-  border: none;
-  color: #fff;
-  border-radius: 4px;
-  padding: 0.2rem;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  opacity: 0;
-  transition: opacity 0.14s;
+/* Remove zoom-trigger styles, add this instead: */
+.thumb-img {
+  width: 100%;
+  display: block;
+  cursor: zoom-in;
+  transition: filter 0.15s;
 }
 
-.thumb-wrap:hover .zoom-trigger {
+.thumb-wrap:hover .thumb-img {
+  filter: brightness(0.88);
+}
+
+.thumb-hover-hint {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s;
+  pointer-events: none;
+}
+
+.thumb-wrap:hover .thumb-hover-hint {
   opacity: 1;
 }
 
@@ -2936,6 +3100,8 @@ watch(activeSection, (newSection) => {
   justify-content: center;
   opacity: 0;
   transition: opacity 0.14s;
+  pointer-events: none;
+  /* allow clicks to pass through to card/image */
 }
 
 .thumb-card.selected .thumb-overlay {
@@ -3337,24 +3503,18 @@ watch(activeSection, (newSection) => {
   position: relative;
   max-width: 90vw;
   max-height: 90vh;
-}
-
-.zoom-close {
-  position: absolute;
-  top: -14px;
-  right: -14px;
   background: var(--paper);
-  border: 1px solid var(--rule);
-  color: var(--ink);
-  border-radius: 50%;
-  width: 36px;
-  height: 36px;
+  border-radius: 24px;
+  overflow: hidden;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  z-index: 10;
-  cursor: pointer;
+  padding: 1.5rem;
 }
+
+/* zoom-close class is no longer used; icon now uses .modal-close which is already styled
+   to appear inside the modal with proper offset and z‑index. */
 
 .zoom-label {
   background: rgba(0, 0, 0, 0.6);
@@ -3567,5 +3727,191 @@ watch(activeSection, (newSection) => {
   .thumbs-grid {
     grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
   }
+}
+
+/* ══ IMRAD PANEL ═══════════════════════════════════════════════ */
+.imrad-panel {
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: 1.5rem;
+}
+
+.subheadings-preview {
+  margin-bottom: 1.25rem;
+}
+
+.fg-label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-3);
+  margin-bottom: 0.5rem;
+}
+
+.sub-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.sub-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: var(--green-dim);
+  color: var(--green-dk);
+  font-size: 0.74rem;
+  font-weight: 600;
+  padding: 0.25rem 0.6rem;
+  border-radius: 4px;
+}
+
+.imrad-tabs {
+  display: flex;
+  gap: 0.25rem;
+  background: var(--surface);
+  padding: 0.25rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+}
+
+.imrad-tab-btn {
+  flex: 1;
+  background: none;
+  border: none;
+  padding: 0.5rem;
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ink-3);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.imrad-tab-btn:hover {
+  background: rgba(0, 0, 0, 0.03);
+  color: var(--ink);
+}
+
+.imrad-tab-btn.active {
+  background: var(--paper);
+  color: var(--green-dk);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.imrad-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.trim-alert {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  color: #92400e;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.trim-alert strong {
+  color: #78350f;
+}
+
+.imrad-textarea {
+  width: 100%;
+  min-height: 300px;
+  max-height: 600px;
+  background: var(--paper);
+  border: 1.5px solid var(--rule);
+  border-radius: 8px;
+  padding: 1rem;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  font-family: inherit;
+  resize: vertical;
+  overflow-y: auto;
+  color: var(--ink-2);
+}
+
+.imrad-textarea:focus {
+  outline: none;
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px var(--green-dim);
+}
+
+/* ── IMRAD summary preview (Step 2) ──────────────────────── */
+.imrad-summary-preview {
+  background: var(--green-dim);
+  border: 1.5px solid rgba(0, 166, 81, 0.3);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.imrad-summary-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--green-dk);
+  margin-bottom: 0.65rem;
+}
+
+.imrad-summary-hint {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--ink-3);
+  font-size: 0.71rem;
+  margin-left: 0.25rem;
+}
+
+.imrad-summary-body {
+  font-size: 0.9rem;
+  line-height: 1.75;
+  color: var(--ink-2);
+  white-space: pre-wrap;
+}
+
+/* collapsible raw text toggle */
+.imrad-raw-toggle {
+  margin-top: 0.25rem;
+}
+
+.imrad-raw-toggle[open]>.imrad-raw-label {
+  margin-bottom: 0.5rem;
+}
+
+.imrad-raw-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ink-3);
+  cursor: pointer;
+  user-select: none;
+  list-style: none;
+  padding: 0.3rem 0;
+}
+
+.imrad-raw-label::-webkit-details-marker {
+  display: none;
+}
+
+.imrad-raw-label:hover {
+  color: var(--ink);
 }
 </style>

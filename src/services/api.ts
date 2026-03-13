@@ -16,9 +16,14 @@ export interface Paper {
   methods?: string
   results?: string
   discussion?: string
+  introduction_summary?: string | null
+  methods_summary?: string | null
+  results_summary?: string | null
+  discussion_summary?: string | null
   sections?: Record<string, string>
   section_pages?: Record<string, number[]>
   detected_subheadings?: string[]
+  trim_points?: Record<string, string>
 }
 
 export type PaperMetadata = Omit<Paper, 'id' | 'view_count' | 'citation_count'>
@@ -249,7 +254,9 @@ export const api = {
     metadata: PartialPaperMetadata
     pages: { page_num: number; thumbnail: string; preview_text: string }[]
     sections?: Record<string, string>
+    sections_summary?: Record<string, string>
     section_pages?: Record<string, number[]>
+    trim_points?: Record<string, string>
   }> {
     const formData = new FormData()
     formData.append('file', file)
@@ -273,6 +280,7 @@ export const api = {
     methods?: string
     results?: string
     discussion?: string
+    sections_summary?: Record<string, string>
   }) {
     const response = await apiFetch(`${BASE_URL}/papers/confirm-upload`, {
       method: 'POST',
