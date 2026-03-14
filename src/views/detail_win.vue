@@ -2,7 +2,7 @@
 import { ref, onMounted, watch, computed } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { useAuth } from '../composables/useAuth'
-import { Calendar, User, FileText, BookOpen, Eye, Award, CheckCircle, Sparkles, TrendingUp, MessageSquare, ImageIcon, Loader2, ChevronRight, Columns, AlignLeft, AlertTriangle } from 'lucide-vue-next'
+import { Calendar, User, FileText, BookOpen, Eye, Award, CheckCircle, Sparkles, TrendingUp, MessageSquare, ImageIcon, Loader2, ChevronRight, Columns, AlertTriangle } from 'lucide-vue-next'
 import { api, type Paper, type SearchResult } from '../services/api'
 
 const route = useRoute()
@@ -19,24 +19,11 @@ const citeLoading = ref(false)
 const { isLoggedIn } = useAuth()
 
 // Document view state
-const activeTab = ref<'abstract' | 'introduction' | 'methods' | 'results' | 'discussion' | 'authors' | 'document'>('abstract')
+const activeTab = ref<'abstract' | 'introduction' | 'methods' | 'results' | 'discussion' | 'authors' | 'document' | 'imrad'>('abstract')
 const pdfUrl = computed(() => {
   const base = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api/v1'
   return paper.value ? `${base}/papers/${paper.value.id}/pdf` : ''
 })
-
-// IMRAD view toggle
-// 'regular' → per-tab extracted text
-// 'imrad'   → full-page 2-column layout showing ALL 4 sections at once
-const imradView = ref<'regular' | 'imrad'>('regular')
-
-const setImradView = (v: 'regular' | 'imrad') => {
-  imradView.value = v
-  if (v === 'imrad') {
-    const imradTabs = ['introduction', 'methods', 'results', 'discussion']
-    if (!imradTabs.includes(activeTab.value)) activeTab.value = 'introduction'
-  }
-}
 
 const IMRAD_SECTION_CONFIGS = [
   { key: 'introduction' as const, label: 'Introduction', summaryKey: 'introduction_summary' as const },
@@ -190,7 +177,7 @@ const abstractPreview = computed(() => {
           <button @click="goBack" class="bc-link">Results</button>
           <ChevronRight :size="12" class="bc-sep" />
           <span class="bc-active">{{ paper.title.length > 55 ? paper.title.substring(0, 55) + '…' : paper.title
-            }}</span>
+          }}</span>
         </nav>
 
         <!-- Badges -->
@@ -262,6 +249,13 @@ const abstractPreview = computed(() => {
             @click="activeTab = 'discussion'">
             Discussion
           </button>
+
+          <button
+            v-if="paper.introduction_summary || paper.methods_summary || paper.results_summary || paper.discussion_summary"
+            class="aside-item aside-item-imrad" :class="{ active: activeTab === 'imrad' }" @click="activeTab = 'imrad'">
+            <Columns :size="12" class="aside-imrad-icon" /> IMRAD Format
+            <span class="imrad-new-tag">NEW</span>
+          </button>
         </nav>
 
         <p class="aside-group-label" style="margin-top: 1.5rem">Study Info</p>
@@ -276,9 +270,9 @@ const abstractPreview = computed(() => {
       <main class="paper-main">
 
         <!-- Tabs (horizontal, visible on all sizes) -->
-        <div class="doc-tabs">
+        <div class="doc-tabs" v-if="activeTab !== 'imrad'">
           <button class="doc-tab" :class="{ active: activeTab === 'abstract' }"
-            @click="activeTab = 'abstract'; imradView = 'regular'">Abstract</button>
+            @click="activeTab = 'abstract'">Abstract</button>
           <button v-if="paper.introduction" class="doc-tab" :class="{ active: activeTab === 'introduction' }"
             @click="activeTab = 'introduction'">Introduction</button>
           <button v-if="paper.methods" class="doc-tab" :class="{ active: activeTab === 'methods' }"
@@ -287,8 +281,18 @@ const abstractPreview = computed(() => {
             @click="activeTab = 'results'">Results</button>
           <button v-if="paper.discussion" class="doc-tab" :class="{ active: activeTab === 'discussion' }"
             @click="activeTab = 'discussion'">Discussion</button>
+
           <button class="doc-tab" :class="{ active: activeTab === 'authors' }"
-            @click="activeTab = 'authors'; imradView = 'regular'">Authors</button>
+            @click="activeTab = 'authors'">Authors</button>
+        </div>
+
+        <!-- ── IMRAD availability notice banner ───────────────── -->
+        <div
+          v-if="activeTab !== 'imrad' && (paper.introduction_summary || paper.methods_summary || paper.results_summary || paper.discussion_summary)"
+          class="imrad-avail-banner" @click="activeTab = 'imrad'">
+          <span class="imrad-avail-tag">NOTICE</span>
+          <span class="imrad-avail-text"><strong>IMRAD Format</strong> is available for this paper.</span>
+          <span class="imrad-avail-cta">Take me there →</span>
         </div>
 
         <!-- ── Abstract Tab ─────────────────────────────────────── -->
@@ -316,7 +320,7 @@ const abstractPreview = computed(() => {
         </div>
 
         <!-- ── IMRAD Sections — Regular per-tab view ──────────── -->
-        <template v-if="imradView === 'regular'">
+        <template v-if="activeTab !== 'imrad'">
           <template v-for="cfg in IMRAD_SECTION_CONFIGS" :key="cfg.key">
             <div v-if="activeTab === cfg.key" class="paper-section imrad-section">
 
@@ -329,14 +333,6 @@ const abstractPreview = computed(() => {
                   {{ cfg.label }}
                 </h3>
                 <div class="imrad-actions">
-                  <div class="view-toggle">
-                    <button class="toggle-opt active" title="Regular extracted text">
-                      <AlignLeft :size="12" /> Regular
-                    </button>
-                    <button class="toggle-opt" @click="setImradView('imrad')" title="IMRAD full summary view">
-                      <Columns :size="12" /> IMRAD View
-                    </button>
-                  </div>
                   <button class="view-pages-btn" :class="{ active: sectionPageCache[cfg.key]?.shown }"
                     @click="toggleSectionPages(cfg.key)">
                     <Loader2 v-if="sectionPageCache[cfg.key]?.loading" :size="13" class="spin" />
@@ -373,55 +369,51 @@ const abstractPreview = computed(() => {
         </template>
 
         <!-- ── IMRAD View — All sections, 2-column layout ──────── -->
-        <div
-          v-else-if="imradView === 'imrad' && ['introduction', 'methods', 'results', 'discussion'].includes(activeTab)"
-          class="imrad-full-view">
+        <div v-if="activeTab === 'imrad'" class="imrad-full-view">
 
           <!-- Top bar -->
           <div class="imrad-full-bar">
             <div class="imrad-full-bar-left">
               <Columns :size="15" />
-              <span>IMRAD Summary View</span>
+              <span>IMRAD Format (Summary)</span>
               <span class="imrad-full-hint">All sections · AI-generated summaries</span>
             </div>
-            <button class="toggle-opt active-green" @click="setImradView('regular')">
-              <AlignLeft :size="12" /> Back to Regular
-            </button>
+
           </div>
 
           <!-- Notice banner -->
           <div class="imrad-notice-banner">
             <AlertTriangle :size="14" class="imrad-notice-icon" />
-            <span><strong>Please Note:</strong> The IMRAD section summaries displayed here are automatically extracted
-              by an AI. The current structure or format of the IMRAD is not finalized and for further
-              ehnancement/optimization.
-              Thank you for understanding.
+            <span><strong>Please Note:</strong> The summary of the document with IMRAD format below is not yet
+              finalized.
+              It is still under multiple testing and debugging for any deficiency in formatting.
+              Formatting configuration is under enhancement and/or optimization. Thanks.
             </span>
           </div>
 
-          <!-- Each section block stacked vertically, each with its own 2-col grid -->
-          <div v-for="cfg in IMRAD_SECTION_CONFIGS" :key="cfg.key" class="imrad-full-section">
-            <div class="imrad-full-section-head">
-              <BookOpen v-if="cfg.key === 'introduction'" :size="14" />
-              <Sparkles v-else-if="cfg.key === 'methods'" :size="14" />
-              <TrendingUp v-else-if="cfg.key === 'results'" :size="14" />
-              <MessageSquare v-else :size="14" />
-              <span>{{ cfg.label }}</span>
-            </div>
+          <!-- ONE unified 2-column flow — all sections, no section-level gaps -->
+          <div class="imrad-unified-wrap">
+            <div class="imrad-unified-col">
+              <template v-for="cfg in IMRAD_SECTION_CONFIGS" :key="cfg.key">
+                <div class="imrad-col-block imrad-section-label">
+                  <div class="imrad-full-section-head">
 
-            <template v-if="paper[cfg.summaryKey]">
-              <div class="imrad-two-col">
-                <div v-for="(block, idx) in parseSummaryBlocks(paper[cfg.summaryKey] as string)" :key="idx"
-                  class="imrad-col-block">
-                  <p v-if="block.heading" class="imrad-block-heading">{{ block.heading }}</p>
-                  <p class="imrad-block-body">{{ block.body }}</p>
+                    <span>{{ cfg.label }}</span>
+                  </div>
                 </div>
-              </div>
-            </template>
-            <div v-else class="imrad-no-summary">
-              <p>Summary not yet generated for this section.</p>
-              <p class="imrad-no-summary-hint">Switch to <strong>Regular</strong> view to read the full extracted text.
-              </p>
+                <template v-if="paper[cfg.summaryKey]">
+                  <div v-for="(block, idx) in parseSummaryBlocks(paper[cfg.summaryKey] as string)" :key="idx"
+                    class="imrad-col-block">
+                    <p v-if="block.heading" class="imrad-block-heading">{{ block.heading }}</p>
+                    <p class="imrad-block-body">{{ block.body }}</p>
+                  </div>
+                </template>
+                <div v-else class="imrad-col-block imrad-no-summary">
+                  <p>Summary not yet generated for this section.</p>
+                  <p class="imrad-no-summary-hint">Switch to <strong>Regular</strong> view to read the full extracted
+                    text.</p>
+                </div>
+              </template>
             </div>
           </div>
         </div>
@@ -1219,6 +1211,104 @@ const abstractPreview = computed(() => {
   }
 }
 
+/* ── IMRAD "NEW" tag on sidebar button ───────────────── */
+.imrad-new-tag {
+  margin-left: auto;
+  background: #e63946;
+  color: #fff;
+  font-size: 0.55rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  padding: 0.15rem 0.4rem;
+  border-radius: 3px;
+  text-transform: uppercase;
+  flex-shrink: 0;
+  line-height: 1.4;
+}
+
+/* ── IMRAD availability banner ────────────────────────── */
+.imrad-avail-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.65rem 1rem;
+  margin-bottom: 1rem;
+  background: var(--green-dim);
+  border: 1.5px solid var(--green);
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.imrad-avail-banner:hover {
+  background: #c8ecd9;
+  border-color: var(--green-dk);
+}
+
+.imrad-avail-tag {
+  background: var(--green);
+  color: #fff;
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  padding: 0.2rem 0.55rem;
+  border-radius: 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.imrad-avail-text {
+  font-size: 0.82rem;
+  color: var(--green-dk);
+  flex: 1;
+  line-height: 1.4;
+}
+
+.imrad-avail-cta {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--green-dk);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* IMRAD Summary top tab — subtle accent */
+.doc-tab-imrad {
+  color: var(--green-dk);
+}
+
+.doc-tab-imrad.active {
+  color: var(--green-dk);
+  border-bottom-color: var(--green);
+}
+
+/* ── IMRAD summary shortcut in sidebar ────────────────── */
+.aside-item-imrad {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+  border-top: 1px dashed var(--rule);
+  padding-top: 0.65rem;
+  color: var(--green-dk);
+  font-weight: 600;
+}
+
+.aside-item-imrad.active {
+  background: var(--green-dim);
+  color: var(--green-dk);
+}
+
+.aside-item-imrad:hover:not(.active) {
+  background: var(--surface);
+  color: var(--green-dk);
+}
+
+.aside-imrad-icon {
+  flex-shrink: 0;
+  opacity: 0.75;
+}
+
 /* ── IMRAD view toggle + 2-column layout ──────────────── */
 
 .imrad-actions {
@@ -1266,15 +1356,14 @@ const abstractPreview = computed(() => {
   color: var(--green-dk);
 }
 
-/* 2-column grid */
+/* 2-column flowing layout — content fills columns top-to-bottom, no orphan gaps */
 .imrad-two-col-wrap {
   margin-bottom: 1rem;
 }
 
 .imrad-two-col {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1rem 1.5rem;
+  columns: 2;
+  column-gap: 1.75rem;
   padding: 1.25rem 1.5rem;
   background: var(--paper);
   border: 1px solid var(--rule);
@@ -1284,6 +1373,8 @@ const abstractPreview = computed(() => {
 
 .imrad-col-block {
   break-inside: avoid;
+  margin-bottom: 1.1rem;
+  display: block;
 }
 
 .imrad-block-heading {
@@ -1337,7 +1428,7 @@ const abstractPreview = computed(() => {
 /* Collapse to single column on narrow screens */
 @media (max-width: 640px) {
   .imrad-two-col {
-    grid-template-columns: 1fr;
+    columns: 1;
   }
 }
 
@@ -1415,20 +1506,34 @@ const abstractPreview = computed(() => {
   background: var(--green-dk);
 }
 
-.imrad-full-section {
-  padding: 1.5rem 1.75rem;
+.imrad-unified-wrap {
   background: var(--paper);
   border-left: 1px solid var(--rule);
   border-right: 1px solid var(--rule);
   border-bottom: 1px solid var(--rule);
+  border-radius: 0 0 8px 8px;
 }
 
-.imrad-full-section:last-child {
-  border-radius: 0 0 8px 8px;
+/* Single unified 2-column flow — all IMRAD content in one container */
+.imrad-unified-col {
+  columns: 2;
+  column-gap: 2rem;
+  padding: 1.5rem 1.75rem;
+}
+
+/* Section label: keep heading pinned to its first content block */
+.imrad-section-label {
+  margin-top: 1.25rem;
+  break-after: avoid;
+}
+
+.imrad-section-label:first-child {
+  margin-top: 0;
 }
 
 .imrad-full-section-head {
   display: flex;
+  justify-content: center;
   align-items: center;
   gap: 0.5rem;
   font-size: 0.72rem;
@@ -1441,18 +1546,14 @@ const abstractPreview = computed(() => {
   border-bottom: 1.5px solid var(--green-dim);
 }
 
-/* reuse .imrad-two-col grid inside full view */
-.imrad-full-section .imrad-two-col {
-  border: none;
-  border-top: none;
-  padding: 0;
-  background: transparent;
-}
-
 @media (max-width: 640px) {
   .imrad-full-bar {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .imrad-unified-col {
+    columns: 1;
   }
 }
 </style>
