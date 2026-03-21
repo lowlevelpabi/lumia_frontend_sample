@@ -47,8 +47,8 @@ const handleSearch = () => {
         </h1>
 
         <p class="hero-sub">
-          Full-text retrieval across thesis, capstone projects, and research
-          from the institution's indexed collection.
+          Experience the next-level of thesis archiving system with smarter ways using,
+          OCR + IMRAD services and BERT embedding for semantic search.
         </p>
 
         <div class="search-row">

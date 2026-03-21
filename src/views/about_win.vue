@@ -1,142 +1,139 @@
 <template>
   <div class="about-page">
 
-    <!-- HERO -->
+    <!-- ══ HERO: IMMERSIVE ══════════════════════════════════════════ -->
     <section class="hero">
       <div class="hero__dot-grid" aria-hidden="true" />
       <div class="hero__inner">
-        <div class="hero__masthead-rule" />
-        <p class="hero__overline">About</p>
+        <div class="hero__masthead">
+          <span class="masthead-rule"></span>
+          <span class="masthead-label">Institutional Repository · Intelligence Layer</span>
+          <span class="masthead-rule"></span>
+        </div>
         <h1 class="hero__title">
-          Lumia<br />
-          <span class="hero__title--accent">Retrieval System.</span>
+          The Future of <em>Scholarship</em> Discovery.
         </h1>
         <p class="hero__sub">
-          Full-text retrieval across thesis, capstone projects, and research
-          from the institution's indexed collection.
+          Lumia is an intelligent retrieval layer built for institutional research,
+          leveraging OCR extraction and BERT-driven semantic vector search.
         </p>
       </div>
     </section>
 
-    <!-- MAIN -->
+    <!-- ══ MAIN: BENTO GRID ════════════════════════════════════════ -->
     <main class="about-main">
-      <div class="about-grid">
+      <div class="bento-grid">
 
-        <!-- LEFT BODY -->
-        <div class="about-body">
+        <!-- 01: SYSTEM OVERVIEW (Full Width) -->
+        <section class="bento-card bento-card--hero">
+          <div class="card-label">01 — System Overview</div>
+          <h2 class="card-title">An AI-Enhanced Research Repository</h2>
+          <div class="card-prose">
+            <p>Lumia goes beyond traditional metadata inquiry. It builds a searchable index from the complete full-text
+              of institutional submissions, allowing scholars to surface specific findings deep within document
+              archives.</p>
+            <p>The system was developed to solve the "dark data" problem in academia — where valuable research remains
+              unsearchable because it is trapped within scanned PDFs or unindexed manuscripts.</p>
+          </div>
+          <div class="card-icon-bg">
+            <BookOpen :size="120" />
+          </div>
+        </section>
 
-          <!-- 01 -->
-          <section class="es">
-            <header class="es__header"><span class="es__label">01 — System Overview</span></header>
-            <h2 class="es__title">Purpose and Scope</h2>
-            <div class="es__prose">
-              <p>Lumia is a full-text retrieval system built for institutional academic collections. It provides a unified search interface for thesis submissions, capstone projects, and research outputs deposited within the institution's repository.</p>
-              <p>The system was developed to address gaps in existing retrieval tools — specifically, the inability to search across document full-text and return results ranked by contextual relevance rather than metadata alone.</p>
+        <!-- 02: THE PIPELINE (Dynamic Step Row) -->
+        <section class="bento-group bento-group--pipeline">
+          <div class="group-header">
+            <div class="card-label">02 — The Processing Pipeline</div>
+            <h2 class="card-title">How Lumia Processes Knowledge</h2>
+          </div>
+          <div class="pipeline-row">
+            <div class="step-card">
+              <div class="step-num">I</div>
+              <div class="step-header">
+                <ScanLine :size="20" class="step-icon" />
+                <h3>OCR Extraction</h3>
+              </div>
+              <p>Digital PDF submissions are processed via OCR to extract high-fidelity text layers.</p>
             </div>
-          </section>
-
-          <div class="h-rule" />
-
-          <!-- 02 -->
-          <section class="es">
-            <header class="es__header"><span class="es__label">02 — Design Principles</span></header>
-            <h2 class="es__title">Guiding Criteria</h2>
-            <ol class="principles">
-              <li class="principles__item">
-                <span class="principles__idx">I</span>
-                <div class="principles__body">
-                  <h3 class="principles__heading">Precision over volume</h3>
-                  <p class="principles__text">Results are ranked and filtered for contextual relevance, not quantity. The system surfaces fewer, more appropriate results rather than exhaustive matches.</p>
-                </div>
-              </li>
-              <li class="principles__item">
-                <span class="principles__idx">II</span>
-                <div class="principles__body">
-                  <h3 class="principles__heading">Contextual integrity</h3>
-                  <p class="principles__text">Each result includes full document metadata — author, programme, year, and access status — so that source authority can be assessed without leaving the interface.</p>
-                </div>
-              </li>
-              <li class="principles__item">
-                <span class="principles__idx">III</span>
-                <div class="principles__body">
-                  <h3 class="principles__heading">Transparency</h3>
-                  <p class="principles__text">No personalisation or recommendation mechanisms are applied. Ranking is deterministic and based solely on documented relevance criteria.</p>
-                </div>
-              </li>
-              <li class="principles__item">
-                <span class="principles__idx">IV</span>
-                <div class="principles__body">
-                  <h3 class="principles__heading">Institutional access</h3>
-                  <p class="principles__text">The system indexes only materials deposited within the institution's collection. Access status is displayed clearly for each document in the result set.</p>
-                </div>
-              </li>
-            </ol>
-          </section>
-
-          <div class="h-rule" />
-
-          <!-- 03 -->
-          <section class="es">
-            <header class="es__header"><span class="es__label">03 — Technical Architecture</span></header>
-            <h2 class="es__title">Retrieval Methodology</h2>
-            <div class="es__prose">
-              <p>The retrieval engine uses a hybrid approach — full-text keyword indexing combined with semantic vector search — allowing the system to match both exact terms and conceptually related content within a single query.</p>
-              <p>Results are ranked by relevance score, recency, and document type. The index updates on a rolling basis as new submissions are deposited into the institutional repository.</p>
+            <div class="step-card">
+              <div class="step-num">II</div>
+              <div class="step-header">
+                <Brain :size="20" class="step-icon" />
+                <h3>Neural Classification</h3>
+              </div>
+              <p>Fine-tuned BERT models automatically classify documents by Dept, Degree, and Project Type.</p>
             </div>
-            <div class="tech-tags">
-              <span class="tech-tag">Full-Text Indexing</span>
-              <span class="tech-tag">Semantic Search</span>
-              <span class="tech-tag">Relevance Ranking</span>
-              <span class="tech-tag">Institutional Repository</span>
-              <span class="tech-tag">Vue 3 + TypeScript</span>
+            <div class="step-card">
+              <div class="step-num">III</div>
+              <div class="step-header">
+                <FileJson :size="20" class="step-icon" />
+                <h3>IMRAD Parsing</h3>
+              </div>
+              <p>Natural Language Inference (NLI) segments research into structural components for discovery.</p>
             </div>
-          </section>
-
-          <div class="h-rule" />
-
-          <!-- 04 -->
-          <section class="es">
-            <header class="es__header"><span class="es__label">04 — Development Team</span></header>
-            <h2 class="es__title">Institutional Background</h2>
-            <div class="es__prose">
-              <p>Lumia was developed by a student research team as part of a capstone project in partial fulfilment of degree requirements, under faculty supervision and evaluated against institutional repository access needs.</p>
-              <p>The project is submitted for formal system evaluation by the faculty panel. All source code, documentation, and test data are available for review upon request.</p>
+            <div class="step-card">
+              <div class="step-num">IV</div>
+              <div class="step-header">
+                <Network :size="20" class="step-icon" />
+                <h3>Vector Discovery</h3>
+              </div>
+              <p>Queries are matched against document embeddings to find conceptually related content.</p>
             </div>
-          </section>
+          </div>
+        </section>
 
-        </div>
+        <!-- 03: CAPABILITIES (Split) -->
+        <section class="bento-card bento-card--cap">
+          <div class="card-label">03 — Discovery</div>
+          <h2 class="card-title">Contextual Alignment</h2>
+          <p class="card-text">Results are ranked via Siamese BERT networks, ensuring that the most relevant research is
+            always surfaced first, regardless of the specific keywords used.</p>
+          <div class="tech-tags">
+            <span class="tech-tag">BERT Classification</span>
+            <span class="tech-tag">Vector Search</span>
+          </div>
+        </section>
 
-        <!-- SIDEBAR -->
-        <aside class="sidebar">
-          <div class="sb-block">
-            <div class="sb-block__rule" />
-            <span class="sb-block__label">Enquiries</span>
-            <p class="sb-note">
-              For evaluation feedback, institutional access requests, or technical
-              correspondence regarding this system, please contact the development
-              team directly.
-            </p>
-            <a href="#" class="btn-primary">Contact the Team</a>
+        <section class="bento-card bento-card--cap">
+          <div class="card-label">04 — Visibility</div>
+          <h2 class="card-title">Structural Highlights</h2>
+          <p class="card-text">View AI-generated summaries of specific methodology or findings before downloading the
+            full document through automated section highlights.</p>
+          <div class="tech-tags">
+            <span class="tech-tag">IMRAD Parsing</span>
+            <span class="tech-tag">NLI Inference</span>
+          </div>
+        </section>
+
+        <!-- SIDEBAR / CONTACT (Right/Bottom) -->
+        <aside class="bento-card bento-card--sidebar">
+          <div class="card-label">Enquiries</div>
+          <h2 class="card-title">Technical Correspondence</h2>
+          <p class="sb-note">
+            For evaluation feedback or institutional access requests, please contact the development team directly.
+          </p>
+          <a href="#" class="btn-primary">Contact the Team</a>
+          <div class="sidebar-rule" />
+          <div class="sb-meta">
+            <span>Development Team</span>
+            <span>Est. 2024</span>
           </div>
         </aside>
 
       </div>
     </main>
 
-    <!-- FOOTER -->
+    <!-- ══ FOOTER ══════════════════════════════════════════════════ -->
     <footer class="about-footer">
       <div class="about-footer__inner">
         <div class="about-footer__top-rule" />
         <p class="about-footer__wordmark">Lumia</p>
         <p class="about-footer__desc">
-          Lumia is an institutional research retrieval system developed to support
-          full-text discovery across thesis, capstone, and research submissions
-          within the university's indexed collection. Built for academic evaluation,
-          designed for clarity, and committed to surfacing relevant scholarship
-          without friction.
+          Powered by local machine learning, Lumia enables high-precision discovery through OCR extraction,
+          structural IMRAD segmenting, and neural semantic ranking. Built to modernize institutional preserves.
         </p>
         <p class="about-footer__copy">
-          © {{ new Date().getFullYear() }} Lumia Research Systems.&ensp;Developed for academic use.
+          © {{ new Date().getFullYear() }} Lumia Research Systems.&ensp;Institutional Evaluation Build.
         </p>
       </div>
     </footer>
@@ -145,72 +142,416 @@
 </template>
 
 <script setup lang="ts">
-// Static About page — no props or reactive state required.
+import { BookOpen, ScanLine, Brain, FileJson, Network } from 'lucide-vue-next'
 </script>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400;1,600&family=Source+Sans+3:wght@300;400;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400;1,600&family=Source+Sans+3:wght@300;400;500;600&display=swap');
 
 .about-page {
-  --ink:      #181c18; --ink-2: #3d4239; --ink-3: #7a7f75;
-  --rule:     #dfe0db; --surface: #f5f5f2; --paper: #ffffff;
-  --green:    #00a651; --green-dk: #007d3d;
-  --hero-bg:  #0d1f12;
+  --ink: #181c18;
+  --ink-2: #3d4239;
+  --ink-3: #7a7f75;
+  --rule: #dfe0db;
+  --surface: #f5f5f2;
+  --paper: #ffffff;
+  --paper-gloss: rgba(255, 255, 255, 0.7);
+  --green: #00a651;
+  --green-dk: #007d3d;
+  --hero-bg: #0d1f12;
+
   font-family: 'Source Sans 3', sans-serif;
   background: var(--surface);
   color: var(--ink);
   min-height: 100vh;
 }
 
-.hero { position: relative; background: var(--hero-bg); overflow: hidden; border-bottom: 3px solid var(--green); }
-.hero__dot-grid { position: absolute; inset: 0; background-image: radial-gradient(circle, rgba(255,255,255,0.07) 1px, transparent 1px); background-size: 22px 22px; pointer-events: none; }
-.hero__inner { position: relative; max-width: 1100px; margin: 0 auto; padding: 56px 48px 52px; }
-.hero__masthead-rule { width: 100%; height: 1px; background: rgba(255,255,255,0.15); margin-bottom: 36px; }
-.hero__overline { font-size: 0.68rem; font-weight: 600; letter-spacing: 0.18em; text-transform: uppercase; color: var(--green); margin: 0 0 14px; }
-.hero__title { font-family: 'Lora', serif; font-size: clamp(1.9rem, 3.5vw, 2.75rem); font-weight: 600; line-height: 1.2; color: #f0ede6; margin: 0 0 22px; }
-.hero__title--accent { font-style: italic; color: #f0ede6; }
-.hero__sub { font-size: 1rem; font-weight: 300; color: rgba(240,237,230,0.62); max-width: 580px; line-height: 1.7; margin: 0; }
+/* ── Hero ─────────────────────────────────────────── */
+.hero {
+  position: relative;
+  background: var(--hero-bg);
+  overflow: hidden;
+  border-bottom: 3px solid var(--green);
+  padding: 80px 24px 72px;
+}
 
-.about-main { max-width: 1100px; margin: 0 auto; padding: 56px 48px 72px; }
-.about-grid { display: grid; grid-template-columns: 1fr 240px; gap: 64px; align-items: start; }
+.hero__dot-grid {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+  background-size: 22px 22px;
+  pointer-events: none;
+}
 
-.es__header { border-top: 2px solid var(--ink); padding-top: 20px; margin-bottom: 14px; }
-.es__label { font-size: 0.68rem; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-3); }
-.es__title { font-family: 'Lora', serif; font-size: 1.2rem; font-weight: 600; color: var(--ink); margin: 0 0 12px; line-height: 1.3; }
-.es__prose { font-size: 0.95rem; line-height: 1.75; color: var(--ink-2); }
-.es__prose p { margin: 0 0 10px; }
-.es__prose p:last-child { margin-bottom: 0; }
+.hero__inner {
+  position: relative;
+  max-width: 800px;
+  margin: 0 auto;
+  text-align: center;
+}
 
-.h-rule { height: 1px; background: var(--rule); margin: 36px 0; }
+.hero__masthead {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
 
-.principles { list-style: none; margin: 4px 0 0; padding: 0; }
-.principles__item { display: flex; gap: 18px; padding: 16px 0; border-bottom: 1px solid var(--rule); }
-.principles__item:first-child { border-top: 1px solid var(--rule); }
-.principles__idx { font-family: 'Lora', serif; font-size: 0.75rem; font-style: italic; color: var(--green); min-width: 24px; padding-top: 2px; }
-.principles__heading { font-family: 'Lora', serif; font-size: 0.97rem; font-weight: 600; color: var(--ink); margin: 0 0 4px; }
-.principles__text { font-size: 0.9rem; line-height: 1.65; color: var(--ink-2); margin: 0; }
+.masthead-rule {
+  flex: 1;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.15);
+}
 
-.tech-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
-.tech-tag { font-size: 0.68rem; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: var(--ink-2); border: 1.5px solid var(--rule); padding: 4px 10px; background: var(--paper); }
+.masthead-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  color: var(--green);
+  white-space: nowrap;
+}
 
-.sidebar { position: sticky; top: 32px; display: flex; flex-direction: column; gap: 28px; }
-.sb-block__rule { height: 2px; background: var(--ink); margin-bottom: 14px; }
-.sb-block__label { display: block; font-size: 0.68rem; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-3); margin: 0 0 12px; }
-.sb-note { font-size: 0.85rem; line-height: 1.65; color: var(--ink-3); margin: 0 0 16px; }
+.hero__title {
+  font-family: 'Lora', serif;
+  font-size: clamp(2.2rem, 5vw, 3.5rem);
+  font-weight: 600;
+  line-height: 1.1;
+  color: #f0ede6;
+  margin: 0 0 24px;
+}
 
-.btn-primary { display: inline-block; font-family: 'Source Sans 3', sans-serif; font-size: 0.8rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; text-decoration: none; padding: 9px 18px; background: var(--green); color: #fff; border: 1.5px solid var(--green); cursor: pointer; transition: background 0.15s, border-color 0.15s; }
-.btn-primary:hover { background: var(--green-dk); border-color: var(--green-dk); }
+.hero__title em {
+  font-style: italic;
+  color: #fff;
+  font-weight: 400;
+}
 
-.about-footer { background: var(--hero-bg); border-top: 3px solid var(--green); }
-.about-footer__inner { max-width: 1100px; margin: 0 auto; padding: 48px 48px 44px; }
-.about-footer__top-rule { width: 100%; height: 1px; background: rgba(255,255,255,0.10); margin-bottom: 32px; }
-.about-footer__wordmark { font-family: 'Lora', serif; font-size: 1.1rem; font-weight: 600; font-style: italic; color: var(--green); margin: 0 0 14px; letter-spacing: 0.04em; }
-.about-footer__desc { font-size: 0.9rem; font-weight: 300; line-height: 1.8; color: rgba(240,237,230,0.58); max-width: 680px; margin: 0 0 22px; }
-.about-footer__copy { font-size: 0.72rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(240,237,230,0.28); margin: 0; }
+.hero__sub {
+  font-size: 1.1rem;
+  font-weight: 300;
+  color: rgba(240, 237, 230, 0.62);
+  max-width: 600px;
+  line-height: 1.7;
+  margin: 0 auto;
+}
 
-@media (max-width: 820px) {
-  .about-grid { grid-template-columns: 1fr; gap: 48px; }
-  .sidebar { position: static; }
-  .hero__inner, .about-main, .about-footer__inner { padding-left: 24px; padding-right: 24px; }
+/* ── Bento Grid ───────────────────────────────────── */
+.about-main {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 64px 24px 80px;
+}
+
+.bento-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-areas:
+    "hero hero hero"
+    "pipeline pipeline pipeline"
+    "cap1 cap2 sidebar";
+  gap: 24px;
+}
+
+.bento-card {
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  padding: 32px;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.4s cubic-bezier(0.165, 0.84, 0.44, 1), box-shadow 0.4s ease;
+}
+
+.bento-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 24px -10px rgba(0, 0, 0, 0.08);
+}
+
+.bento-card--hero {
+  grid-area: hero;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 300px;
+}
+
+.bento-card--cap:nth-of-type(1) {
+  grid-area: cap1;
+}
+
+.bento-card--cap:nth-of-type(2) {
+  grid-area: cap2;
+}
+
+.bento-card--sidebar {
+  grid-area: sidebar;
+  background: var(--surface);
+  border-color: var(--ink);
+}
+
+.bento-group--pipeline {
+  grid-area: pipeline;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  padding: 40px 32px;
+}
+
+/* ── Card Content ─────────────────────────────────── */
+.card-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--green);
+  margin-bottom: 16px;
+  display: block;
+}
+
+.card-title {
+  font-family: 'Lora', serif;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0 0 18px;
+  line-height: 1.25;
+}
+
+.card-prose {
+  font-size: 1rem;
+  line-height: 1.75;
+  color: var(--ink-2);
+  max-width: 700px;
+}
+
+.card-prose p {
+  margin-bottom: 12px;
+}
+
+.card-text {
+  font-size: 0.95rem;
+  line-height: 1.7;
+  color: var(--ink-2);
+  margin-bottom: 20px;
+}
+
+.card-icon-bg {
+  position: absolute;
+  bottom: -20px;
+  right: -20px;
+  color: var(--surface);
+  z-index: 0;
+  pointer-events: none;
+  transform: rotate(-15deg);
+}
+
+.card-prose,
+.card-title,
+.card-label {
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Pipeline Row ─────────────────────────────────── */
+.pipeline-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 24px;
+  margin-top: 32px;
+}
+
+.step-card {
+  position: relative;
+  padding: 20px;
+  background: var(--surface);
+  border-radius: 4px;
+  border: 1px solid transparent;
+  transition: border-color 0.3s;
+}
+
+.step-card:hover {
+  border-color: var(--green);
+}
+
+.step-num {
+  font-family: 'Lora', serif;
+  font-size: 0.75rem;
+  font-style: italic;
+  color: var(--green);
+  margin-bottom: 12px;
+}
+
+.step-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.step-icon {
+  color: var(--ink);
+}
+
+.step-card h3 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--ink);
+}
+
+.step-card p {
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: var(--ink-3);
+  margin: 0;
+}
+
+/* ── Sidebar Component ───────────────────────────── */
+.sb-note {
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--ink-2);
+  margin-bottom: 24px;
+}
+
+.sidebar-rule {
+  height: 1px;
+  background: var(--rule);
+  margin: 32px 0 20px;
+}
+
+.sb-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink-3);
+}
+
+/* ── UI Elements ─────────────────────────────────── */
+.tech-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tech-tag {
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  border: 1px solid var(--rule);
+  padding: 4px 10px;
+  background: var(--paper);
+}
+
+.btn-primary {
+  display: block;
+  text-align: center;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-decoration: none;
+  padding: 12px;
+  background: var(--ink);
+  color: #fff;
+  border: 1.5px solid var(--ink);
+  transition: background 0.2s;
+}
+
+.btn-primary:hover {
+  background: var(--green);
+  border-color: var(--green);
+}
+
+/* ── Footer ──────────────────────────────────────── */
+.about-footer {
+  background: var(--hero-bg);
+  border-top: 3px solid var(--green);
+}
+
+.about-footer__inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 64px 24px 56px;
+}
+
+.about-footer__top-rule {
+  width: 100%;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.10);
+  margin-bottom: 40px;
+}
+
+.about-footer__wordmark {
+  font-family: 'Lora', serif;
+  font-size: 1.2rem;
+  font-weight: 600;
+  font-style: italic;
+  color: var(--green);
+  margin: 0 0 16px;
+  letter-spacing: 0.04em;
+}
+
+.about-footer__desc {
+  font-size: 0.95rem;
+  font-weight: 300;
+  line-height: 1.8;
+  color: rgba(240, 237, 230, 0.5);
+  max-width: 720px;
+  margin: 0 0 28px;
+}
+
+.about-footer__copy {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(240, 237, 230, 0.25);
+  margin: 0;
+}
+
+/* ── Responsive ──────────────────────────────────── */
+@media (max-width: 1024px) {
+  .bento-grid {
+    grid-template-columns: repeat(2, 1fr);
+    grid-template-areas:
+      "hero hero"
+      "pipeline pipeline"
+      "cap1 cap2"
+      "sidebar sidebar";
+  }
+}
+
+@media (max-width: 768px) {
+  .hero {
+    padding: 56px 20px 48px;
+  }
+
+  .pipeline-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .bento-grid {
+    grid-template-columns: 1fr;
+    grid-template-areas: none;
+  }
+
+  .bento-card--sidebar {
+    grid-area: auto;
+  }
+
+  .bento-group--pipeline {
+    grid-area: auto;
+  }
+
+  .bento-card--hero {
+    grid-area: auto;
+    min-height: auto;
+  }
 }
 </style>

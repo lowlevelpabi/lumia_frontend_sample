@@ -9,6 +9,7 @@ import RegisterView from '../views/reg_win.vue'
 import ManagementView from '../views/manage_win.vue'
 import UploadView from '../views/up_win.vue'
 import AboutView from '../views/about_win.vue'
+import ProfileView from '../views/profile_win.vue'
 
 const STAFF_ROLES = ['Admin', 'Faculty']  // matches backend UserRole enum
 
@@ -70,6 +71,15 @@ const router = createRouter({
       name: 'about',
       component: AboutView,
       meta: { title: 'About - Lumia' }
+    },
+    {
+      path: '/profile',
+      name: 'profile',
+      component: ProfileView,
+      meta: {
+        title: 'My Profile - Lumia',
+        requiresAuth: true
+      }
     }
   ],
 })

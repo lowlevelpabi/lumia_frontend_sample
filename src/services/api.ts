@@ -358,6 +358,22 @@ export const api = {
       return response.json()
   },
 
+  async getUserMe(): Promise<UserResponse> {
+    const response = await apiFetch(`${BASE_URL}/users/me`, {
+      headers: getAuthHeaders(),
+    })
+    if (!response.ok) throw new Error('Failed to fetch user data')
+    return response.json()
+  },
+
+  async getUserCitations(): Promise<Paper[]> {
+    const response = await apiFetch(`${BASE_URL}/users/me/citations`, {
+      headers: getAuthHeaders(),
+    })
+    if (!response.ok) throw new Error('Failed to fetch citations')
+    return response.json()
+  },
+
   async getSystemHealth(): Promise<SystemHealth> {
     const response = await apiFetch(`${BASE_URL}/system/health`, {
       headers: getAuthHeaders(),

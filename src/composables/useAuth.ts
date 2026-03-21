@@ -64,8 +64,14 @@ export function useAuth() {
   // Staff can upload and manage papers
   const canUpload = computed(() => isStaff.value)
 
+  const username = computed<string>(() => {
+    const payload = getTokenPayload()
+    return (payload?.sub as string) ?? ''
+  })
+
   return {
     isLoggedIn,
+    username,
     userRole,
     isAdmin,
     isFaculty,

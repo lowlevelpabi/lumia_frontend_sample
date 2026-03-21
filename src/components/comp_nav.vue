@@ -1,7 +1,10 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, onUnmounted } from 'vue'
 import { useRouter, useRoute, RouterLink } from 'vue-router'
-import { Search, BookOpen, Settings, LogOut, Menu, X, ArrowRight } from 'lucide-vue-next'
+import { 
+  Search, BookOpen, Settings, ArrowRight, LogOut, 
+  ChevronDown, Home, Info, Compass, UserCircle, X, Menu 
+} from 'lucide-vue-next'
 import { api } from '../services/api'
 import { useAuth } from '../composables/useAuth'
 
@@ -10,32 +13,63 @@ const route = useRoute()
 const searchQuery = ref('')
 const isLoggedIn = ref(false)
 const showMobileMenu = ref(false)
+const showMobileSearch = ref(false)
+const showProfileMenu = ref(false)
 
-const { isStaff } = useAuth()
+const { isStaff, username, userRole } = useAuth()
 
 const checkAuth = () => {
   isLoggedIn.value = !!localStorage.getItem('token')
 }
 
-onMounted(checkAuth)
+// Click outside logic for profile dropdown
+const closeProfileMenu = (e: MouseEvent) => {
+  const target = e.target as HTMLElement
+  if (!target.closest('.nav-profile-container')) {
+    showProfileMenu.value = false
+  }
+}
 
-// Watch for route changes to refresh auth and close mobile menu
+onMounted(() => {
+  checkAuth()
+  window.addEventListener('click', closeProfileMenu)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('click', closeProfileMenu)
+})
+
+// Watch for route changes to refresh auth and close menus
 watch(() => route.path, () => {
   checkAuth()
   showMobileMenu.value = false
+  showProfileMenu.value = false
+  showMobileSearch.value = false
 })
+
+const toggleMobileSearch = () => {
+  showMobileSearch.value = !showMobileSearch.value
+  if (showMobileSearch.value) showMobileMenu.value = false
+}
+
+const toggleMobileMenu = () => {
+  showMobileMenu.value = !showMobileMenu.value
+  if (showMobileMenu.value) showMobileSearch.value = false
+}
 
 const handleSearch = () => {
   if (searchQuery.value.trim()) {
     router.push({ name: 'explore', query: { q: searchQuery.value } })
     searchQuery.value = ''
     showMobileMenu.value = false
+    showMobileSearch.value = false
   }
 }
 
 const logout = () => {
   api.logout()
   isLoggedIn.value = false
+  showProfileMenu.value = false
   router.push({ name: 'home' })
 }
 </script>
@@ -43,134 +77,285 @@ const logout = () => {
 <template>
   <nav class="global-navbar">
     <div class="nav-container">
-      <!-- Left: Logo -->
+
+      <!-- Left: Logo (Institutional Branding) -->
       <RouterLink :to="{ name: 'home' }" class="nav-logo">
         <div class="logo-icon">
-          <BookOpen :size="20" color="#fff" />
+          <BookOpen :size="18" color="#fff" />
         </div>
-        <span class="logo-text">LUMIA</span>
+        <div class="logo-text">
+          LUMIA <span class="logo-text--sub">Discovery</span>
+        </div>
       </RouterLink>
 
-      <!-- Center: Search Bar (Hidden on home and management pages to avoid redundancy) -->
-      <transition name="fade">
-        <div v-if="!['home', 'management', 'login', 'register'].includes(route.name as string)" class="nav-search-wrap">
+      <!-- Center: Search Bar (Desktop) -->
+      <transition name="nav-search-fade">
+        <div v-if="!['home', 'management', 'login', 'register', 'about', 'profile'].includes(route.name as string)"
+          class="nav-search-wrap">
           <div class="nav-search">
-            <Search :size="16" class="search-icon" />
-            <input v-model="searchQuery" type="text" placeholder="Search publications, authors, topics..."
-              @keyup.enter="handleSearch" />
+            <Search :size="14" class="search-icon" />
+            <input v-model="searchQuery" type="text" placeholder="Search the repository..." @keyup.enter="handleSearch"
+              spellcheck="false" autocomplete="off" />
+            <div class="search-hint">⏎</div>
           </div>
         </div>
       </transition>
 
-      <!-- Right: Links & Actions -->
-      <div class="nav-actions" :class="{ 'mobile-open': showMobileMenu }">
+      <!-- Right: Desktop Actions & Profile -->
+      <div class="nav-actions-desktop">
+        <RouterLink :to="{ name: 'home' }" class="nav-item">Home</RouterLink>
+        <RouterLink :to="{ name: 'about' }" class="nav-item">About</RouterLink>
         <RouterLink :to="{ name: 'explore' }" class="nav-item">Explore</RouterLink>
 
         <template v-if="isLoggedIn">
-          <RouterLink v-if="isStaff" :to="{ name: 'management' }" class="nav-item">
-            <Settings :size="16" /> Management
-          </RouterLink>
           <div class="nav-divider"></div>
-          <button @click="logout" class="nav-item logout-btn">
-            <LogOut :size="16" /> Logout
-          </button>
+          <div class="nav-profile-container">
+            <button class="nav-profile-trigger" @click.stop="showProfileMenu = !showProfileMenu">
+              <div class="profile-avatar">
+                <img src="/avatar.png" alt="User Avatar" />
+              </div>
+              <div class="profile-info">
+                <span class="profile-name">{{ username || 'Academic User' }}</span>
+                <span class="profile-role">{{ userRole }}</span>
+              </div>
+              <ChevronDown :size="14" class="dropdown-arrow" :class="{ 'rotated': showProfileMenu }" />
+            </button>
+
+            <!-- Desktop Dropdown -->
+            <transition name="dropdown-slide">
+              <div v-if="showProfileMenu" class="nav-dropdown">
+                <div class="dropdown-header">Account</div>
+                <RouterLink :to="{ name: 'profile' }" class="dropdown-item">
+                  <UserCircle :size="16" /> My Profile
+                </RouterLink>
+                <RouterLink v-if="isStaff" :to="{ name: 'management' }" class="dropdown-item">
+                  <Settings :size="16" /> Management
+                </RouterLink>
+                <div class="dropdown-divider"></div>
+                <button @click="logout" class="dropdown-item logout-btn">
+                  <LogOut :size="16" /> Sign Out
+                </button>
+              </div>
+            </transition>
+          </div>
         </template>
 
         <template v-else>
+          <div class="nav-divider"></div>
           <RouterLink :to="{ name: 'login' }" class="get-started-btn">
             Get started
-            <ArrowRight :size="15" />
+            <ArrowRight :size="14" />
           </RouterLink>
         </template>
       </div>
 
-      <!-- Mobile Toggle -->
-      <button class="mobile-toggle" @click="showMobileMenu = !showMobileMenu">
-        <Menu v-if="!showMobileMenu" :size="24" />
-        <X v-else :size="24" />
-      </button>
+      <!-- Mobile UI Controls -->
+      <div class="mobile-controls">
+        <button v-if="!['home', 'management', 'login', 'register', 'about', 'profile'].includes(route.name as string)" 
+          class="mobile-control-btn" @click="toggleMobileSearch">
+          <Search :size="20" />
+        </button>
+        <button class="mobile-control-btn" @click="toggleMobileMenu">
+          <Menu v-if="!showMobileMenu" :size="22" />
+          <X v-else :size="22" />
+        </button>
+      </div>
+
+      <!-- Mobile Drawer Overlay -->
+      <transition name="fade">
+        <div v-if="showMobileMenu" class="mobile-drawer-overlay" @click="showMobileMenu = false"></div>
+      </transition>
+
+      <!-- Mobile Side Drawer -->
+      <transition name="drawer-slide">
+        <aside v-if="showMobileMenu" class="mobile-drawer">
+          <!-- Drawer Header (Identity) -->
+          <div v-if="isLoggedIn" class="drawer-user-card">
+            <div class="drawer-user-cover"></div>
+            <div class="drawer-user-info">
+              <div class="drawer-avatar">
+                <img src="/avatar.png" alt="User Avatar" />
+              </div>
+              <div class="drawer-text">
+                <span class="drawer-name">{{ username || 'Academic User' }}</span>
+                <span class="drawer-role">{{ userRole }}</span>
+              </div>
+            </div>
+          </div>
+          
+          <div v-else class="drawer-guest-card">
+            <div class="logo-icon">
+              <BookOpen :size="18" color="#fff" />
+            </div>
+            <p>Welcome to Lumia</p>
+          </div>
+
+          <!-- Drawer Navigation -->
+          <div class="drawer-nav">
+            <div class="drawer-section">Navigation</div>
+            <RouterLink :to="{ name: 'home' }" class="drawer-item">
+              <Home :size="18" /> Home
+            </RouterLink>
+            <RouterLink :to="{ name: 'about' }" class="drawer-item">
+              <Info :size="18" /> About
+            </RouterLink>
+            <RouterLink :to="{ name: 'explore' }" class="drawer-item">
+              <Compass :size="18" /> Explore
+            </RouterLink>
+
+            <template v-if="isLoggedIn">
+              <div class="drawer-section">Account</div>
+              <RouterLink :to="{ name: 'profile' }" class="drawer-item">
+                <UserCircle :size="18" /> My Profile
+              </RouterLink>
+              <RouterLink v-if="isStaff" :to="{ name: 'management' }" class="drawer-item">
+                <Settings :size="18" /> Management
+              </RouterLink>
+              <button @click="logout" class="drawer-item logout-mobile">
+                <LogOut :size="18" /> Sign Out
+              </button>
+            </template>
+
+            <template v-else>
+              <div class="drawer-section">Access</div>
+              <RouterLink :to="{ name: 'login' }" class="drawer-item drawer-cta">
+                Get Started <ArrowRight :size="16" />
+              </RouterLink>
+            </template>
+          </div>
+        </aside>
+      </transition>
+
+      <!-- Mobile Search Overlay -->
+      <transition name="search-slide">
+        <div v-if="showMobileSearch" class="mobile-search-overlay">
+          <div class="mobile-search-container">
+            <Search :size="18" class="m-search-icon" />
+            <input v-model="searchQuery" type="text" placeholder="Search publications..." 
+              @keyup.enter="handleSearch" autofocus />
+            <button @click="showMobileSearch = false" class="close-search">
+              <X :size="20" />
+            </button>
+          </div>
+        </div>
+      </transition>
+
     </div>
   </nav>
 </template>
 
 <style scoped>
+@import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400;1,600&family=Source+Sans+3:wght@400;500;600;700&display=swap');
+
 .global-navbar {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   height: 64px;
-  background: #fff;
-  border-bottom: 1px solid #e5e7eb;
+  background: #ffffff;
+  border-bottom: 1.5px solid #dfe0db;
   z-index: 1000;
   display: flex;
   align-items: center;
+  font-family: 'Source Sans 3', sans-serif;
+}
+
+/* Subtle top-border accent to match the institutional theme */
+.global-navbar::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: #00a651;
 }
 
 .nav-container {
   width: 100%;
-  max-width: 1400px;
+  max-width: 1300px;
   margin: 0 auto;
-  padding: 0 2rem;
+  padding: 0 24px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 2rem;
+  gap: 32px;
 }
 
 /* ── Logo ──────────────────────────────────────────────────────── */
 .nav-logo {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: 12px;
   text-decoration: none;
   flex-shrink: 0;
 }
 
 .logo-icon {
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   background: #00a651;
-  border-radius: 7px;
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
+  transition: transform 0.2s ease;
+}
+
+.nav-logo:hover .logo-icon {
+  transform: scale(1.05);
 }
 
 .logo-text {
-  font-size: 1.1rem;
-  font-weight: 800;
-  color: #111827;
-  letter-spacing: 0.06em;
+  font-family: 'Lora', serif;
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: #181c18;
+  letter-spacing: 0.02em;
+  display: flex;
+  flex-direction: column;
+  line-height: 1;
+}
+
+.logo-text--sub {
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: #00a651;
+  margin-top: 2px;
 }
 
 /* ── Search ────────────────────────────────────────────────────── */
 .nav-search-wrap {
   flex: 1;
-  max-width: 520px;
+  max-width: 480px;
 }
 
 .nav-search {
   position: relative;
   display: flex;
   align-items: center;
-  background: #f3f4f6;
-  border-radius: 8px;
-  padding: 0 0.875rem;
-  height: 36px;
-  border: 1.5px solid transparent;
-  transition: all 0.15s;
+  background: #f5f5f2;
+  border-radius: 6px;
+  padding: 0 12px;
+  height: 38px;
+  border: 1px solid #dfe0db;
+  transition: all 0.2s cubic-bezier(0.165, 0.84, 0.44, 1);
 }
 
 .nav-search:focus-within {
-  background: #fff;
+  background: #ffffff;
   border-color: #00a651;
-  box-shadow: 0 0 0 3px rgba(0, 166, 81, 0.1);
+  box-shadow: 0 4px 12px -4px rgba(0, 166, 81, 0.12);
 }
 
 .search-icon {
-  color: #9ca3af;
-  margin-right: 0.5rem;
+  color: #181c18;
+  opacity: 0.3;
+  margin-right: 10px;
   flex-shrink: 0;
 }
 
@@ -179,48 +364,380 @@ const logout = () => {
   border: none;
   outline: none;
   width: 100%;
-  font-size: 0.875rem;
-  color: #111827;
+  font-size: 0.9rem;
+  color: #181c18;
 }
 
 .nav-search input::placeholder {
-  color: #9ca3af;
+  color: #7a7f75;
 }
 
-/* ── Right actions ─────────────────────────────────────────────── */
-.nav-actions {
+.search-hint {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #dfe0db;
+  border: 1px solid #dfe0db;
+  padding: 2px 5px;
+  border-radius: 3px;
+  pointer-events: none;
+}
+
+/* ── Desktop Actions ───────────────────────────────────────────── */
+.nav-actions-desktop {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 4px;
   flex-shrink: 0;
 }
 
-/* Base nav link */
+@media (max-width: 860px) {
+  .nav-actions-desktop { display: none; }
+}
+
 .nav-item {
   text-decoration: none;
-  color: #6b7280;
-  font-size: 0.875rem;
-  font-weight: 500;
+  color: #3d4239;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
   display: inline-flex;
   align-items: center;
-  gap: 0.375rem;
-  padding: 0.4rem 0.75rem;
-  border-radius: 6px;
-  transition: color 0.15s, background 0.15s;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 4px;
+  transition: all 0.15s;
   white-space: nowrap;
 }
 
 .nav-item:hover {
-  color: #111827;
-  background: #f3f4f6;
+  color: #181c18;
+  background: #f5f5f2;
 }
 
-.nav-item.router-link-active {
+.nav-item.router-link-active:not(.logout-btn) {
   color: #00a651;
-  background: #f0fdf4;
 }
 
-/* Logout button reset */
+.nav-item.nav-item--active {
+  background: #181c18;
+  color: #fff;
+}
+
+/* ── Profile Trigger ───────────────────────────────────────────── */
+.nav-profile-container {
+  position: relative;
+}
+
+.nav-profile-trigger {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 8px;
+  transition: background 0.2s;
+}
+
+.nav-profile-trigger:hover {
+  background: #f5f5f2;
+}
+
+.profile-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 1.5px solid #dfe0db;
+  background: #fff;
+}
+
+.profile-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profile-info {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1.2;
+}
+
+.profile-name {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #181c18;
+}
+
+.profile-role {
+  font-size: 0.65rem;
+  font-weight: 500;
+  color: #7a7f75;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.dropdown-arrow {
+  color: #7a7f75;
+  transition: transform 0.2s;
+}
+
+.dropdown-arrow.rotated {
+  transform: rotate(180deg);
+}
+
+/* ── Dropdown Menu (Desktop) ─────────────────────────────────── */
+.nav-dropdown {
+  position: absolute;
+  top: calc(100% + 12px);
+  right: 0;
+  width: 240px;
+  background: #ffffff;
+  border: 1.5px solid #dfe0db;
+  border-radius: 8px;
+  box-shadow: 0 12px 32px -8px rgba(0, 0, 0, 0.12);
+  padding: 8px;
+  z-index: 1001;
+}
+
+.dropdown-header {
+  padding: 8px 12px 12px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #7a7f75;
+}
+
+.dropdown-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  text-decoration: none;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #181c18;
+  border-radius: 6px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.dropdown-item:hover {
+  background: #f5f5f2;
+  color: #00a651;
+}
+
+.dropdown-divider {
+  height: 1px;
+  background: #dfe0db;
+  margin: 8px 0;
+}
+
+.logout-btn:hover {
+  color: #ef4444;
+  background: #fef2f2;
+}
+
+/* ── Mobile Controls ─────────────────────────────────────────── */
+.mobile-controls {
+  display: none;
+  align-items: center;
+  gap: 8px;
+}
+
+.mobile-control-btn {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f5f5f2;
+  border: 1px solid #dfe0db;
+  border-radius: 8px;
+  color: #181c18;
+  cursor: pointer;
+}
+
+@media (max-width: 860px) {
+  .mobile-controls { display: flex; }
+}
+
+/* ── Mobile Drawer ────────────────────────────────────────────── */
+.mobile-drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  backdrop-filter: blur(2px);
+  z-index: 2000;
+}
+
+.mobile-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 280px;
+  background: #fff;
+  z-index: 2001;
+  display: flex;
+  flex-direction: column;
+  box-shadow: -10px 0 30px rgba(0,0,0,0.1);
+}
+
+.drawer-user-card {
+  position: relative;
+  padding: 32px 24px 24px;
+  background: #181c18;
+  color: #fff;
+  overflow: hidden;
+}
+
+.drawer-user-cover {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, #00a651 0%, #007d3d 100%);
+  opacity: 0.1;
+}
+
+.drawer-user-info {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.drawer-avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 2px solid rgba(255,255,255,0.2);
+  background: #fff;
+}
+
+.drawer-avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+.drawer-text { display: flex; flex-direction: column; gap: 2px; }
+.drawer-name { font-family: 'Lora', serif; font-size: 1.1rem; font-weight: 600; }
+.drawer-role { font-size: 0.65rem; font-weight: 700; text-transform: uppercase; color: #00a651; letter-spacing: 0.1em; }
+
+.drawer-guest-card {
+  padding: 40px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: #f5f5f2;
+}
+
+.drawer-guest-card p { font-family: 'Lora', serif; font-weight: 600; color: #181c18; }
+
+.drawer-nav {
+  flex: 1;
+  padding: 24px;
+  overflow-y: auto;
+}
+
+.drawer-section {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: #7a7f75;
+  margin: 24px 0 12px;
+}
+
+.drawer-section:first-child { margin-top: 0; }
+
+.drawer-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 0;
+  color: #3d4239;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.95rem;
+  border-bottom: 1px solid #f5f5f2;
+  transition: color 0.2s;
+}
+
+.drawer-item:hover { color: #00a651; }
+.drawer-item svg { color: #7a7f75; }
+
+.drawer-cta {
+  background: #00a651;
+  color: #fff !important;
+  border: none;
+  padding: 14px;
+  justify-content: center;
+  border-radius: 8px;
+  margin-top: 12px;
+}
+
+.logout-mobile {
+  width: 100%;
+  background: none;
+  border: none;
+  font-family: inherit;
+  color: #ef4444 !important;
+}
+
+/* ── Mobile Search Overlay ────────────────────────────────────── */
+.mobile-search-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 64px;
+  background: #fff;
+  z-index: 2100;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+
+.mobile-search-container {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.m-search-icon { color: #00a651; }
+
+.mobile-search-container input {
+  flex: 1;
+  border: none;
+  outline: none;
+  font-size: 1rem;
+  font-family: inherit;
+  color: #181c18;
+}
+
+.close-search {
+  background: none;
+  border: none;
+  color: #7a7f75;
+  cursor: pointer;
+}
+
+/* ── Transitions ─────────────────────────────────────────────── */
+.drawer-slide-enter-active, .drawer-slide-leave-active { transition: transform 0.4s cubic-bezier(0.165, 0.84, 0.44, 1); }
+.drawer-slide-enter-from, .drawer-slide-leave-to { transform: translateX(100%); }
+
+.search-slide-enter-active, .search-slide-leave-active { transition: transform 0.3s ease; }
+.search-slide-enter-from, .search-slide-leave-to { transform: translateY(-100%); }
+
+/* Rest of standard styles */
 .logout-btn {
   background: none;
   border: none;
@@ -228,126 +745,31 @@ const logout = () => {
   font-family: inherit;
 }
 
-/* Divider between staff links and logout */
 .nav-divider {
   width: 1px;
-  height: 20px;
-  background: #e5e7eb;
-  margin: 0 0.25rem;
+  height: 18px;
+  background: #dfe0db;
+  margin: 0 8px;
 }
 
-/* Get started CTA */
 .get-started-btn {
   display: inline-flex;
   align-items: center;
-  gap: 0.375rem;
+  gap: 8px;
   text-decoration: none;
   background: #00a651;
   color: #fff;
-  padding: 0.45rem 1rem;
-  border-radius: 6px;
-  font-weight: 600;
-  font-size: 0.875rem;
-  margin-left: 0.5rem;
-  transition: background 0.15s, box-shadow 0.15s;
-  line-height: 1;
+  padding: 8px 18px;
+  border-radius: 4px;
+  font-weight: 700;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  transition: all 0.2s;
 }
 
 .get-started-btn:hover {
-  background: #008c44;
-  box-shadow: 0 2px 8px rgba(0, 166, 81, 0.25);
-}
-
-.get-started-btn svg {
-  flex-shrink: 0;
-}
-
-/* Mobile toggle */
-.mobile-toggle {
-  display: none;
-  background: none;
-  border: none;
-  color: #111827;
-  cursor: pointer;
-  padding: 0.25rem;
-}
-
-@media (max-width: 1024px) {
-  .nav-search-wrap {
-    display: none;
-  }
-}
-
-@media (max-width: 768px) {
-  .mobile-toggle {
-    display: block;
-  }
-
-  /* Mobile dropdown menu — hidden by default using visibility + opacity
-     so it is fully removed from interaction and cannot bleed into the
-     page below (the management topbar sits right at top: 64px + 52px).
-     z-index 999 keeps it below the management sidebar drawer (1100). */
-  .nav-actions {
-    position: fixed;
-    top: 64px;
-    left: 0;
-    right: 0;
-    background: #fff;
-    flex-direction: column;
-    align-items: flex-start;
-    padding: 1.25rem 1.5rem;
-    gap: 0.25rem;
-    border-bottom: 1px solid #e5e7eb;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
-    /* Use visibility + opacity instead of transform so the element
-       is fully non-interactive and invisible when closed */
-    opacity: 0;
-    visibility: hidden;
-    pointer-events: none;
-    transform: translateY(-8px);
-    transition: opacity 0.2s ease, visibility 0.2s ease, transform 0.2s ease;
-    z-index: 999;
-  }
-
-  .nav-actions.mobile-open {
-    opacity: 1;
-    visibility: visible;
-    pointer-events: auto;
-    transform: translateY(0);
-  }
-
-  .nav-item {
-    width: 100%;
-    padding: 0.6rem 0.75rem;
-  }
-
-  .get-started-btn {
-    width: 100%;
-    justify-content: center;
-    margin-left: 0;
-    margin-top: 0.5rem;
-  }
-
-  .nav-divider {
-    width: 100%;
-    height: 1px;
-    margin: 0.25rem 0;
-  }
-
-  .nav-divider {
-    display: none;
-  }
-}
-
-/* Transitions */
-.fade-enter-active,
-.fade-leave-active {
-  transition: all 0.3s ease;
-}
-
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-  transform: translateY(-10px);
+  background: #007d3d;
+  transform: translateY(-1px);
 }
 </style>
