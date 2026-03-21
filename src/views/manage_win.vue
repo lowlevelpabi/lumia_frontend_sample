@@ -270,9 +270,41 @@ const sectionsSummary = reactive<Record<string, string>>({
   discussion: ''
 })
 
-const availableImradTabs = computed<ImradKey[]>(() =>
-  ALL_IMRAD_TABS.filter(t => imradSections[t] || sectionsSummary[t])
+// RAD combined detection: results and discussion have identical text
+// when the backend stored a single combined RAD section
+const isRadCombined = computed(() => {
+  const r = imradSections.results
+  const d = imradSections.discussion
+  return !!(r && d && r.trim() === d.trim())
+})
+
+// When combined, user can toggle to inspect them separately
+const radSplitMode = ref(false)
+
+// Label strings as computed — avoids Volar misparsing long ternary strings in mustaches
+const radModeLabel = computed(() =>
+  radSplitMode.value
+    ? 'Showing separate Results & Discussion tabs'
+    : 'Results & Discussion are combined in this document'
 )
+const radMergeBtnLabel = computed(() =>
+  radSplitMode.value ? '⊞ Merge tabs' : '⊟ Split into separate tabs'
+)
+const radTabLabel = computed(() =>
+  isRadCombined.value && !radSplitMode.value ? 'Results & Discussion' : null
+)
+
+// Available tabs — merges R+D into one tab when combined
+const availableImradTabs = computed<ImradKey[]>(() => {
+  const all = ALL_IMRAD_TABS.filter(t => imradSections[t] || sectionsSummary[t])
+  if (isRadCombined.value && !radSplitMode.value) {
+    // Replace both 'results' and 'discussion' with a single merged entry
+    // We use 'results' as the key since it holds the content
+    const merged = all.filter(t => t !== 'discussion')
+    return merged
+  }
+  return all
+})
 
 // Auto-resize the raw textarea to fit its content
 const imradTextarea = ref<HTMLTextAreaElement | null>(null)
@@ -867,7 +899,20 @@ watch(activeSection, (newSection) => {
                     <div class="imrad-tabs">
                       <button v-for="tab in availableImradTabs" :key="tab" type="button" class="imrad-tab-btn"
                         :class="{ active: activeImradTab === tab }" @click="activeImradTab = tab">
-                        {{ tab.charAt(0).toUpperCase() + tab.slice(1) }}
+                        <!-- Show merged label when results tab is the combined RAD -->
+                        {{ (tab === 'results' && radTabLabel) ? radTabLabel : tab.charAt(0).toUpperCase() + tab.slice(1)
+                        }}
+                      </button>
+                    </div>
+
+                    <!-- RAD split/merge toggle — only shown when relevant -->
+                    <div v-if="isRadCombined" class="rad-mode-bar">
+                      <span class="rad-mode-label">
+                        {{ radModeLabel }}
+                      </span>
+                      <button type="button" class="rad-mode-btn"
+                        @click="radSplitMode = !radSplitMode; activeImradTab = 'results'">
+                        {{ radMergeBtnLabel }}
                       </button>
                     </div>
 
@@ -3043,6 +3088,40 @@ watch(activeSection, (newSection) => {
 
 .sec-badge.methods {
   background: #2563eb;
+}
+
+.rad-mode-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.45rem 0.75rem;
+  background: #f0faf5;
+  border: 1px solid #b2dfc6;
+  border-radius: 6px;
+  margin-bottom: 0.75rem;
+  font-size: 0.78rem;
+}
+
+.rad-mode-label {
+  color: #2d6a4f;
+  flex: 1;
+}
+
+.rad-mode-btn {
+  font-size: 0.73rem;
+  padding: 0.2rem 0.55rem;
+  background: #fff;
+  color: #007d3d;
+  border: 1px solid #00a651;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.rad-mode-btn:hover {
+  background: #00a651;
+  color: #fff;
 }
 
 .sec-badge.results {

@@ -19,18 +19,49 @@ const citeLoading = ref(false)
 const { isLoggedIn } = useAuth()
 
 // Document view state
-const activeTab = ref<'abstract' | 'introduction' | 'methods' | 'results' | 'discussion' | 'authors' | 'document' | 'imrad'>('abstract')
+// 'rad' is a virtual tab key used only internally when RAD is combined —
+// it maps to the 'results' field on Paper (both fields are identical when combined)
+type TabKey = 'abstract' | 'introduction' | 'methods' | 'results' | 'discussion' | 'rad' | 'authors' | 'document' | 'imrad'
+const activeTab = ref<TabKey>('abstract')
 const pdfUrl = computed(() => {
   const base = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api/v1'
   return paper.value ? `${base}/papers/${paper.value.id}/pdf` : ''
 })
 
-const IMRAD_SECTION_CONFIGS = [
-  { key: 'introduction' as const, label: 'Introduction', summaryKey: 'introduction_summary' as const },
-  { key: 'methods' as const, label: 'Methodology', summaryKey: 'methods_summary' as const },
-  { key: 'results' as const, label: 'Results & Findings', summaryKey: 'results_summary' as const },
-  { key: 'discussion' as const, label: 'Discussion', summaryKey: 'discussion_summary' as const },
-]
+// ── RAD combined detection ────────────────────────────────────────────────────
+// The backend stores identical text in both results + discussion when combined.
+// Must be defined BEFORE IMRAD_SECTION_CONFIGS which depends on it.
+const isRadCombined = computed(() => {
+  if (!paper.value) return false
+  const r = paper.value.results
+  const d = paper.value.discussion
+  return !!(r && d && r.trim() === d.trim())
+})
+
+// User can toggle split mode to inspect combined RAD as separate tabs
+const radSplitMode = ref(false)
+
+// Resolve virtual 'rad' key → actual Paper field key ('results')
+// Use this everywhere we access paper[key] or sectionPageCache[key]
+const resolveKey = (key: string): 'introduction' | 'methods' | 'results' | 'discussion' =>
+  key === 'rad' ? 'results' : key as 'introduction' | 'methods' | 'results' | 'discussion'
+
+// IMRAD section config — computed so it reacts to combined/split mode
+type SectionCfg = { key: TabKey; label: string; summaryKey: keyof Paper }
+const IMRAD_SECTION_CONFIGS = computed((): SectionCfg[] => {
+  const base: SectionCfg[] = [
+    { key: 'introduction', label: 'Introduction', summaryKey: 'introduction_summary' },
+    { key: 'methods', label: 'Methodology', summaryKey: 'methods_summary' },
+  ]
+  if (isRadCombined.value && !radSplitMode.value) {
+    return [...base, { key: 'rad', label: 'Results & Discussion', summaryKey: 'results_summary' }]
+  }
+  return [
+    ...base,
+    { key: 'results', label: 'Results & Findings', summaryKey: 'results_summary' },
+    { key: 'discussion', label: 'Discussion', summaryKey: 'discussion_summary' },
+  ]
+})
 
 // Parse summary text into labelled sub-sections (split on lines that look like headings)
 const parseSummaryBlocks = (text: string): { heading: string; body: string }[] => {
@@ -241,14 +272,23 @@ const abstractPreview = computed(() => {
             @click="activeTab = 'methods'">
             Methods
           </button>
-          <button v-if="paper.results" class="aside-item" :class="{ active: activeTab === 'results' }"
-            @click="activeTab = 'results'">
-            Results
-          </button>
-          <button v-if="paper.discussion" class="aside-item" :class="{ active: activeTab === 'discussion' }"
-            @click="activeTab = 'discussion'">
-            Discussion
-          </button>
+          <!-- RAD: combined tab or separate tabs depending on document type -->
+          <template v-if="isRadCombined && !radSplitMode">
+            <button v-if="paper.results || paper.discussion" class="aside-item" :class="{ active: activeTab === 'rad' }"
+              @click="activeTab = 'rad'">
+              Results & Discussion
+            </button>
+          </template>
+          <template v-else>
+            <button v-if="paper.results" class="aside-item" :class="{ active: activeTab === 'results' }"
+              @click="activeTab = 'results'">
+              Results
+            </button>
+            <button v-if="paper.discussion" class="aside-item" :class="{ active: activeTab === 'discussion' }"
+              @click="activeTab = 'discussion'">
+              Discussion
+            </button>
+          </template>
 
           <button
             v-if="paper.introduction_summary || paper.methods_summary || paper.results_summary || paper.discussion_summary"
@@ -277,10 +317,19 @@ const abstractPreview = computed(() => {
             @click="activeTab = 'introduction'">Introduction</button>
           <button v-if="paper.methods" class="doc-tab" :class="{ active: activeTab === 'methods' }"
             @click="activeTab = 'methods'">Methods</button>
-          <button v-if="paper.results" class="doc-tab" :class="{ active: activeTab === 'results' }"
-            @click="activeTab = 'results'">Results</button>
-          <button v-if="paper.discussion" class="doc-tab" :class="{ active: activeTab === 'discussion' }"
-            @click="activeTab = 'discussion'">Discussion</button>
+          <!-- RAD merged tab or split tabs -->
+          <template v-if="isRadCombined && !radSplitMode">
+            <button v-if="paper.results || paper.discussion" class="doc-tab" :class="{ active: activeTab === 'rad' }"
+              @click="activeTab = 'rad'">
+              Results & Discussion
+            </button>
+          </template>
+          <template v-else>
+            <button v-if="paper.results" class="doc-tab" :class="{ active: activeTab === 'results' }"
+              @click="activeTab = 'results'">Results</button>
+            <button v-if="paper.discussion" class="doc-tab" :class="{ active: activeTab === 'discussion' }"
+              @click="activeTab = 'discussion'">Discussion</button>
+          </template>
 
           <button class="doc-tab" :class="{ active: activeTab === 'authors' }"
             @click="activeTab = 'authors'">Authors</button>
@@ -328,36 +377,44 @@ const abstractPreview = computed(() => {
                 <h3 class="section-heading">
                   <BookOpen v-if="cfg.key === 'introduction'" :size="15" />
                   <Sparkles v-else-if="cfg.key === 'methods'" :size="15" />
-                  <TrendingUp v-else-if="cfg.key === 'results'" :size="15" />
+                  <TrendingUp v-else-if="cfg.key === 'results' || cfg.key === 'rad'" :size="15" />
                   <MessageSquare v-else :size="15" />
                   {{ cfg.label }}
                 </h3>
                 <div class="imrad-actions">
-                  <button class="view-pages-btn" :class="{ active: sectionPageCache[cfg.key]?.shown }"
-                    @click="toggleSectionPages(cfg.key)">
-                    <Loader2 v-if="sectionPageCache[cfg.key]?.loading" :size="13" class="spin" />
+                  <!-- Split/merge toggle — only shown on RAD sections -->
+                  <button
+                    v-if="isRadCombined && (cfg.key === 'rad' || cfg.key === 'results' || cfg.key === 'discussion')"
+                    class="view-pages-btn rad-toggle-btn"
+                    @click="radSplitMode = !radSplitMode; activeTab = radSplitMode ? 'results' : 'rad'">
+                    {{ radSplitMode ? '⊞ Merge Results & Discussion' : '⊟ Split into separate tabs' }}
+                  </button>
+                  <button class="view-pages-btn" :class="{ active: sectionPageCache[resolveKey(cfg.key)]?.shown }"
+                    @click="toggleSectionPages(resolveKey(cfg.key))">
+                    <Loader2 v-if="sectionPageCache[resolveKey(cfg.key)]?.loading" :size="13" class="spin" />
                     <ImageIcon v-else :size="13" />
-                    {{ sectionPageCache[cfg.key]?.shown ? 'Hide pages' : 'View pages' }}
+                    {{ sectionPageCache[resolveKey(cfg.key)]?.shown ? 'Hide pages' : 'View pages' }}
                   </button>
                 </div>
               </div>
 
-              <div v-if="paper[cfg.key]" class="section-text-outer">
+              <!-- Section text — for merged RAD use results field (both are identical) -->
+              <div v-if="paper[resolveKey(cfg.key)]" class="section-text-outer">
                 <div class="section-text-wrap">
-                  <pre class="section-text">{{ paper[cfg.key] }}</pre>
+                  <pre class="section-text">{{ paper[resolveKey(cfg.key)] }}</pre>
                 </div>
               </div>
               <p v-else class="no-content">No extracted text available for this section.</p>
 
-              <div v-if="sectionPageCache[cfg.key]?.shown" class="pages-viewer">
-                <div v-if="sectionPageCache[cfg.key]?.loading" class="pages-state">
+              <div v-if="sectionPageCache[resolveKey(cfg.key)]?.shown" class="pages-viewer">
+                <div v-if="sectionPageCache[resolveKey(cfg.key)]?.loading" class="pages-state">
                   <Loader2 :size="18" class="spin" /> Loading pages…
                 </div>
-                <div v-else-if="sectionPageCache[cfg.key]?.pages.length === 0" class="pages-state">
+                <div v-else-if="sectionPageCache[resolveKey(cfg.key)]?.pages.length === 0" class="pages-state">
                   No page images available.
                 </div>
                 <div v-else class="pages-stack">
-                  <div v-for="pg in sectionPageCache[cfg.key]!.pages" :key="pg.page_num" class="page-card">
+                  <div v-for="pg in sectionPageCache[resolveKey(cfg.key)]!.pages" :key="pg.page_num" class="page-card">
                     <div class="page-label">Page {{ pg.page_num }}</div>
                     <img :src="'data:image/jpeg;base64,' + pg.thumbnail" :alt="'Page ' + pg.page_num"
                       class="page-img" />
@@ -397,10 +454,15 @@ const abstractPreview = computed(() => {
               <template v-for="cfg in IMRAD_SECTION_CONFIGS" :key="cfg.key">
                 <div class="imrad-col-block imrad-section-label">
                   <div class="imrad-full-section-head">
-
                     <span>{{ cfg.label }}</span>
+                    <!-- Split toggle inside IMRAD full view too -->
+                    <button v-if="isRadCombined && cfg.key === 'rad'" class="rad-split-inline-btn"
+                      @click="radSplitMode = true; activeTab = 'results'">
+                      Split view →
+                    </button>
                   </div>
                 </div>
+                <!-- For merged RAD, summaryKey points to results_summary -->
                 <template v-if="paper[cfg.summaryKey]">
                   <div v-for="(block, idx) in parseSummaryBlocks(paper[cfg.summaryKey] as string)" :key="idx"
                     class="imrad-col-block">
@@ -1161,6 +1223,40 @@ const abstractPreview = computed(() => {
 }
 
 /* ── Responsive ────────────────────────────────────────── */
+.rad-toggle-btn {
+  font-size: 0.72rem;
+  padding: 0.25rem 0.6rem;
+  background: var(--green-dim, #e6f4ed);
+  color: var(--green-dk, #007d3d);
+  border: 1px solid var(--green, #00a651);
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+}
+
+.rad-toggle-btn:hover {
+  background: var(--green, #00a651);
+  color: #fff;
+}
+
+.rad-split-inline-btn {
+  font-size: 0.65rem;
+  padding: 0.15rem 0.45rem;
+  background: transparent;
+  color: var(--green-dk, #007d3d);
+  border: 1px solid var(--green, #00a651);
+  border-radius: 3px;
+  cursor: pointer;
+  margin-left: auto;
+  transition: background 0.15s;
+}
+
+.rad-split-inline-btn:hover {
+  background: var(--green-dim, #e6f4ed);
+}
+
 @media (max-width: 1024px) {
   .rec-aside {
     display: none;
