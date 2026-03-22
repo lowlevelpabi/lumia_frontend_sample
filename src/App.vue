@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
 import comp_nav from './components/comp_nav.vue'
-import TheFooter from './components/TheFooter.vue'
+import comp_footer from './components/comp_footer.vue'
 
 const route = useRoute()
 const isAuthPage = computed(() => ['login', 'register'].includes(route.name as string))
@@ -14,7 +14,7 @@ const isAuthPage = computed(() => ['login', 'register'].includes(route.name as s
     <main class="main-content" :class="{ 'no-nav': isAuthPage }">
       <RouterView />
     </main>
-    <TheFooter v-if="!isAuthPage" />
+    <comp_footer v-if="!isAuthPage" />
   </div>
 </template>
 

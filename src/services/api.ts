@@ -126,7 +126,7 @@ export interface HealthStatus {
 export type SystemHealth = Record<string, HealthStatus>
 
 export interface SearchParams {
-  query: string
+  query?: string
   threshold?: number
   author?: string
   year?: string
@@ -199,7 +199,7 @@ export const api = {
   // Papers Search & Details
   async searchPapers(params: SearchParams): Promise<SearchResult[]> {
     const url = new URL(`${BASE_URL}/papers/search`)
-    url.searchParams.append('query', params.query)
+    if (params.query) url.searchParams.append('query', params.query)
     if (params.threshold) url.searchParams.append('threshold', params.threshold.toString())
     if (params.author) url.searchParams.append('author', params.author)
     if (params.year) url.searchParams.append('year', params.year)
@@ -212,6 +212,12 @@ export const api = {
 
     const response = await fetch(url.toString())
     if (!response.ok) throw new Error('Search failed')
+    return response.json()
+  },
+
+  async getSearchConfig(): Promise<{ default_threshold: number }> {
+    const response = await fetch(`${BASE_URL}/papers/search/config`)
+    if (!response.ok) throw new Error('Failed to fetch search config')
     return response.json()
   },
 

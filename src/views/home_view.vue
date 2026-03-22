@@ -43,7 +43,7 @@ const handleSearch = () => {
         </div>
 
         <h1 class="hero-heading">
-          Lumia System
+          Lumia Discovery
         </h1>
 
         <p class="hero-sub">
@@ -60,6 +60,7 @@ const handleSearch = () => {
           <button class="search-btn" @click="handleSearch">Search</button>
         </div>
 
+        <!--
         <div class="browse-chips">
           <span class="chips-label">Browse for:</span>
           <RouterLink :to="{ name: 'explore', query: { q: 'thesis article' } }" class="chip">thesis article</RouterLink>
@@ -69,6 +70,7 @@ const handleSearch = () => {
             topic
           </RouterLink>
         </div>
+        -->
 
       </div>
     </section>

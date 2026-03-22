@@ -2,13 +2,12 @@
 import { ref, onMounted, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Filter, SlidersHorizontal, ArrowRight, User, Search, X } from 'lucide-vue-next'
-import { api, type SearchResult, type SearchParams, type Paper } from '../services/api'
+import { api, type SearchResult, type SearchParams } from '../services/api'
 
 const route = useRoute()
 const router = useRouter()
 const query = ref('')
 const results = ref<SearchResult[]>([])
-const allPapers = ref<Paper[]>([])
 const loading = ref(false)
 const showFilters = ref(false)
 const showMobileSearch = ref(false)
@@ -25,56 +24,13 @@ const selectedDegree = ref('')
 const selectedSection = ref('')
 const sortBy = ref<'newest' | 'oldest' | 'cited'>('newest')
 
-// True when no search query — show full archive
+// True when no search query — used for UI labels and conditional rendering
 const browseMode = computed(() => !query.value.trim())
 
-// Filtered + sorted papers for browse mode
-const filteredPapers = computed(() => {
-  let list = [...allPapers.value]
-  if (selectedProjectType.value) list = list.filter(p => p.project_type === selectedProjectType.value)
-  if (selectedDegree.value) list = list.filter(p => p.degree_program === selectedDegree.value)
-  if (minYear.value) list = list.filter(p => parseInt(p.year) >= minYear.value!)
-  if (maxYear.value) list = list.filter(p => parseInt(p.year) <= maxYear.value!)
-  if (sortBy.value === 'newest') list.sort((a, b) => (b.year ?? '').localeCompare(a.year ?? ''))
-  else if (sortBy.value === 'oldest') list.sort((a, b) => (a.year ?? '').localeCompare(b.year ?? ''))
-  else if (sortBy.value === 'cited') list.sort((a, b) => (b.citation_count ?? 0) - (a.citation_count ?? 0))
-  return list
-})
-
-// Map Paper → SearchResult shape so template stays unified
-const browseAsResults = computed((): SearchResult[] =>
-  filteredPapers.value.map(p => ({
-    id: p.id,
-    score: 1,
-    payload: {
-      title: p.title,
-      author: p.author,
-      year: p.year,
-      abstract: p.abstract,
-      department: p.department,
-      project_type: p.project_type,
-      degree_program: p.degree_program,
-      citation_count: p.citation_count,
-    }
-  }))
-)
-
 // What the template actually renders
-const displayResults = computed(() => browseMode.value ? browseAsResults.value : results.value)
-
-const loadAllPapers = async () => {
-  loading.value = true
-  try {
-    allPapers.value = await api.listAllPapers()
-  } catch {
-    console.error('Failed to load papers')
-  } finally {
-    loading.value = false
-  }
-}
+const displayResults = computed(() => results.value)
 
 const performSearch = async () => {
-  if (!query.value.trim()) return
   loading.value = true
   try {
     const params: SearchParams = {
@@ -86,21 +42,34 @@ const performSearch = async () => {
       degreeProgram: selectedDegree.value || undefined,
       section: selectedSection.value || undefined,
     }
+    console.log('[Search] Sending params:', params)
     results.value = await api.searchPapers(params)
-  } catch {
-    console.error('Search error occurred')
+    console.log('[Search] Results received:', results.value.length)
+  } catch (err) {
+    console.error('Search error occurred:', err)
   } finally {
     loading.value = false
   }
 }
 
 const load = () => {
-  if (browseMode.value) loadAllPapers()
-  else performSearch()
+  performSearch()
 }
 
-onMounted(() => {
+onMounted(async () => {
   query.value = (route.query.q as string) || ''
+
+  // Fetch default threshold from backend
+  try {
+    const config = await api.getSearchConfig()
+    if (config && config.default_threshold !== undefined) {
+      threshold.value = config.default_threshold
+      console.log(`[Search] Default threshold synced from backend: ${threshold.value}`)
+    }
+  } catch {
+    console.warn('[Search] Failed to fetch backend search config, using local default:', threshold.value)
+  }
+
   load()
   const onResize = () => { windowWidth.value = window.innerWidth }
   window.addEventListener('resize', onResize)
@@ -116,7 +85,7 @@ watch(
 
 watch(
   [threshold, minYear, maxYear, selectedProjectType, selectedDegree, selectedSection],
-  () => { if (!browseMode.value) performSearch() }
+  () => { performSearch() }
 )
 
 const viewDetail = (id: string) => router.push({ name: 'detail', params: { id } })
@@ -238,12 +207,12 @@ const openMobileSearch = () => {
             <div class="year-range">
               <select v-model="minYear" class="year-select">
                 <option :value="undefined">From</option>
-                <option v-for="y in [2024, 2023, 2022, 2021, 2020]" :key="y" :value="y">{{ y }}</option>
+                <option v-for="y in [2025, 2024, 2023, 2022, 2021]" :key="y" :value="y">{{ y }}</option>
               </select>
               <span class="year-to">—</span>
               <select v-model="maxYear" class="year-select">
                 <option :value="undefined">To</option>
-                <option v-for="y in [2024, 2023, 2022, 2021, 2020]" :key="y" :value="y">{{ y }}</option>
+                <option v-for="y in [2025, 2024, 2023, 2022, 2021]" :key="y" :value="y">{{ y }}</option>
               </select>
             </div>
           </div>
@@ -339,7 +308,7 @@ const openMobileSearch = () => {
                 <p class="item-abstract">{{ res.payload.abstract.substring(0, 220) }}&hellip;</p>
 
                 <span class="item-action">
-                  View full record
+                  See full study
                   <ArrowRight :size="12" />
                 </span>
               </div>

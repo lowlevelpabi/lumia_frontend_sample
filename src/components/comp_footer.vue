@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { BookOpen } from 'lucide-vue-next'
 </script>
 
 <template>
@@ -11,10 +10,10 @@ import { BookOpen } from 'lucide-vue-next'
         <!-- Brand -->
         <div class="footer-brand">
           <RouterLink to="/" class="footer-logo">
-            <div class="logo-icon">
-              <BookOpen :size="17" color="#fff" stroke-width="2.5" />
+            <img src="/lumia_logo.ico" style="width: 28px; height: 28px;" />
+            <div class="logo-text">
+              UMIA <span class="logo-text--sub">Discovery</span>
             </div>
-            <span class="logo-text">LUMIA</span>
           </RouterLink>
           <p class="brand-desc">
             An institutional research repository with full-text retrieval,
@@ -126,11 +125,23 @@ import { BookOpen } from 'lucide-vue-next'
 }
 
 .logo-text {
-  font-family: 'Source Sans 3', sans-serif;
-  font-size: 1.05rem;
+  font-family: 'Lora', serif;
+  font-size: 1.25rem;
   font-weight: 700;
-  letter-spacing: 0.1em;
   color: #fff;
+  display: flex;
+  flex-direction: column;
+  line-height: 0.8;
+}
+
+.logo-text--sub {
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.5rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: #00a651;
+  margin-top: 3px;
 }
 
 .brand-desc {

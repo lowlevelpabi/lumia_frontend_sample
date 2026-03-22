@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, onUnmounted } from 'vue'
 import { useRouter, useRoute, RouterLink } from 'vue-router'
-import { 
-  Search, BookOpen, Settings, ArrowRight, LogOut, 
-  ChevronDown, Home, Info, Compass, UserCircle, X, Menu 
+import {
+  Search, BookOpen, Settings, ArrowRight, LogOut,
+  ChevronDown, Home, Info, Compass, UserCircle, X, Menu
 } from 'lucide-vue-next'
 import { api } from '../services/api'
 import { useAuth } from '../composables/useAuth'
@@ -80,11 +80,9 @@ const logout = () => {
 
       <!-- Left: Logo (Institutional Branding) -->
       <RouterLink :to="{ name: 'home' }" class="nav-logo">
-        <div class="logo-icon">
-          <BookOpen :size="18" color="#fff" />
-        </div>
+        <img src="/lumia_logo.ico" style="width: 32px; height: 32px;" />
         <div class="logo-text">
-          LUMIA <span class="logo-text--sub">Discovery</span>
+          UMIA <span class="logo-text--sub">Discovery</span>
         </div>
       </RouterLink>
 
@@ -151,7 +149,7 @@ const logout = () => {
 
       <!-- Mobile UI Controls -->
       <div class="mobile-controls">
-        <button v-if="!['home', 'management', 'login', 'register', 'about', 'profile'].includes(route.name as string)" 
+        <button v-if="!['home', 'management', 'login', 'register', 'about', 'profile'].includes(route.name as string)"
           class="mobile-control-btn" @click="toggleMobileSearch">
           <Search :size="20" />
         </button>
@@ -182,7 +180,7 @@ const logout = () => {
               </div>
             </div>
           </div>
-          
+
           <div v-else class="drawer-guest-card">
             <div class="logo-icon">
               <BookOpen :size="18" color="#fff" />
@@ -219,7 +217,8 @@ const logout = () => {
             <template v-else>
               <div class="drawer-section">Access</div>
               <RouterLink :to="{ name: 'login' }" class="drawer-item drawer-cta">
-                Get Started <ArrowRight :size="16" />
+                Get Started
+                <ArrowRight :size="16" />
               </RouterLink>
             </template>
           </div>
@@ -231,8 +230,8 @@ const logout = () => {
         <div v-if="showMobileSearch" class="mobile-search-overlay">
           <div class="mobile-search-container">
             <Search :size="18" class="m-search-icon" />
-            <input v-model="searchQuery" type="text" placeholder="Search publications..." 
-              @keyup.enter="handleSearch" autofocus />
+            <input v-model="searchQuery" type="text" placeholder="Search publications..." @keyup.enter="handleSearch"
+              autofocus />
             <button @click="showMobileSearch = false" class="close-search">
               <X :size="20" />
             </button>
@@ -287,45 +286,46 @@ const logout = () => {
 .nav-logo {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 6px; /* Tighter gap to help the icon act as the letter L */
   text-decoration: none;
   flex-shrink: 0;
+  transition: all 0.2s ease;
 }
 
-.logo-icon {
-  width: 32px;
-  height: 32px;
-  background: #00a651;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: transform 0.2s ease;
+.nav-logo:hover {
+  transform: translateY(-1px);
 }
 
-.nav-logo:hover .logo-icon {
-  transform: scale(1.05);
+.nav-logo img {
+  width: 30px;
+  height: 30px;
+  object-fit: contain;
+  transition: filter 0.2s ease;
+}
+
+.nav-logo:hover img {
+  filter: drop-shadow(0 0 6px rgba(0, 166, 81, 0.3));
 }
 
 .logo-text {
   font-family: 'Lora', serif;
-  font-size: 1.15rem;
-  font-weight: 600;
+  font-size: 1.35rem; /* Slightly larger Umia */
+  font-weight: 700; /* Bolder weight */
   color: #181c18;
-  letter-spacing: 0.02em;
+  letter-spacing: -0.01em;
   display: flex;
   flex-direction: column;
-  line-height: 1;
+  line-height: 0.85; /* Tighter line height for the sub-text */
 }
 
 .logo-text--sub {
   font-family: 'Source Sans 3', sans-serif;
-  font-size: 0.6rem;
-  font-weight: 700;
+  font-size: 0.55rem;
+  font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.15em;
+  letter-spacing: 0.22em; /* More tracking for Discovery */
   color: #00a651;
-  margin-top: 2px;
+  margin-top: 4px;
 }
 
 /* ── Search ────────────────────────────────────────────────────── */
@@ -391,7 +391,9 @@ const logout = () => {
 }
 
 @media (max-width: 860px) {
-  .nav-actions-desktop { display: none; }
+  .nav-actions-desktop {
+    display: none;
+  }
 }
 
 .nav-item {
@@ -567,14 +569,16 @@ const logout = () => {
 }
 
 @media (max-width: 860px) {
-  .mobile-controls { display: flex; }
+  .mobile-controls {
+    display: flex;
+  }
 }
 
 /* ── Mobile Drawer ────────────────────────────────────────────── */
 .mobile-drawer-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.4);
+  background: rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(2px);
   z-index: 2000;
 }
@@ -589,7 +593,7 @@ const logout = () => {
   z-index: 2001;
   display: flex;
   flex-direction: column;
-  box-shadow: -10px 0 30px rgba(0,0,0,0.1);
+  box-shadow: -10px 0 30px rgba(0, 0, 0, 0.1);
 }
 
 .drawer-user-card {
@@ -619,15 +623,35 @@ const logout = () => {
   height: 56px;
   border-radius: 12px;
   overflow: hidden;
-  border: 2px solid rgba(255,255,255,0.2);
+  border: 2px solid rgba(255, 255, 255, 0.2);
   background: #fff;
 }
 
-.drawer-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.drawer-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
 
-.drawer-text { display: flex; flex-direction: column; gap: 2px; }
-.drawer-name { font-family: 'Lora', serif; font-size: 1.1rem; font-weight: 600; }
-.drawer-role { font-size: 0.65rem; font-weight: 700; text-transform: uppercase; color: #00a651; letter-spacing: 0.1em; }
+.drawer-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.drawer-name {
+  font-family: 'Lora', serif;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.drawer-role {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #00a651;
+  letter-spacing: 0.1em;
+}
 
 .drawer-guest-card {
   padding: 40px 24px;
@@ -637,7 +661,11 @@ const logout = () => {
   background: #f5f5f2;
 }
 
-.drawer-guest-card p { font-family: 'Lora', serif; font-weight: 600; color: #181c18; }
+.drawer-guest-card p {
+  font-family: 'Lora', serif;
+  font-weight: 600;
+  color: #181c18;
+}
 
 .drawer-nav {
   flex: 1;
@@ -654,7 +682,9 @@ const logout = () => {
   margin: 24px 0 12px;
 }
 
-.drawer-section:first-child { margin-top: 0; }
+.drawer-section:first-child {
+  margin-top: 0;
+}
 
 .drawer-item {
   display: flex;
@@ -669,8 +699,13 @@ const logout = () => {
   transition: color 0.2s;
 }
 
-.drawer-item:hover { color: #00a651; }
-.drawer-item svg { color: #7a7f75; }
+.drawer-item:hover {
+  color: #00a651;
+}
+
+.drawer-item svg {
+  color: #7a7f75;
+}
 
 .drawer-cta {
   background: #00a651;
@@ -702,7 +737,7 @@ const logout = () => {
   padding: 0 16px;
   display: flex;
   align-items: center;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
 }
 
 .mobile-search-container {
@@ -712,7 +747,9 @@ const logout = () => {
   gap: 12px;
 }
 
-.m-search-icon { color: #00a651; }
+.m-search-icon {
+  color: #00a651;
+}
 
 .mobile-search-container input {
   flex: 1;
@@ -731,11 +768,25 @@ const logout = () => {
 }
 
 /* ── Transitions ─────────────────────────────────────────────── */
-.drawer-slide-enter-active, .drawer-slide-leave-active { transition: transform 0.4s cubic-bezier(0.165, 0.84, 0.44, 1); }
-.drawer-slide-enter-from, .drawer-slide-leave-to { transform: translateX(100%); }
+.drawer-slide-enter-active,
+.drawer-slide-leave-active {
+  transition: transform 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+}
 
-.search-slide-enter-active, .search-slide-leave-active { transition: transform 0.3s ease; }
-.search-slide-enter-from, .search-slide-leave-to { transform: translateY(-100%); }
+.drawer-slide-enter-from,
+.drawer-slide-leave-to {
+  transform: translateX(100%);
+}
+
+.search-slide-enter-active,
+.search-slide-leave-active {
+  transition: transform 0.3s ease;
+}
+
+.search-slide-enter-from,
+.search-slide-leave-to {
+  transform: translateY(-100%);
+}
 
 /* Rest of standard styles */
 .logout-btn {

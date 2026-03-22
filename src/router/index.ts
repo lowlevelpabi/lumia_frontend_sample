@@ -2,7 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { getAuthState } from '../composables/useAuth'
 
 import HomeView from '../views/home_view.vue'
-import ResultsView from '../views/result_win.vue'
+import ResultsView from '../views/explore_win.vue'
 import DetailView from '../views/detail_win.vue'
 import LoginView from '../views/auth_win.vue'
 import RegisterView from '../views/reg_win.vue'
@@ -11,7 +11,7 @@ import UploadView from '../views/up_win.vue'
 import AboutView from '../views/about_win.vue'
 import ProfileView from '../views/profile_win.vue'
 
-const STAFF_ROLES = ['Admin', 'Faculty']  // matches backend UserRole enum
+const STAFF_ROLES = ['Admin', 'Faculty'] // matches backend UserRole enum
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -20,31 +20,31 @@ const router = createRouter({
       path: '/',
       name: 'home',
       component: HomeView,
-      meta: { title: 'Home - Lumia' }
+      meta: { title: 'Lumia Discovery' },
     },
     {
       path: '/explore',
       name: 'explore',
       component: ResultsView,
-      meta: { title: 'Search Results - Lumia' }
+      meta: { title: 'Search Results - Lumia' },
     },
     {
       path: '/paper/:id',
       name: 'detail',
       component: DetailView,
-      meta: { title: 'Paper Details - Lumia' }
+      meta: { title: 'Paper Details - Lumia' },
     },
     {
       path: '/login',
       name: 'login',
       component: LoginView,
-      meta: { title: 'Login - Lumia' }
+      meta: { title: 'Login - Lumia' },
     },
     {
       path: '/register',
       name: 'register',
       component: RegisterView,
-      meta: { title: 'Register - Lumia' }
+      meta: { title: 'Register - Lumia' },
     },
     {
       path: '/management',
@@ -54,7 +54,7 @@ const router = createRouter({
         title: 'Management - Lumia',
         requiresAuth: true,
         requiredRoles: STAFF_ROLES,
-      }
+      },
     },
     {
       path: '/upload',
@@ -64,13 +64,13 @@ const router = createRouter({
         title: 'Upload Research - Lumia',
         requiresAuth: true,
         requiredRoles: STAFF_ROLES,
-      }
+      },
     },
     {
       path: '/about',
       name: 'about',
       component: AboutView,
-      meta: { title: 'About - Lumia' }
+      meta: { title: 'About - Lumia' },
     },
     {
       path: '/profile',
@@ -78,9 +78,9 @@ const router = createRouter({
       component: ProfileView,
       meta: {
         title: 'My Profile - Lumia',
-        requiresAuth: true
-      }
-    }
+        requiresAuth: true,
+      },
+    },
   ],
 })
 
@@ -92,7 +92,7 @@ router.beforeEach((to, _from, next) => {
   }
 
   const { isLoggedIn, role } = getAuthState()
-  const requiresAuth  = to.meta.requiresAuth as boolean | undefined
+  const requiresAuth = to.meta.requiresAuth as boolean | undefined
   const requiredRoles = to.meta.requiredRoles as string[] | undefined
 
   // 1. Route requires authentication
