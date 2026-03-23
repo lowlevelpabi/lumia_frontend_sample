@@ -1,24 +1,24 @@
 <template>
   <div class="about-page">
 
-    <!-- ══ HERO: IMMERSIVE ══════════════════════════════════════════ -->
-    <section class="hero">
-      <div class="hero__dot-grid" aria-hidden="true" />
-      <div class="hero__inner">
-        <div class="hero__masthead">
-          <span class="masthead-rule"></span>
-          <span class="masthead-label">Institutional Repository · Intelligence Layer</span>
-          <span class="masthead-rule"></span>
-        </div>
-        <h1 class="hero__title">
-          The Future of <em>Scholarship</em> Discovery.
-        </h1>
-        <p class="hero__sub">
-          Lumia is an intelligent retrieval layer built for institutional research,
-          leveraging OCR extraction and BERT-driven semantic vector search.
-        </p>
-      </div>
-    </section>
+   <!-- ══ HERO: IMMERSIVE ══════════════════════════════════════════ -->
+<section class="hero">
+  <div class="hero__dot-grid" aria-hidden="true"></div>
+  <div class="hero__inner">
+    <div class="hero__masthead">
+      <span class="masthead-rule"></span>
+      <span class="masthead-label">Institutional Repository · Intelligence Layer</span>
+      <span class="masthead-rule"></span>
+    </div>
+    <h1 class="hero__title">
+      The Future of <em>Scholarship</em> Discovery.
+    </h1>
+    <p class="hero__sub">
+      Lumia is an intelligent retrieval layer built for institutional research,
+      leveraging OCR extraction and BERT-driven semantic vector search.
+    </p>
+  </div>
+</section>
 
     <!-- ══ MAIN: BENTO GRID ════════════════════════════════════════ -->
     <main class="about-main">
