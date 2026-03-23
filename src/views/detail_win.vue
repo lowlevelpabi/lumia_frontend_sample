@@ -54,11 +54,11 @@ const IMRAD_SECTION_CONFIGS = computed((): SectionCfg[] => {
     { key: 'methods', label: 'Methodology', summaryKey: 'methods_summary' },
   ]
   if (isRadCombined.value && !radSplitMode.value) {
-    return [...base, { key: 'rad', label: 'Results & Discussion', summaryKey: 'results_summary' }]
+    return [...base, { key: 'rad', label: 'Results and Discussion', summaryKey: 'results_summary' }]
   }
   return [
     ...base,
-    { key: 'results', label: 'Results & Findings', summaryKey: 'results_summary' },
+    { key: 'results', label: 'Results and Findings', summaryKey: 'results_summary' },
     { key: 'discussion', label: 'Discussion', summaryKey: 'discussion_summary' },
   ]
 })
@@ -208,7 +208,7 @@ const abstractPreview = computed(() => {
           <button @click="goBack" class="bc-link">Results</button>
           <ChevronRight :size="12" class="bc-sep" />
           <span class="bc-active">{{ paper.title.length > 55 ? paper.title.substring(0, 55) + '…' : paper.title
-          }}</span>
+            }}</span>
         </nav>
 
         <!-- Badges -->
@@ -276,7 +276,7 @@ const abstractPreview = computed(() => {
           <template v-if="isRadCombined && !radSplitMode">
             <button v-if="paper.results || paper.discussion" class="aside-item" :class="{ active: activeTab === 'rad' }"
               @click="activeTab = 'rad'">
-              Results & Discussion
+              Results and Discussion
             </button>
           </template>
           <template v-else>
@@ -293,7 +293,7 @@ const abstractPreview = computed(() => {
           <button
             v-if="paper.introduction_summary || paper.methods_summary || paper.results_summary || paper.discussion_summary"
             class="aside-item aside-item-imrad" :class="{ active: activeTab === 'imrad' }" @click="activeTab = 'imrad'">
-            <Columns :size="12" class="aside-imrad-icon" /> IMRAD Format
+            IMRAD Format
             <span class="imrad-new-tag">NEW</span>
           </button>
         </nav>
@@ -321,7 +321,7 @@ const abstractPreview = computed(() => {
           <template v-if="isRadCombined && !radSplitMode">
             <button v-if="paper.results || paper.discussion" class="doc-tab" :class="{ active: activeTab === 'rad' }"
               @click="activeTab = 'rad'">
-              Results & Discussion
+              Results and Discussion
             </button>
           </template>
           <template v-else>
@@ -330,9 +330,6 @@ const abstractPreview = computed(() => {
             <button v-if="paper.discussion" class="doc-tab" :class="{ active: activeTab === 'discussion' }"
               @click="activeTab = 'discussion'">Discussion</button>
           </template>
-
-          <button class="doc-tab" :class="{ active: activeTab === 'authors' }"
-            @click="activeTab = 'authors'">Authors</button>
         </div>
 
         <!-- ── IMRAD availability notice banner ───────────────── -->
@@ -340,7 +337,7 @@ const abstractPreview = computed(() => {
           v-if="activeTab !== 'imrad' && (paper.introduction_summary || paper.methods_summary || paper.results_summary || paper.discussion_summary)"
           class="imrad-avail-banner" @click="activeTab = 'imrad'">
           <span class="imrad-avail-tag">NOTICE</span>
-          <span class="imrad-avail-text"><strong>IMRAD Format</strong> is available for this paper.</span>
+          <span class="imrad-avail-text"><strong>IMRAD Format</strong> is available for this study.</span>
           <span class="imrad-avail-cta">Take me there →</span>
         </div>
 
@@ -387,7 +384,7 @@ const abstractPreview = computed(() => {
                     v-if="isRadCombined && (cfg.key === 'rad' || cfg.key === 'results' || cfg.key === 'discussion')"
                     class="view-pages-btn rad-toggle-btn"
                     @click="radSplitMode = !radSplitMode; activeTab = radSplitMode ? 'results' : 'rad'">
-                    {{ radSplitMode ? '⊞ Merge Results & Discussion' : '⊟ Split into separate tabs' }}
+                    {{ radSplitMode ? '⊞ Merge Results and Discussion' : '⊟ Split into separate tabs' }}
                   </button>
                   <button class="view-pages-btn" :class="{ active: sectionPageCache[resolveKey(cfg.key)]?.shown }"
                     @click="toggleSectionPages(resolveKey(cfg.key))">

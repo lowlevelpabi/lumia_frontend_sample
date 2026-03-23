@@ -284,14 +284,14 @@ const radSplitMode = ref(false)
 // Label strings as computed — avoids Volar misparsing long ternary strings in mustaches
 const radModeLabel = computed(() =>
   radSplitMode.value
-    ? 'Showing separate Results & Discussion tabs'
-    : 'Results & Discussion are combined in this document'
+    ? 'Showing separate Results and Discussion tabs'
+    : 'Results and Discussion are combined in this document'
 )
 const radMergeBtnLabel = computed(() =>
-  radSplitMode.value ? '⊞ Merge tabs' : '⊟ Split into separate tabs'
+  radSplitMode.value ? 'Merge tabs' : 'Split into separate tabs'
 )
 const radTabLabel = computed(() =>
-  isRadCombined.value && !radSplitMode.value ? 'Results & Discussion' : null
+  isRadCombined.value && !radSplitMode.value ? 'Results and Discussion' : null
 )
 
 // Available tabs — merges R+D into one tab when combined
@@ -931,9 +931,10 @@ watch(activeSection, (newSection) => {
                       <!-- Summary preview (shown when a summary was pre-generated) -->
                       <div v-if="sectionsSummary[activeImradTab]" class="imrad-summary-preview">
                         <div class="imrad-summary-label">
-                          <Sparkles :size="13" />
-                          <span>AI Summary Preview</span>
-                          <span class="imrad-summary-hint">This is what will be shown in IMRAD view</span>
+                          <span>Summary Preview</span>
+                          <span class="imrad-summary-hint">All sub-headings of the IMRAD sections have been summarized
+                            to make the
+                            context shorter.</span>
                         </div>
                         <div class="imrad-summary-body">{{ sectionsSummary[activeImradTab] }}</div>
                       </div>

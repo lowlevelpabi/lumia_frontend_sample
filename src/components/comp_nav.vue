@@ -149,7 +149,8 @@ const logout = () => {
 
       <!-- Mobile UI Controls -->
       <div class="mobile-controls">
-        <button v-if="!['home', 'management', 'login', 'register', 'about', 'profile'].includes(route.name as string)"
+        <button
+          v-if="!['home', 'management', 'login', 'register', 'about', 'profile', 'explore'].includes(route.name as string)"
           class="mobile-control-btn" @click="toggleMobileSearch">
           <Search :size="20" />
         </button>
@@ -286,7 +287,8 @@ const logout = () => {
 .nav-logo {
   display: flex;
   align-items: center;
-  gap: 6px; /* Tighter gap to help the icon act as the letter L */
+  gap: 6px;
+  /* Tighter gap to help the icon act as the letter L */
   text-decoration: none;
   flex-shrink: 0;
   transition: all 0.2s ease;
@@ -309,13 +311,16 @@ const logout = () => {
 
 .logo-text {
   font-family: 'Lora', serif;
-  font-size: 1.35rem; /* Slightly larger Umia */
-  font-weight: 700; /* Bolder weight */
+  font-size: 1.35rem;
+  /* Slightly larger Umia */
+  font-weight: 700;
+  /* Bolder weight */
   color: #181c18;
   letter-spacing: -0.01em;
   display: flex;
   flex-direction: column;
-  line-height: 0.85; /* Tighter line height for the sub-text */
+  line-height: 0.85;
+  /* Tighter line height for the sub-text */
 }
 
 .logo-text--sub {
@@ -323,7 +328,8 @@ const logout = () => {
   font-size: 0.55rem;
   font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.22em; /* More tracking for Discovery */
+  letter-spacing: 0.22em;
+  /* More tracking for Discovery */
   color: #00a651;
   margin-top: 4px;
 }
@@ -391,7 +397,9 @@ const logout = () => {
 }
 
 @media (max-width: 860px) {
-  .nav-actions-desktop {
+
+  .nav-actions-desktop,
+  .nav-search-wrap {
     display: none;
   }
 }
