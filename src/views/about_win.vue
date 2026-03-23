@@ -1,46 +1,46 @@
 <template>
   <div class="about-page">
 
-   <!-- ══ HERO: IMMERSIVE ══════════════════════════════════════════ -->
-<section class="hero">
-  <div class="hero__dot-grid" aria-hidden="true"></div>
-  <div class="hero__inner">
-    <div class="hero__masthead">
-      <span class="masthead-rule"></span>
-      <span class="masthead-label">Institutional Repository · Intelligence Layer</span>
-      <span class="masthead-rule"></span>
-    </div>
-    <h1 class="hero__title">
-      The Future of <em>Scholarship</em> Discovery.
-    </h1>
-    <p class="hero__sub">
-      Lumia is an intelligent retrieval layer built for institutional research,
-      leveraging OCR extraction and BERT-driven semantic vector search.
-    </p>
-  </div>
-</section>
+    <!-- ══ HERO ══════════════════════════════════════════════════════ -->
+    <section class="hero">
+      <div class="hero__dot-grid" aria-hidden="true"></div>
+      <div class="hero__inner">
+        <div class="hero__masthead">
+          <span class="masthead-rule"></span>
+          <span class="masthead-label">Institutional Repository · Intelligence Layer</span>
+          <span class="masthead-rule"></span>
+        </div>
+        <h1 class="hero__title">
+          The Future of <em>Scholarship</em> Discovery.
+        </h1>
+        <p class="hero__sub">
+          Lumia is an intelligent retrieval layer built for institutional research,
+          leveraging OCR extraction and BERT-driven semantic vector search.
+        </p>
+      </div>
+    </section>
 
-    <!-- ══ MAIN: BENTO GRID ════════════════════════════════════════ -->
+    <!-- ══ MAIN: BENTO GRID ══════════════════════════════════════════ -->
     <main class="about-main">
       <div class="bento-grid">
 
-        <!-- 01: SYSTEM OVERVIEW (Full Width) -->
+        <!-- 01: SYSTEM OVERVIEW -->
         <section class="bento-card bento-card--hero">
           <div class="card-label">01 — System Overview</div>
           <h2 class="card-title">An AI-Enhanced Research Repository</h2>
           <div class="card-prose">
-            <p>Lumia goes beyond traditional metadata inquiry. It builds a searchable index from the complete full-text
-              of institutional submissions, allowing scholars to surface specific findings deep within document
-              archives.</p>
-            <p>The system was developed to solve the "dark data" problem in academia — where valuable research remains
-              unsearchable because it is trapped within scanned PDFs or unindexed manuscripts.</p>
+            <p>Lumia goes beyond traditional metadata inquiry. It builds a searchable index from the complete
+              full-text of institutional submissions, allowing scholars to surface specific findings deep
+              within document archives.</p>
+            <p>The system was developed to solve the "dark data" problem in academia — where valuable research
+              remains unsearchable because it is trapped within scanned PDFs or unindexed manuscripts.</p>
           </div>
           <div class="card-icon-bg">
             <BookOpen :size="120" />
           </div>
         </section>
 
-        <!-- 02: THE PIPELINE (Dynamic Step Row) -->
+        <!-- 02: THE PIPELINE -->
         <section class="bento-group bento-group--pipeline">
           <div class="group-header">
             <div class="card-label">02 — The Processing Pipeline</div>
@@ -82,38 +82,40 @@
           </div>
         </section>
 
-        <!-- 03: CAPABILITIES (Split) -->
-        <section class="bento-card bento-card--cap">
+        <!-- 03: DISCOVERY — grid-area set inline to bypass Vue scoped CSS limitation -->
+        <section class="bento-card bento-card--cap" style="grid-area: cap1">
           <div class="card-label">03 — Discovery</div>
           <h2 class="card-title">Contextual Alignment</h2>
-          <p class="card-text">Results are ranked via Siamese BERT networks, ensuring that the most relevant research is
-            always surfaced first, regardless of the specific keywords used.</p>
+          <p class="card-text">Results are ranked via Siamese BERT networks, ensuring that the most relevant
+            research is always surfaced first, regardless of the specific keywords used.</p>
           <div class="tech-tags">
             <span class="tech-tag">BERT Classification</span>
             <span class="tech-tag">Vector Search</span>
           </div>
         </section>
 
-        <section class="bento-card bento-card--cap">
+        <!-- 04: VISIBILITY -->
+        <section class="bento-card bento-card--cap" style="grid-area: cap2">
           <div class="card-label">04 — Visibility</div>
           <h2 class="card-title">Structural Highlights</h2>
-          <p class="card-text">View AI-generated summaries of specific methodology or findings before downloading the
-            full document through automated section highlights.</p>
+          <p class="card-text">View AI-generated summaries of specific methodology or findings before
+            downloading the full document through automated section highlights.</p>
           <div class="tech-tags">
             <span class="tech-tag">IMRAD Parsing</span>
             <span class="tech-tag">NLI Inference</span>
           </div>
         </section>
 
-        <!-- SIDEBAR / CONTACT (Right/Bottom) -->
+        <!-- SIDEBAR / CONTACT -->
         <aside class="bento-card bento-card--sidebar">
           <div class="card-label">Enquiries</div>
           <h2 class="card-title">Technical Correspondence</h2>
           <p class="sb-note">
-            For evaluation feedback or institutional access requests, please contact the development team directly.
+            For evaluation feedback or institutional access requests, please contact the development team
+            directly.
           </p>
           <a href="#" class="btn-primary">Contact the Team</a>
-          <div class="sidebar-rule" />
+          <div class="sidebar-rule"></div>
           <div class="sb-meta">
             <span>Development Team</span>
             <span>Est. 2024</span>
@@ -122,21 +124,6 @@
 
       </div>
     </main>
-
-    <!-- ══ FOOTER ══════════════════════════════════════════════════ -->
-    <footer class="about-footer">
-      <div class="about-footer__inner">
-        <div class="about-footer__top-rule" />
-        <p class="about-footer__wordmark">Lumia</p>
-        <p class="about-footer__desc">
-          Powered by local machine learning, Lumia enables high-precision discovery through OCR extraction,
-          structural IMRAD segmenting, and neural semantic ranking. Built to modernize institutional preserves.
-        </p>
-        <p class="about-footer__copy">
-          © {{ new Date().getFullYear() }} Lumia Research Systems.&ensp;Institutional Evaluation Build.
-        </p>
-      </div>
-    </footer>
 
   </div>
 </template>
@@ -148,17 +135,17 @@ import { BookOpen, ScanLine, Brain, FileJson, Network } from 'lucide-vue-next'
 <style scoped>
 @import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400;1,600&family=Source+Sans+3:wght@300;400;500;600&display=swap');
 
+/* ── Design Tokens ───────────────────────────────── */
 .about-page {
-  --ink: #181c18;
-  --ink-2: #3d4239;
-  --ink-3: #7a7f75;
-  --rule: #dfe0db;
-  --surface: #f5f5f2;
-  --paper: #ffffff;
-  --paper-gloss: rgba(255, 255, 255, 0.7);
-  --green: #00a651;
-  --green-dk: #007d3d;
-  --hero-bg: #0d1f12;
+  --ink:        #181c18;
+  --ink-2:      #3d4239;
+  --ink-3:      #7a7f75;
+  --rule:       #dfe0db;
+  --surface:    #f5f5f2;
+  --paper:      #ffffff;
+  --green:      #00a651;
+  --green-dk:   #007d3d;
+  --hero-bg:    #0d1f12;
 
   font-family: 'Source Sans 3', sans-serif;
   background: var(--surface);
@@ -166,7 +153,7 @@ import { BookOpen, ScanLine, Brain, FileJson, Network } from 'lucide-vue-next'
   min-height: 100vh;
 }
 
-/* ── Hero ─────────────────────────────────────────── */
+/* ── Hero ────────────────────────────────────────── */
 .hero {
   position: relative;
   background: var(--hero-bg);
@@ -236,7 +223,7 @@ import { BookOpen, ScanLine, Brain, FileJson, Network } from 'lucide-vue-next'
   margin: 0 auto;
 }
 
-/* ── Bento Grid ───────────────────────────────────── */
+/* ── Bento Grid ──────────────────────────────────── */
 .about-main {
   max-width: 1200px;
   margin: 0 auto;
@@ -247,12 +234,13 @@ import { BookOpen, ScanLine, Brain, FileJson, Network } from 'lucide-vue-next'
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   grid-template-areas:
-    "hero hero hero"
+    "hero     hero     hero"
     "pipeline pipeline pipeline"
-    "cap1 cap2 sidebar";
+    "cap1     cap2     sidebar";
   gap: 24px;
 }
 
+/* ── Bento Cards ─────────────────────────────────── */
 .bento-card {
   background: var(--paper);
   border: 1px solid var(--rule);
@@ -275,13 +263,7 @@ import { BookOpen, ScanLine, Brain, FileJson, Network } from 'lucide-vue-next'
   min-height: 300px;
 }
 
-.bento-card--cap:nth-of-type(1) {
-  grid-area: cap1;
-}
-
-.bento-card--cap:nth-of-type(2) {
-  grid-area: cap2;
-}
+/* cap1 and cap2 are set via inline style on the elements */
 
 .bento-card--sidebar {
   grid-area: sidebar;
@@ -296,7 +278,7 @@ import { BookOpen, ScanLine, Brain, FileJson, Network } from 'lucide-vue-next'
   padding: 40px 32px;
 }
 
-/* ── Card Content ─────────────────────────────────── */
+/* ── Card Content ────────────────────────────────── */
 .card-label {
   font-size: 0.65rem;
   font-weight: 700;
@@ -305,6 +287,8 @@ import { BookOpen, ScanLine, Brain, FileJson, Network } from 'lucide-vue-next'
   color: var(--green);
   margin-bottom: 16px;
   display: block;
+  position: relative;
+  z-index: 1;
 }
 
 .card-title {
@@ -314,6 +298,8 @@ import { BookOpen, ScanLine, Brain, FileJson, Network } from 'lucide-vue-next'
   color: var(--ink);
   margin: 0 0 18px;
   line-height: 1.25;
+  position: relative;
+  z-index: 1;
 }
 
 .card-prose {
@@ -321,10 +307,16 @@ import { BookOpen, ScanLine, Brain, FileJson, Network } from 'lucide-vue-next'
   line-height: 1.75;
   color: var(--ink-2);
   max-width: 700px;
+  position: relative;
+  z-index: 1;
 }
 
 .card-prose p {
   margin-bottom: 12px;
+}
+
+.card-prose p:last-child {
+  margin-bottom: 0;
 }
 
 .card-text {
@@ -344,14 +336,11 @@ import { BookOpen, ScanLine, Brain, FileJson, Network } from 'lucide-vue-next'
   transform: rotate(-15deg);
 }
 
-.card-prose,
-.card-title,
-.card-label {
-  position: relative;
-  z-index: 1;
+/* ── Pipeline ────────────────────────────────────── */
+.group-header {
+  margin-bottom: 0;
 }
 
-/* ── Pipeline Row ─────────────────────────────────── */
 .pipeline-row {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -360,7 +349,6 @@ import { BookOpen, ScanLine, Brain, FileJson, Network } from 'lucide-vue-next'
 }
 
 .step-card {
-  position: relative;
   padding: 20px;
   background: var(--surface);
   border-radius: 4px;
@@ -389,6 +377,7 @@ import { BookOpen, ScanLine, Brain, FileJson, Network } from 'lucide-vue-next'
 
 .step-icon {
   color: var(--ink);
+  flex-shrink: 0;
 }
 
 .step-card h3 {
@@ -405,7 +394,7 @@ import { BookOpen, ScanLine, Brain, FileJson, Network } from 'lucide-vue-next'
   margin: 0;
 }
 
-/* ── Sidebar Component ───────────────────────────── */
+/* ── Sidebar ─────────────────────────────────────── */
 .sb-note {
   font-size: 0.9rem;
   line-height: 1.6;
@@ -429,7 +418,7 @@ import { BookOpen, ScanLine, Brain, FileJson, Network } from 'lucide-vue-next'
   color: var(--ink-3);
 }
 
-/* ── UI Elements ─────────────────────────────────── */
+/* ── Tech Tags ───────────────────────────────────── */
 .tech-tags {
   display: flex;
   flex-wrap: wrap;
@@ -447,6 +436,7 @@ import { BookOpen, ScanLine, Brain, FileJson, Network } from 'lucide-vue-next'
   background: var(--paper);
 }
 
+/* ── Button ──────────────────────────────────────── */
 .btn-primary {
   display: block;
   text-align: center;
@@ -460,7 +450,7 @@ import { BookOpen, ScanLine, Brain, FileJson, Network } from 'lucide-vue-next'
   background: var(--ink);
   color: #fff;
   border: 1.5px solid var(--ink);
-  transition: background 0.2s;
+  transition: background 0.2s, border-color 0.2s;
 }
 
 .btn-primary:hover {
@@ -468,62 +458,15 @@ import { BookOpen, ScanLine, Brain, FileJson, Network } from 'lucide-vue-next'
   border-color: var(--green);
 }
 
-/* ── Footer ──────────────────────────────────────── */
-.about-footer {
-  background: var(--hero-bg);
-  border-top: 3px solid var(--green);
-}
-
-.about-footer__inner {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 64px 24px 56px;
-}
-
-.about-footer__top-rule {
-  width: 100%;
-  height: 1px;
-  background: rgba(255, 255, 255, 0.10);
-  margin-bottom: 40px;
-}
-
-.about-footer__wordmark {
-  font-family: 'Lora', serif;
-  font-size: 1.2rem;
-  font-weight: 600;
-  font-style: italic;
-  color: var(--green);
-  margin: 0 0 16px;
-  letter-spacing: 0.04em;
-}
-
-.about-footer__desc {
-  font-size: 0.95rem;
-  font-weight: 300;
-  line-height: 1.8;
-  color: rgba(240, 237, 230, 0.5);
-  max-width: 720px;
-  margin: 0 0 28px;
-}
-
-.about-footer__copy {
-  font-size: 0.72rem;
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: rgba(240, 237, 230, 0.25);
-  margin: 0;
-}
-
 /* ── Responsive ──────────────────────────────────── */
 @media (max-width: 1024px) {
   .bento-grid {
     grid-template-columns: repeat(2, 1fr);
     grid-template-areas:
-      "hero hero"
+      "hero     hero"
       "pipeline pipeline"
-      "cap1 cap2"
-      "sidebar sidebar";
+      "cap1     cap2"
+      "sidebar  sidebar";
   }
 }
 
@@ -541,17 +484,35 @@ import { BookOpen, ScanLine, Brain, FileJson, Network } from 'lucide-vue-next'
     grid-template-areas: none;
   }
 
-  .bento-card--sidebar {
-    grid-area: auto;
-  }
-
+  /* Reset all grid-area assignments at mobile so inline styles don't conflict */
+  .bento-card--hero,
+  .bento-card--sidebar,
   .bento-group--pipeline {
     grid-area: auto;
   }
 
   .bento-card--hero {
-    grid-area: auto;
     min-height: auto;
+  }
+
+  /* Override inline styles at mobile */
+  .bento-card--cap {
+    grid-area: auto !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .about-main {
+    padding: 40px 16px 60px;
+  }
+
+  .pipeline-row {
+    grid-template-columns: 1fr;
+  }
+
+  .bento-card,
+  .bento-group--pipeline {
+    padding: 24px 20px;
   }
 }
 </style>
