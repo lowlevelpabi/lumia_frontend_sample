@@ -1,24 +1,24 @@
 <template>
   <div class="about-page">
 
-   <!-- ══ HERO: IMMERSIVE ══════════════════════════════════════════ -->
-<section class="hero">
-  <div class="hero__dot-grid" aria-hidden="true"></div>
-  <div class="hero__inner">
-    <div class="hero__masthead">
-      <span class="masthead-rule"></span>
-      <span class="masthead-label">Institutional Repository · Intelligence Layer</span>
-      <span class="masthead-rule"></span>
-    </div>
-    <h1 class="hero__title">
-      The Future of <em>Scholarship</em> Discovery.
-    </h1>
-    <p class="hero__sub">
-      Lumia is an intelligent retrieval layer built for institutional research,
-      leveraging OCR extraction and BERT-driven semantic vector search.
-    </p>
-  </div>
-</section>
+    <!-- ══ HERO: IMMERSIVE ══════════════════════════════════════════ -->
+    <section class="hero">
+      <div class="hero__dot-grid" aria-hidden="true"></div>
+      <div class="hero__inner">
+        <div class="hero__masthead">
+          <span class="masthead-rule"></span>
+          <span class="masthead-label">Institutional Repository · Intelligence Layer</span>
+          <span class="masthead-rule"></span>
+        </div>
+        <h1 class="hero__title">
+          The Future of <em>Scholarship</em> Discovery.
+        </h1>
+        <p class="hero__sub">
+          Lumia is an intelligent retrieval layer built for institutional research,
+          leveraging OCR extraction and BERT-driven semantic vector search.
+        </p>
+      </div>
+    </section>
 
     <!-- ══ MAIN: BENTO GRID ════════════════════════════════════════ -->
     <main class="about-main">
@@ -122,21 +122,6 @@
 
       </div>
     </main>
-
-    <!-- ══ FOOTER ══════════════════════════════════════════════════ -->
-    <footer class="about-footer">
-      <div class="about-footer__inner">
-        <div class="about-footer__top-rule" />
-        <p class="about-footer__wordmark">Lumia</p>
-        <p class="about-footer__desc">
-          Powered by local machine learning, Lumia enables high-precision discovery through OCR extraction,
-          structural IMRAD segmenting, and neural semantic ranking. Built to modernize institutional preserves.
-        </p>
-        <p class="about-footer__copy">
-          © {{ new Date().getFullYear() }} Lumia Research Systems.&ensp;Institutional Evaluation Build.
-        </p>
-      </div>
-    </footer>
 
   </div>
 </template>

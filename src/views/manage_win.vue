@@ -8,13 +8,14 @@ import {
   Settings, ArrowLeft, Save, BookOpen,
   UserCheck, Menu, X, Clock, TrendingUp,
   FileUp, Sparkles, Eye, Settings2, CheckCircle, AlertCircle, Check,
-  AlertTriangle, RefreshCw, SquareArrowRight, ShieldAlert, ShieldCheck, UserCog
+  AlertTriangle, RefreshCw, SquareArrowRight, ShieldAlert, ShieldCheck, UserCog, UserPlus
 } from 'lucide-vue-next'
-import { api, type Paper, type UserResponse, type PartialPaperMetadata } from '../services/api'
+import { api, type Paper, type UserResponse, type PartialPaperMetadata, type ActivityLog } from '../services/api'
 import { useAuth } from '../composables/useAuth'
 
 const router = useRouter()
-const { isAdmin } = useAuth()
+const { isAdmin, isFaculty } = useAuth()
+const canEdit = computed(() => isAdmin.value || isFaculty.value)
 
 // ── Sidebar collapse ────────────────────────────────────────────
 const sidebarCollapsed = ref(false)
@@ -50,7 +51,7 @@ onUnmounted(() => {
 })
 
 // ── Sidebar ─────────────────────────────────────────────────────
-type Section = 'dashboard' | 'repository' | 'users' | 'upload'
+type Section = 'dashboard' | 'repository' | 'users' | 'upload' | 'logs'
 const activeSection = ref<Section>('dashboard')
 
 const baseNavItems: { id: Section; label: string; icon: Component; description: string }[] = [
@@ -60,9 +61,10 @@ const baseNavItems: { id: Section; label: string; icon: Component; description: 
 ]
 const adminNavItems: { id: Section; label: string; icon: Component; description: string }[] = [
   { id: 'users', label: 'User Manager', icon: Users, description: 'Manage students & faculty' },
+  { id: 'logs', label: 'Activity Log', icon: Clock, description: 'Track uploads, edits & deletes' },
 ]
 const navItems = computed(() =>
-  isAdmin.value ? [...baseNavItems, ...adminNavItems] : baseNavItems
+  isAdmin.value ? [...baseNavItems, ...adminNavItems] : canEdit.value ? [...baseNavItems, { id: 'logs' as Section, label: 'Activity Log', icon: Clock, description: 'Track uploads, edits & deletes' }] : baseNavItems
 )
 
 const activeLabel = computed(() => {
@@ -184,6 +186,35 @@ const adminCount = computed(() => users.value.filter(u => u.role === 'Admin').le
 const facultyCount = computed(() => users.value.filter(u => u.role === 'Faculty').length)
 const studentCount = computed(() => users.value.filter(u => u.role === 'User').length) // Based on models/user.py UserRole.USER = "User"
 
+// ── Activity Logs ─────────────────────────────────────────────────
+const logs = ref<ActivityLog[]>([])
+const loadingLogs = ref(false)
+
+const fetchLogs = async () => {
+  loadingLogs.value = true
+  try {
+    logs.value = await api.getLogs()
+  } catch (e) {
+    console.error('Failed to fetch logs: ', e)
+  } finally {
+    loadingLogs.value = false
+  }
+}
+
+const logActionColor = (action: string) => {
+  if (action === 'Upload') return 'green'
+  if (action === 'Edit') return 'blue'
+  if (action === 'Delete') return 'red'
+  return ''
+}
+
+const formatLogDate = (iso: string) => {
+  const d = new Date(iso)
+  return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+}
+
+watch(activeSection, (s) => { if (s === 'logs') fetchLogs() })
+
 // ── Role Change ───────────────────────────────────────────────────
 const roleTarget = ref<UserResponse | null>(null)
 const roleNew = ref('')
@@ -216,6 +247,56 @@ const handleRoleChange = async () => {
     console.error(e)
   } finally {
     roleChanging.value = false
+  }
+}
+
+// ── User Creation ────────────────────────────────────────────────
+const showCreateUserModal = ref(false)
+const creatingUser = ref(false)
+const createError = ref('')
+const createdPassword = ref('')
+const newUser = reactive({
+  username: '',
+  full_name: '',
+  email: '',
+  role: 'Faculty'
+})
+
+const openCreateUserModal = () => {
+  newUser.username = ''
+  newUser.full_name = ''
+  newUser.email = ''
+  newUser.role = 'Faculty'
+  createdPassword.value = ''
+  createError.value = ''
+  showCreateUserModal.value = true
+}
+
+const closeCreateUserModal = () => {
+  showCreateUserModal.value = false
+  newUser.username = ''
+  newUser.full_name = ''
+  newUser.email = ''
+  newUser.role = 'Faculty'
+  createdPassword.value = ''
+  createError.value = ''
+}
+
+const handleCreateStaff = async () => {
+  if (!newUser.username || !newUser.full_name || !newUser.email) {
+    createError.value = 'Please fill in all fields.'
+    return
+  }
+  creatingUser.value = true
+  createError.value = ''
+  try {
+    const res = await api.createStaffUser(newUser)
+    createdPassword.value = res.password
+    await fetchUsers()
+  } catch (err) {
+    createError.value = (err as Error).message || 'Failed to create user.'
+  } finally {
+    creatingUser.value = false
   }
 }
 
@@ -490,7 +571,12 @@ const handleFinalConfirm = async () => {
       sections_summary: { ...sectionsSummary },
     })
     step.value = 3
-    setTimeout(() => { setSection('repository'); step.value = 1; file.value = null }, 2000)
+    setTimeout(async () => {
+      await fetchPapers()
+      setSection('repository')
+      step.value = 1
+      file.value = null
+    }, 200)
   } catch (err) {
     uploadError.value = (err as Error).message || 'Failed to finalize upload.'
   } finally { uploadingPaper.value = false }
@@ -803,7 +889,7 @@ watch(activeSection, (newSection) => {
                   <p class="notice-desc">The following sections could not be found. Search accuracy may be reduced.</p>
                   <div class="missing-list">
                     <span v-for="s in missingSections" :key="s" class="missing-badge"><span class="missing-dot" />{{ s
-                    }}</span>
+                      }}</span>
                   </div>
                 </div>
                 <div class="notice-actions">
@@ -923,7 +1009,7 @@ watch(activeSection, (newSection) => {
                         <span>
                           <strong>Auto-Trimmed:</strong>
                           This section was trimmed at <strong>"{{ uploadMetadata.trim_points[activeImradTab]
-                            }}"</strong>
+                          }}"</strong>
                           to avoid including sub-heading content.
                         </span>
                       </div>
@@ -1061,6 +1147,8 @@ watch(activeSection, (newSection) => {
                     <th>Year</th>
                     <th>Department</th>
                     <th>Type</th>
+                    <th>Uploaded By</th>
+                    <th>Role</th>
                     <th class="th-r">Actions</th>
                   </tr>
                 </thead>
@@ -1080,16 +1168,25 @@ watch(activeSection, (newSection) => {
                         <div class="skel skel-chip" />
                       </td>
                       <td>
+                        <div class="skel skel-chip" />
+                      </td>
+                      <td>
                         <div class="skel skel-dept" />
                       </td>
                       <td>
                         <div class="skel skel-type" />
                       </td>
+                      <td>
+                        <div class="skel skel-dept" />
+                      </td>
+                      <td>
+                        <div class="skel skel-chip" />
+                      </td>
                       <td />
                     </tr>
                   </template>
                   <tr v-else-if="filteredPapers.length === 0">
-                    <td colspan="5">
+                    <td colspan="7">
                       <div class="tbl-empty">
                         <FolderOpen :size="40" />
                         <h3>No papers found</h3>
@@ -1115,11 +1212,19 @@ watch(activeSection, (newSection) => {
                     <td><span class="dept-chip">{{ paper.department }}</span></td>
                     <td><span class="type-badge" :class="typeColor(paper.project_type)">{{ paper.project_type }}</span>
                     </td>
+                    <td><span class="uploader-chip">{{ paper.uploaded_by ?? '—' }}</span></td>
+                    <td>
+                      <span class="type-badge"
+                        :class="paper.uploader_role === 'Admin' ? 'purple' : paper.uploader_role === 'Faculty' ? 'green' : 'blue'">
+                        {{ paper.uploader_role ?? '—' }}
+                      </span>
+                    </td>
                     <td class="td-r">
-                      <button @click="openEditModal(paper)" class="row-btn" title="Edit">
+                      <button v-if="canEdit" @click="openEditModal(paper)" class="row-btn" title="Edit">
                         <Edit3 :size="13" />
                       </button>
-                      <button @click="handleDelete(paper.id)" class="row-btn danger" title="Delete">
+                      <button v-if="isAdmin || isFaculty" @click="handleDelete(paper.id)" class="row-btn danger"
+                        title="Delete">
                         <Trash2 :size="13" />
                       </button>
                     </td>
@@ -1133,8 +1238,14 @@ watch(activeSection, (newSection) => {
         <!-- ══ USER MANAGER ══════════════════════════════════════ -->
         <template v-else-if="activeSection === 'users'">
           <div class="page-head">
-            <h1 class="page-title">User Management</h1>
-            <p class="page-sub">Monitor accounts and manage role-based access control.</p>
+            <div>
+              <h1 class="page-title">User Management</h1>
+              <p class="page-sub">Monitor accounts and manage role-based access control.</p>
+            </div>
+            <button v-if="isAdmin" @click="openCreateUserModal" class="add-btn">
+              <UserPlus :size="16" />
+              <span>Create Staff Account</span>
+            </button>
           </div>
 
           <div class="stats-row">
@@ -1278,6 +1389,88 @@ watch(activeSection, (newSection) => {
           </div>
         </div>
 
+        <!-- ══ ACTIVITY LOG ════════════════════════════════════════ -->
+        <template v-else-if="activeSection === 'logs'">
+          <div class="page-head">
+            <h1 class="page-title">Activity Log</h1>
+            <p class="page-sub">Track who uploaded, edited, or deleted research papers.</p>
+          </div>
+
+          <div class="tbl-card">
+            <div class="tbl-card-head">
+              <span class="tbl-count">{{ logs.length }} event{{ logs.length !== 1 ? 's' : '' }}</span>
+              <button @click="fetchLogs" class="ghost-btn" title="Refresh">
+                <RefreshCw :size="13" />
+              </button>
+            </div>
+            <div class="tbl-scroll">
+              <table class="tbl">
+                <thead>
+                  <tr>
+                    <th>Action</th>
+                    <th>Research Paper</th>
+                    <th>Performed By</th>
+                    <th>Role</th>
+                    <th>Date &amp; Time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <template v-if="loadingLogs">
+                    <tr v-for="i in 6" :key="'lsk' + i" class="skel-row">
+                      <td>
+                        <div class="skel skel-type" />
+                      </td>
+                      <td>
+                        <div class="skel skel-t1" />
+                      </td>
+                      <td>
+                        <div class="skel skel-chip" />
+                      </td>
+                      <td>
+                        <div class="skel skel-chip" />
+                      </td>
+                      <td>
+                        <div class="skel skel-dept" />
+                      </td>
+                    </tr>
+                  </template>
+                  <tr v-else-if="logs.length === 0">
+                    <td colspan="5">
+                      <div class="tbl-empty">
+                        <Clock :size="40" />
+                        <h3>No activity yet</h3>
+                        <p>Uploads, edits, and deletes will appear here.</p>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr v-else v-for="log in logs" :key="log.id" class="tbl-row">
+                    <td>
+                      <span class="log-badge" :class="logActionColor(log.action)">
+                        {{ log.action }}
+                      </span>
+                    </td>
+                    <td class="td-paper">
+                      <span class="paper-name">{{ log.paper_title }}</span>
+                    </td>
+                    <td>
+                      <span class="uploader-chip">{{ log.performed_by }}</span>
+                    </td>
+                    <td>
+                      <span class="type-badge"
+                        :class="log.performed_by_role === 'Admin' ? 'purple' : log.performed_by_role === 'Faculty' ? 'green' : 'blue'">
+                        {{ log.performed_by_role ?? '—' }}
+                      </span>
+                    </td>
+                    <td>
+                      <span class="log-date">{{ formatLogDate(log.performed_at) }}</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </template>
+
         <p class="foot-notice">
           <ShieldAlert :size="12" /> Only Admin, Faculty, and Librarians can upload or modify papers.
         </p>
@@ -1391,6 +1584,94 @@ watch(activeSection, (newSection) => {
                   <Loader2 v-if="roleChanging" :size="13" class="spin" />
                   <Check v-else :size="13" />
                   {{ roleChanging ? 'Updating…' : 'Confirm Role Change' }}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- ── CREATE USER MODAL ─────────────────────────────────── -->
+          <div v-if="showCreateUserModal" class="modal-overlay" @click.self="closeCreateUserModal">
+            <div class="modal-card creation-modal">
+              <div class="modal-head">
+                <div class="modal-head-icon purple">
+                  <UserPlus :size="20" />
+                </div>
+                <div>
+                  <h3>Create Staff Account</h3>
+                  <p>Generate a new Admin or Faculty account.</p>
+                </div>
+                <button @click="closeCreateUserModal" class="modal-close">
+                  <X :size="18" />
+                </button>
+              </div>
+
+              <div class="modal-body">
+                <template v-if="!createdPassword">
+                  <div class="form-grid">
+                    <div class="form-group">
+                      <label class="form-lbl">Username</label>
+                      <input v-model="newUser.username" type="text" class="form-input" placeholder="e.g. jdoe" />
+                    </div>
+                    <div class="form-group">
+                      <label class="form-lbl">Full Name</label>
+                      <input v-model="newUser.full_name" type="text" class="form-input" placeholder="e.g. John Doe" />
+                    </div>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-lbl">Email Address</label>
+                    <input v-model="newUser.email" type="email" class="form-input"
+                      placeholder="e.g. john@example.com" />
+                  </div>
+                  <div class="form-group">
+                    <label class="form-lbl">Role</label>
+                    <div class="role-opts">
+                      <label class="role-opt" :class="{ selected: newUser.role === 'Faculty' }">
+                        <input type="radio" v-model="newUser.role" value="Faculty" />
+                        <div class="role-opt-ico green">
+                          <ShieldCheck :size="15" />
+                        </div>
+                        <div class="role-opt-info"><span class="role-opt-name">Faculty</span></div>
+                        <Check v-if="newUser.role === 'Faculty'" :size="13" class="role-check" />
+                      </label>
+                      <label class="role-opt" :class="{ selected: newUser.role === 'Admin' }">
+                        <input type="radio" v-model="newUser.role" value="Admin" />
+                        <div class="role-opt-ico purple">
+                          <ShieldAlert :size="15" />
+                        </div>
+                        <div class="role-opt-info"><span class="role-opt-name">Admin</span></div>
+                        <Check v-if="newUser.role === 'Admin'" :size="13" class="role-check" />
+                      </label>
+                    </div>
+                  </div>
+                  <div v-if="createError" class="role-error" style="margin-top: 1rem">
+                    <AlertCircle :size="14" />
+                    <span>{{ createError }}</span>
+                  </div>
+                </template>
+
+                <template v-else>
+                  <div class="success-box">
+                    <div class="success-ico-wrap">
+                      <CheckCircle :size="32" class="success-ico" />
+                    </div>
+                    <h4 class="success-title">Account Created!</h4>
+                    <p class="success-msg">Please save the auto-generated password below. It will not be shown again.
+                    </p>
+                    <div class="pw-box">
+                      <span class="pw-lbl">Password</span>
+                      <code class="pw-val">{{ createdPassword }}</code>
+                    </div>
+                  </div>
+                </template>
+              </div>
+
+              <div class="modal-foot">
+                <button @click="closeCreateUserModal" class="ghost-btn">
+                  {{ createdPassword ? 'Close' : 'Cancel' }}
+                </button>
+                <button v-if="!createdPassword" @click="handleCreateStaff" class="save-btn" :disabled="creatingUser">
+                  <Loader2 v-if="creatingUser" :size="16" class="spin" />
+                  <span v-else>Generate Account</span>
                 </button>
               </div>
             </div>
@@ -3509,6 +3790,115 @@ watch(activeSection, (newSection) => {
   background: #ffffff;
 }
 
+/* ── Creation Modal ─────────────────────────────────────────── */
+.creation-modal {
+  max-width: 480px !important;
+}
+
+.modal-head-icon.purple {
+  background: #f5f3ff;
+  color: #7c3aed;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.form-group {
+  margin-bottom: 1.25rem;
+}
+
+.form-lbl {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--ink-2);
+  margin-bottom: 0.5rem;
+  letter-spacing: 0.01em;
+}
+
+.form-input {
+  width: 100%;
+  padding: 0.65rem 0.85rem;
+  background: var(--paper);
+  border: 1.5px solid var(--rule);
+  border-radius: 8px;
+  font-size: 0.9rem;
+  color: var(--ink);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px var(--green-dim);
+}
+
+/* Success display */
+.success-box {
+  padding: 0.5rem 0;
+}
+
+.success-ico-wrap {
+  width: 56px;
+  height: 56px;
+  background: var(--green-dim);
+  color: var(--green);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 1.25rem;
+}
+
+.success-title {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--ink);
+  text-align: center;
+  margin-bottom: 0.5rem;
+}
+
+.success-msg {
+  font-size: 0.88rem;
+  color: var(--ink-3);
+  text-align: center;
+  margin-bottom: 1.75rem;
+  line-height: 1.5;
+}
+
+.pw-box {
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  position: relative;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.03);
+}
+
+.pw-lbl {
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  letter-spacing: 0.08em;
+}
+
+.pw-val {
+  font-family: 'JetBrains Mono', 'Courier New', monospace;
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--green-dk);
+  letter-spacing: 0.05em;
+}
+
 .strategy-modal {
   max-width: 420px;
 }
@@ -3993,5 +4383,50 @@ watch(activeSection, (newSection) => {
 
 .imrad-raw-label:hover {
   color: var(--ink);
+}
+
+/* ══ UPLOADED BY CHIP ══════════════════════════════════════════ */
+.uploader-chip {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--ink-2);
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 20px;
+  padding: 0.15rem 0.55rem;
+  white-space: nowrap;
+}
+
+/* ══ ACTIVITY LOG BADGES ════════════════════════════════════════ */
+.log-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.2rem 0.55rem;
+  border-radius: 4px;
+}
+
+.log-badge.green {
+  background: var(--green-dim);
+  color: var(--green-dk);
+}
+
+.log-badge.blue {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.log-badge.red {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.log-date {
+  font-size: 0.78rem;
+  color: var(--ink-3);
+  white-space: nowrap;
 }
 </style>

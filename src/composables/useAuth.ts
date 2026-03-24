@@ -69,9 +69,15 @@ export function useAuth() {
     return (payload?.sub as string) ?? ''
   })
 
+  const fullName = computed<string>(() => {
+    const payload = getTokenPayload()
+    return(payload?.full_name as string) ?? ''
+  })
+
   return {
     isLoggedIn,
     username,
+    fullName,
     userRole,
     isAdmin,
     isFaculty,

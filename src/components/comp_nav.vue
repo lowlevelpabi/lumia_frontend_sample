@@ -16,7 +16,7 @@ const showMobileMenu = ref(false)
 const showMobileSearch = ref(false)
 const showProfileMenu = ref(false)
 
-const { isStaff, username, userRole } = useAuth()
+const { isStaff, username, fullName, userRole } = useAuth()
 
 const checkAuth = () => {
   isLoggedIn.value = !!localStorage.getItem('token')
@@ -113,7 +113,7 @@ const logout = () => {
                 <img src="/avatar.png" alt="User Avatar" />
               </div>
               <div class="profile-info">
-                <span class="profile-name">{{ username || 'Academic User' }}</span>
+                <span class="profile-name">{{ fullName || 'Academic User' }}</span>
                 <span class="profile-role">{{ userRole }}</span>
               </div>
               <ChevronDown :size="14" class="dropdown-arrow" :class="{ 'rotated': showProfileMenu }" />

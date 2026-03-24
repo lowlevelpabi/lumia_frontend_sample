@@ -24,6 +24,8 @@ export interface Paper {
   section_pages?: Record<string, number[]>
   detected_subheadings?: string[]
   trim_points?: Record<string, string>
+  uploaded_by?: string
+  uploader_role?: string
 }
 
 export type PaperMetadata = Omit<Paper, 'id' | 'view_count' | 'citation_count'>
@@ -101,6 +103,7 @@ export interface PaperUpdate {
 
 export interface UserData {
   username: string
+  full_name?: string
   email: string
   password?: string
   role: string
@@ -164,6 +167,15 @@ export interface DashboardStats {
   total_capstone: number
   active_borrows: number
   total_penalties: number
+}
+
+export interface ActivityLog {
+  id: number
+  action: 'Upload' | 'Edit' | 'Delete'
+  paper_title: string
+  performed_by: string
+  performed_at: string
+  performed_by_role?: string
 }
 
 export const api = {
@@ -357,11 +369,29 @@ export const api = {
   async changeUserRole(userId: number, role: string): Promise<UserResponse> {
     const response = await apiFetch(`${BASE_URL}/users/${userId}/role`, {
       method: 'PATCH',
-      headers: { ...getAuthHeaders(), 'Content-Type': 'application/json'},
-      body: JSON.stringify({ role}),
+      headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role }),
     })
     if (!response.ok) throw new Error('Failed to change user role')
-      return response.json()
+    return response.json()
+  },
+
+  async createStaffUser(userData: {
+    username: string
+    full_name: string
+    email: string
+    role: string
+  }): Promise<{ user: UserResponse; password: string }> {
+    const response = await apiFetch(`${BASE_URL}/users/staff`, {
+      method: 'POST',
+      headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify(userData),
+    })
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.detail || 'Failed to create staff user')
+    }
+    return response.json()
   },
 
   async getUserMe(): Promise<UserResponse> {
@@ -438,6 +468,14 @@ export const api = {
       headers: getAuthHeaders(),
     })
     if (!response.ok) throw new Error('Failed to fetch dashboard stats')
+    return response.json()
+  },
+
+  async getLogs(): Promise<ActivityLog[]> {
+    const response = await apiFetch(`${BASE_URL}/logs/`, {
+      headers: getAuthHeaders(),
+    })
+    if (!response.ok) throw new Error('Failed to fetch logs')
     return response.json()
   },
 }
