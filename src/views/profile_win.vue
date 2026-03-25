@@ -24,7 +24,7 @@
 
         <!-- Account Data Section -->
         <div class="profile-section">
-          <h3 class="section-title">Account Detail</h3>
+          <h3 class="section-title">Account Details</h3>
           <div class="info-list">
             <div class="info-row">
               <span class="label">User ID</span>
