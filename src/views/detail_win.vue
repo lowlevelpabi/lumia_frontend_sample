@@ -2,7 +2,7 @@
 import { ref, onMounted, watch, computed } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { useAuth } from '../composables/useAuth'
-import { Calendar, User, FileText, BookOpen, Eye, Award, CheckCircle, Sparkles, TrendingUp, MessageSquare, ImageIcon, Loader2, ChevronRight, Columns, AlertTriangle } from 'lucide-vue-next'
+import { Calendar, User, FileText, BookOpen, Eye, Award, CheckCircle, Sparkles, TrendingUp, Loader2, ChevronRight, Columns } from 'lucide-vue-next'
 import { api, type Paper, type SearchResult } from '../services/api'
 
 const route = useRoute()
@@ -38,8 +38,6 @@ const isRadCombined = computed(() => {
   return !!(r && d && r.trim() === d.trim())
 })
 
-// User can toggle split mode to inspect combined RAD as separate tabs
-const radSplitMode = ref(false)
 
 // Resolve virtual 'rad' key → actual Paper field key ('results')
 // Use this everywhere we access paper[key] or sectionPageCache[key]
@@ -49,17 +47,10 @@ const resolveKey = (key: string): 'introduction' | 'methods' | 'results' | 'disc
 // IMRAD section config — computed so it reacts to combined/split mode
 type SectionCfg = { key: TabKey; label: string; summaryKey: keyof Paper }
 const IMRAD_SECTION_CONFIGS = computed((): SectionCfg[] => {
-  const base: SectionCfg[] = [
+  return [
     { key: 'introduction', label: 'Introduction', summaryKey: 'introduction_summary' },
     { key: 'methods', label: 'Methodology', summaryKey: 'methods_summary' },
-  ]
-  if (isRadCombined.value && !radSplitMode.value) {
-    return [...base, { key: 'rad', label: 'Results and Discussion', summaryKey: 'results_summary' }]
-  }
-  return [
-    ...base,
-    { key: 'results', label: 'Results and Findings', summaryKey: 'results_summary' },
-    { key: 'discussion', label: 'Discussion', summaryKey: 'discussion_summary' },
+    { key: 'rad', label: 'Results and Discussion', summaryKey: 'results_summary' },
   ]
 })
 
@@ -86,36 +77,6 @@ const parseSummaryBlocks = (text: string): { heading: string; body: string }[] =
   return blocks.filter(b => b.body.trim())
 }
 
-// Section page viewer state
-const sectionPageCache = ref<Record<string, { pages: { page_num: number; thumbnail: string }[], loading: boolean, shown: boolean }>>({
-  introduction: { pages: [], loading: false, shown: false },
-  methods: { pages: [], loading: false, shown: false },
-  results: { pages: [], loading: false, shown: false },
-  discussion: { pages: [], loading: false, shown: false },
-})
-
-const toggleSectionPages = async (section: string) => {
-  const s = sectionPageCache.value[section]
-  if (!s) return
-  if (s.shown) { s.shown = false; return }
-  if (s.pages.length > 0) { s.shown = true; return }
-  if (!paper.value) return
-
-  s.loading = true
-  s.shown = true
-  try {
-    const base = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api/v1'
-    const res = await fetch(`${base}/papers/${paper.value.id}/section-pages/${section}`)
-    if (!res.ok) throw new Error(`HTTP ${res.status}`)
-    const data = await res.json()
-    s.pages = data.pages ?? []
-  } catch (e) {
-    console.error('Failed to load section pages:', e)
-    s.pages = []
-  } finally {
-    s.loading = false
-  }
-}
 
 const showFullAbstract = ref(false)
 const ABSTRACT_PREVIEW_LIMIT = 400
@@ -149,6 +110,7 @@ const loadPaperData = async (id: string) => {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 }
+
 
 onMounted(() => { loadPaperData(String(route.params.id)) })
 watch(() => route.params.id, (newId) => { if (newId) loadPaperData(String(newId)) })
@@ -192,6 +154,32 @@ const abstractPreview = computed(() => {
     ? paper.value.abstract.substring(0, ABSTRACT_PREVIEW_LIMIT) + '...'
     : paper.value.abstract
 })
+
+// ── IMRAD structured rendering ────────────────────────────────────────────────
+// The backend pre-parses flat text into typed blocks via imrad_structure_service.
+// We just render them here — no client-side regex or label lists needed.
+
+import type { ImradBlock } from '../services/api'
+
+// Get structured blocks for a section key, falling back to an empty array.
+// Resolves the virtual 'rad' key → 'results' (combined RAD documents).
+const getStructuredBlocks = (key: string): ImradBlock[] => {
+  if (!paper.value?.imrad_structured) return []
+  if (key === 'rad') {
+    const r = paper.value.imrad_structured.results ?? []
+    const d = paper.value.imrad_structured.discussion ?? []
+    // If they are identical (backend combined them), just return one
+    if (isRadCombined.value) return r
+    // Otherwise concatenate
+    return [...r, ...d]
+  }
+  return paper.value.imrad_structured[key as keyof typeof paper.value.imrad_structured] ?? []
+}
+
+// Whether a section has structured blocks available from the backend
+const hasStructured = (key: string): boolean => getStructuredBlocks(key).length > 0
+
+
 </script>
 
 <template>
@@ -208,7 +196,7 @@ const abstractPreview = computed(() => {
           <button @click="goBack" class="bc-link">Results</button>
           <ChevronRight :size="12" class="bc-sep" />
           <span class="bc-active">{{ paper.title.length > 55 ? paper.title.substring(0, 55) + '…' : paper.title
-            }}</span>
+          }}</span>
         </nav>
 
         <!-- Badges -->
@@ -273,22 +261,11 @@ const abstractPreview = computed(() => {
             Methods
           </button>
           <!-- RAD: combined tab or separate tabs depending on document type -->
-          <template v-if="isRadCombined && !radSplitMode">
-            <button v-if="paper.results || paper.discussion" class="aside-item" :class="{ active: activeTab === 'rad' }"
-              @click="activeTab = 'rad'">
-              Results and Discussion
-            </button>
-          </template>
-          <template v-else>
-            <button v-if="paper.results" class="aside-item" :class="{ active: activeTab === 'results' }"
-              @click="activeTab = 'results'">
-              Results
-            </button>
-            <button v-if="paper.discussion" class="aside-item" :class="{ active: activeTab === 'discussion' }"
-              @click="activeTab = 'discussion'">
-              Discussion
-            </button>
-          </template>
+          <button v-if="paper.results || paper.discussion" class="aside-item"
+            :class="{ active: activeTab === 'rad' || activeTab === 'results' || activeTab === 'discussion' }"
+            @click="activeTab = 'rad'">
+            Results and Discussion
+          </button>
 
           <button
             v-if="paper.introduction_summary || paper.methods_summary || paper.results_summary || paper.discussion_summary"
@@ -318,18 +295,11 @@ const abstractPreview = computed(() => {
           <button v-if="paper.methods" class="doc-tab" :class="{ active: activeTab === 'methods' }"
             @click="activeTab = 'methods'">Methods</button>
           <!-- RAD merged tab or split tabs -->
-          <template v-if="isRadCombined && !radSplitMode">
-            <button v-if="paper.results || paper.discussion" class="doc-tab" :class="{ active: activeTab === 'rad' }"
-              @click="activeTab = 'rad'">
-              Results and Discussion
-            </button>
-          </template>
-          <template v-else>
-            <button v-if="paper.results" class="doc-tab" :class="{ active: activeTab === 'results' }"
-              @click="activeTab = 'results'">Results</button>
-            <button v-if="paper.discussion" class="doc-tab" :class="{ active: activeTab === 'discussion' }"
-              @click="activeTab = 'discussion'">Discussion</button>
-          </template>
+          <button v-if="paper.results || paper.discussion" class="doc-tab"
+            :class="{ active: activeTab === 'rad' || activeTab === 'results' || activeTab === 'discussion' }"
+            @click="activeTab = 'rad'">
+            Results and Discussion
+          </button>
         </div>
 
         <!-- ── IMRAD availability notice banner ───────────────── -->
@@ -368,57 +338,39 @@ const abstractPreview = computed(() => {
         <!-- ── IMRAD Sections — Regular per-tab view ──────────── -->
         <template v-if="activeTab !== 'imrad'">
           <template v-for="cfg in IMRAD_SECTION_CONFIGS" :key="cfg.key">
-            <div v-if="activeTab === cfg.key" class="paper-section imrad-section">
+            <section v-if="activeTab === cfg.key" class="paper-section">
 
-              <div class="imrad-header">
-                <h3 class="section-heading">
-                  <BookOpen v-if="cfg.key === 'introduction'" :size="15" />
-                  <Sparkles v-else-if="cfg.key === 'methods'" :size="15" />
-                  <TrendingUp v-else-if="cfg.key === 'results' || cfg.key === 'rad'" :size="15" />
-                  <MessageSquare v-else :size="15" />
-                  {{ cfg.label }}
-                </h3>
-                <div class="imrad-actions">
-                  <!-- Split/merge toggle — only shown on RAD sections -->
-                  <button
-                    v-if="isRadCombined && (cfg.key === 'rad' || cfg.key === 'results' || cfg.key === 'discussion')"
-                    class="view-pages-btn rad-toggle-btn"
-                    @click="radSplitMode = !radSplitMode; activeTab = radSplitMode ? 'results' : 'rad'">
-                    {{ radSplitMode ? '⊞ Merge Results and Discussion' : '⊟ Split into separate tabs' }}
-                  </button>
-                  <button class="view-pages-btn" :class="{ active: sectionPageCache[resolveKey(cfg.key)]?.shown }"
-                    @click="toggleSectionPages(resolveKey(cfg.key))">
-                    <Loader2 v-if="sectionPageCache[resolveKey(cfg.key)]?.loading" :size="13" class="spin" />
-                    <ImageIcon v-else :size="13" />
-                    {{ sectionPageCache[resolveKey(cfg.key)]?.shown ? 'Hide pages' : 'View pages' }}
-                  </button>
-                </div>
-              </div>
+              <h3 class="section-heading">
+                <BookOpen v-if="cfg.key === 'introduction'" :size="15" />
+                <Sparkles v-else-if="cfg.key === 'methods'" :size="15" />
+                <TrendingUp v-else :size="15" />
+                {{ cfg.label }}
+              </h3>
 
-              <!-- Section text — for merged RAD use results field (both are identical) -->
-              <div v-if="paper[resolveKey(cfg.key)]" class="section-text-outer">
+              <!-- Section text — rendered from pre-structured backend blocks -->
+              <div v-if="hasStructured(cfg.key)" class="section-text-outer">
                 <div class="section-text-wrap">
-                  <pre class="section-text">{{ paper[resolveKey(cfg.key)] }}</pre>
-                </div>
-              </div>
-              <p v-else class="no-content">No extracted text available for this section.</p>
-
-              <div v-if="sectionPageCache[resolveKey(cfg.key)]?.shown" class="pages-viewer">
-                <div v-if="sectionPageCache[resolveKey(cfg.key)]?.loading" class="pages-state">
-                  <Loader2 :size="18" class="spin" /> Loading pages…
-                </div>
-                <div v-else-if="sectionPageCache[resolveKey(cfg.key)]?.pages.length === 0" class="pages-state">
-                  No page images available.
-                </div>
-                <div v-else class="pages-stack">
-                  <div v-for="pg in sectionPageCache[resolveKey(cfg.key)]!.pages" :key="pg.page_num" class="page-card">
-                    <div class="page-label">Page {{ pg.page_num }}</div>
-                    <img :src="'data:image/jpeg;base64,' + pg.thumbnail" :alt="'Page ' + pg.page_num"
-                      class="page-img" />
+                  <div class="section-text">
+                    <template v-for="(block, i) in getStructuredBlocks(cfg.key)" :key="i">
+                      <div v-if="block.type === 'subheading'" class="section-subheading">{{ block.text }}</div>
+                      <span v-else class="section-text-block">{{ block.text }}</span>
+                    </template>
                   </div>
                 </div>
               </div>
-            </div>
+              <div v-else-if="paper[resolveKey(cfg.key)]" class="section-text-outer">
+                <div class="section-text-wrap">
+                  <div class="section-text">
+                    {{ paper[resolveKey(cfg.key)] }}
+                    <template v-if="cfg.key === 'rad' && paper.discussion && !isRadCombined">
+                      <br><br>
+                      {{ paper.discussion }}
+                    </template>
+                  </div>
+                </div>
+              </div>
+              <p v-else class="no-content">No extracted text available for this section.</p>
+            </section>
           </template>
         </template>
 
@@ -429,20 +381,9 @@ const abstractPreview = computed(() => {
           <div class="imrad-full-bar">
             <div class="imrad-full-bar-left">
               <Columns :size="15" />
-              <span>IMRAD Format (Summary)</span>
-              <span class="imrad-full-hint">All sections · AI-generated summaries</span>
+              <span>IMRAD Format</span>
+              <span class="imrad-full-hint">Introduction summarized · Methods, Results &amp; Discussion in full</span>
             </div>
-
-          </div>
-
-          <!-- Notice banner -->
-          <div class="imrad-notice-banner">
-            <AlertTriangle :size="14" class="imrad-notice-icon" />
-            <span><strong>Please Note:</strong> The summary of the document with IMRAD format below is not yet
-              finalized.
-              It is still under multiple testing and debugging for any deficiency in formatting.
-              Formatting configuration is under enhancement and/or optimization. Thanks.
-            </span>
           </div>
 
           <!-- ONE unified 2-column flow — all sections, no section-level gaps -->
@@ -452,26 +393,45 @@ const abstractPreview = computed(() => {
                 <div class="imrad-col-block imrad-section-label">
                   <div class="imrad-full-section-head">
                     <span>{{ cfg.label }}</span>
-                    <!-- Split toggle inside IMRAD full view too -->
-                    <button v-if="isRadCombined && cfg.key === 'rad'" class="rad-split-inline-btn"
-                      @click="radSplitMode = true; activeTab = 'results'">
-                      Split view →
-                    </button>
                   </div>
                 </div>
-                <!-- For merged RAD, summaryKey points to results_summary -->
-                <template v-if="paper[cfg.summaryKey]">
-                  <div v-for="(block, idx) in parseSummaryBlocks(paper[cfg.summaryKey] as string)" :key="idx"
-                    class="imrad-col-block">
-                    <p v-if="block.heading" class="imrad-block-heading">{{ block.heading }}</p>
-                    <p class="imrad-block-body">{{ block.body }}</p>
+
+                <!-- Introduction: show summary (parsed into heading blocks) -->
+                <template v-if="cfg.key === 'introduction'">
+                  <template v-if="paper[cfg.summaryKey]">
+                    <div v-for="(block, idx) in parseSummaryBlocks(paper[cfg.summaryKey] as string)" :key="idx"
+                      class="imrad-col-block">
+                      <p v-if="block.heading" class="imrad-block-heading">{{ block.heading }}</p>
+                      <p class="imrad-block-body">{{ block.body }}</p>
+                    </div>
+                  </template>
+                  <div v-else class="imrad-col-block imrad-no-summary">
+                    <p>No introduction summary available.</p>
                   </div>
                 </template>
-                <div v-else class="imrad-col-block imrad-no-summary">
-                  <p>Summary not yet generated for this section.</p>
-                  <p class="imrad-no-summary-hint">Switch to <strong>Regular</strong> view to read the full extracted
-                    text.</p>
-                </div>
+
+                <!-- Methods, Results, Discussion: structured blocks from backend -->
+                <template v-else>
+                  <div v-if="hasStructured(cfg.key)" class="imrad-col-block imrad-raw-block">
+                    <template v-for="(block, i) in getStructuredBlocks(cfg.key)" :key="i">
+                      <div v-if="block.type === 'subheading'" class="imrad-inline-subheading">{{ block.text }}</div>
+                      <p v-else class="imrad-block-body imrad-raw-para">{{ block.text }}</p>
+                    </template>
+                  </div>
+                  <div v-else-if="paper[resolveKey(cfg.key)]" class="imrad-col-block imrad-raw-block">
+                    <p class="imrad-block-body imrad-raw-para">{{
+                      paper[resolveKey(cfg.key)] }}</p>
+                    <template v-if="cfg.key === 'rad' && paper.discussion && !isRadCombined">
+                      <p class="imrad-block-body imrad-raw-para">
+                        {{ paper.discussion }}
+                      </p>
+                    </template>
+                  </div>
+                  <div v-else class="imrad-col-block imrad-no-summary">
+                    <p>No extracted text available for this section.</p>
+                  </div>
+                </template>
+
               </template>
             </div>
           </div>
@@ -508,17 +468,18 @@ const abstractPreview = computed(() => {
           <p class="rec-sub">Based on semantic similarity</p>
         </div>
 
-        <div class="rec-list">
+        <div v-if="recommendations.length > 0" class="rec-list">
           <div v-for="rec in recommendations" :key="rec.id" class="rec-card" @click="viewDetail(rec.id)">
             <span v-if="rec.payload.degree_program" class="rec-badge">{{ rec.payload.degree_program }}</span>
             <p class="rec-title">{{ rec.payload.title }}</p>
             <p class="rec-meta">{{ rec.payload.author }} · {{ rec.payload.year }}</p>
             <div class="rec-score">{{ (rec.score * 100).toFixed(0) }}% match</div>
           </div>
+        </div>
 
-          <p v-if="recommendations.length === 0" class="no-content" style="text-align:center; padding: 2rem 0">
-            No related studies found.
-          </p>
+        <div v-else class="rec-empty">
+          <img src="/book_empty.ico" alt="Empty" class="rec-empty-icon" />
+          <p>No related studies found.</p>
         </div>
       </aside>
 
@@ -573,7 +534,7 @@ const abstractPreview = computed(() => {
 }
 
 .header-inner {
-  max-width: 1300px;
+  max-width: 1600px;
   margin: 0 auto;
   position: relative;
   z-index: 1;
@@ -740,7 +701,7 @@ const abstractPreview = computed(() => {
 /* ══ BODY ════════════════════════════════════════════════ */
 .detail-layout {
   display: flex;
-  max-width: 1300px;
+  max-width: 1600px;
   margin: 0 auto;
   padding: 2.5rem 2rem;
   gap: 2rem;
@@ -913,56 +874,13 @@ const abstractPreview = computed(() => {
   margin-bottom: 1rem;
 }
 
-.imrad-header .section-heading {
-  margin: 0;
-  border: none;
-  padding: 0;
-}
 
-.view-pages-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-family: 'Source Sans 3', sans-serif;
-  font-size: 0.76rem;
-  font-weight: 600;
-  padding: 0.3rem 0.75rem;
-  border-radius: 5px;
-  border: 1.5px solid var(--rule);
-  background: var(--paper);
-  color: var(--ink-3);
-  cursor: pointer;
-  transition: all 0.14s;
-  white-space: nowrap;
-}
-
-.view-pages-btn:hover {
-  border-color: var(--green);
-  color: var(--green-dk);
-}
-
-.view-pages-btn.active {
-  background: var(--green-dim);
-  border-color: var(--green);
-  color: var(--green-dk);
-}
 
 /* Section text */
 .section-text-outer {
   position: relative;
   margin-bottom: 1rem;
   border-radius: 6px;
-}
-
-.section-text-outer::after {
-  content: '';
-  position: absolute;
-  inset: -1px;
-  border-radius: 6px;
-  border: 1.5px solid rgba(0, 166, 81, 0.5);
-  animation: border-ripple 2.6s cubic-bezier(0.2, 0.6, 0.4, 1) infinite;
-  pointer-events: none;
-  z-index: 1;
 }
 
 @keyframes border-ripple {
@@ -980,27 +898,109 @@ const abstractPreview = computed(() => {
 }
 
 .section-text-wrap {
-  background: var(--paper);
-  border: 1px solid var(--rule);
-  border-radius: 6px;
-  padding: 1.25rem 1.5rem;
-  max-height: 480px;
-  overflow-y: auto;
-  position: relative;
-  z-index: 2;
+  margin-bottom: 2.25rem;
 }
 
 .section-text {
-  white-space: pre-wrap;
   word-break: break-word;
   font-family: 'Source Sans 3', sans-serif;
-  font-size: 0.94rem;
+  font-size: 0.96rem;
   line-height: 1.9;
   color: var(--ink-2);
   margin: 0;
   padding: 0;
   background: none;
+  text-align: justify;
   border: none;
+}
+
+/* Sub-heading line — merged into text flow with green left bar */
+.section-subheading {
+  display: block;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--green-dk);
+  background: var(--green-dim);
+  border-left: 3px solid var(--green);
+  padding: 0.3rem 0.75rem;
+  border-radius: 0 4px 4px 0;
+  margin: 1rem 0 0.25rem;
+}
+
+/* Table / Figure caption label — amber bar */
+.section-table-label {
+  display: block;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.78rem;
+  font-weight: 600;
+  font-style: italic;
+  color: #92400e;
+  background: #fffbeb;
+  border-left: 3px solid #f59e0b;
+  padding: 0.25rem 0.75rem;
+  border-radius: 0 4px 4px 0;
+  margin: 0.75rem 0 0.2rem;
+}
+
+/* Plain paragraph block between sub-headings — flows as prose, no forced breaks */
+.section-text-block {
+  word-break: break-word;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.96rem;
+  line-height: 1.9;
+  color: var(--ink-2);
+  margin: 0 0 0.25rem;
+  padding: 0;
+  background: none;
+  border: none;
+  text-align: justify;
+  white-space: normal;
+}
+
+/* ── IMRAD full view — inline subheading / table label ──────── */
+.imrad-raw-block {
+  padding: 0;
+}
+
+.imrad-inline-subheading {
+  display: block;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--green-dk);
+  background: var(--green-dim);
+  border-left: 3px solid var(--green);
+  padding: 0.25rem 0.6rem;
+  border-radius: 0 4px 4px 0;
+  margin: 0.75rem 0 0.2rem;
+}
+
+.imrad-inline-table-label {
+  display: block;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-style: italic;
+  color: #92400e;
+  background: #fffbeb;
+  border-left: 3px solid #f59e0b;
+  padding: 0.2rem 0.6rem;
+  border-radius: 0 4px 4px 0;
+  margin: 0.5rem 0 0.15rem;
+}
+
+.imrad-raw-para {
+  white-space: normal;
+  word-break: break-word;
+  font-size: 0.88rem;
+  line-height: 1.8;
+  color: var(--ink-2);
+  margin: 0 0 0.4rem;
   text-align: justify;
 }
 
@@ -1011,49 +1011,6 @@ const abstractPreview = computed(() => {
 }
 
 /* Pages viewer */
-.pages-viewer {
-  margin-top: 1.25rem;
-  border-top: 1px dashed var(--rule);
-  padding-top: 1.25rem;
-}
-
-.pages-state {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: var(--ink-3);
-  font-size: 0.84rem;
-  padding: 0.75rem 0;
-}
-
-.pages-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.page-card {
-  border: 1px solid var(--rule);
-  border-radius: 6px;
-  overflow: hidden;
-  background: var(--paper);
-}
-
-.page-label {
-  font-size: 0.7rem;
-  font-weight: 700;
-  color: var(--ink-3);
-  padding: 0.35rem 0.75rem;
-  background: var(--surface);
-  border-bottom: 1px solid var(--rule);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.page-img {
-  width: 100%;
-  display: block;
-}
 
 /* PDF viewer */
 .pdf-viewer-wrap {
@@ -1484,11 +1441,20 @@ const abstractPreview = computed(() => {
 
 .imrad-block-body {
   font-family: 'Source Sans 3', sans-serif;
-  font-size: 0.88rem;
-  line-height: 1.8;
-  color: var(--ink-2);
+  font-size: 0.95rem;
+  line-height: 1.85;
+  /* Reverted to preferred spacing */
+  color: #334155;
   margin: 0;
   text-align: justify;
+}
+
+.section-text-block {
+  display: inline;
+  /* Continuous flow */
+  font-size: 0.98rem;
+  line-height: 1.85;
+  color: #334155;
 }
 
 /* No summary fallback */
@@ -1639,14 +1605,84 @@ const abstractPreview = computed(() => {
   border-bottom: 1.5px solid var(--green-dim);
 }
 
-@media (max-width: 640px) {
-  .imrad-full-bar {
+
+
+
+/* ── Responsive ────────────────────────────────────────── */
+@media (max-width: 1200px) {
+  .rec-aside {
+    display: none;
+  }
+}
+
+@media (max-width: 1024px) {
+  .detail-layout {
+    gap: 1.5rem;
+  }
+
+  .paper-main {
+    padding: 1.5rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .detail-layout {
     flex-direction: column;
-    align-items: flex-start;
+  }
+
+  .doc-nav-aside {
+    width: 100%;
+    position: static;
   }
 
   .imrad-unified-col {
     columns: 1;
   }
+
+  .paper-title {
+    font-size: 1.45rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .paper-header-wrap {
+    padding: 1.5rem 1rem;
+  }
+
+  .header-inner {
+    padding: 0;
+  }
+
+  .doc-tabs {
+    gap: 0.75rem;
+  }
+
+  .doc-tab {
+    font-size: 0.75rem;
+  }
+}
+
+.rec-empty {
+  padding: 3rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  text-align: center;
+  border-radius: 6px;
+  margin-top: 1rem;
+}
+
+.rec-empty-icon {
+  width: 48px;
+  height: 48px;
+  opacity: 0.40;
+  filter: grayscale(1);
+}
+
+.rec-empty p {
+  font-size: 0.85rem;
+  color: var(--ink-3);
+  margin: 0;
 }
 </style>

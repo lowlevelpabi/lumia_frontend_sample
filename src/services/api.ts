@@ -1,4 +1,13 @@
-const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api/v1'
+export const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api/v1'
+
+// ── IMRAD structured block ───────────────────────────────────────────────────
+// Produced by the backend's imrad_structure_service at response time.
+// The frontend renders these directly — no client-side text parsing needed.
+export interface ImradBlock {
+  type: 'subheading' | 'table-label' | 'text' | 'table-image'
+  text: string
+  id?: string  // For 'table-image' type
+}
 
 export interface Paper {
   id: string
@@ -20,12 +29,20 @@ export interface Paper {
   methods_summary?: string | null
   results_summary?: string | null
   discussion_summary?: string | null
+  // Structured IMRAD blocks — pre-parsed by backend, ready for direct rendering
+  imrad_structured?: {
+    introduction?: ImradBlock[]
+    methods?: ImradBlock[]
+    results?: ImradBlock[]
+    discussion?: ImradBlock[]
+  }
   sections?: Record<string, string>
   section_pages?: Record<string, number[]>
   detected_subheadings?: string[]
   trim_points?: Record<string, string>
   uploaded_by?: string
   uploader_role?: string
+  media?: Record<string, string> // Table images/visuals indexed by ID
 }
 
 export type PaperMetadata = Omit<Paper, 'id' | 'view_count' | 'citation_count'>
@@ -267,6 +284,7 @@ export const api = {
   async getUploadPreview(
     file: File,
     autoExtract: boolean = true,
+    sessionId?: string
   ): Promise<{
     session_id: string
     metadata: PartialPaperMetadata
@@ -280,6 +298,7 @@ export const api = {
     formData.append('file', file)
     const url = new URL(`${BASE_URL}/papers/preview`)
     url.searchParams.append('auto_extract', autoExtract.toString())
+    if (sessionId) url.searchParams.append('session_id', sessionId)
 
     const response = await apiFetch(url.toString(), {
       method: 'POST',
@@ -299,6 +318,7 @@ export const api = {
     results?: string
     discussion?: string
     sections_summary?: Record<string, string>
+    media?: Record<string, string>
   }) {
     const response = await apiFetch(`${BASE_URL}/papers/confirm-upload`, {
       method: 'POST',

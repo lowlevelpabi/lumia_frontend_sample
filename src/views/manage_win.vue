@@ -10,8 +10,9 @@ import {
   FileUp, Sparkles, Eye, Settings2, CheckCircle, AlertCircle, Check,
   AlertTriangle, RefreshCw, SquareArrowRight, ShieldAlert, ShieldCheck, UserCog, UserPlus
 } from 'lucide-vue-next'
-import { api, type Paper, type UserResponse, type PartialPaperMetadata, type ActivityLog } from '../services/api'
+import { api, BASE_URL, type Paper, type UserResponse, type PartialPaperMetadata, type ActivityLog } from '../services/api'
 import { useAuth } from '../composables/useAuth'
+import BookLoader from '../components/BookLoader.vue'
 
 const router = useRouter()
 const { isAdmin, isFaculty } = useAuth()
@@ -309,6 +310,43 @@ const uploadError = ref('')
 const file = ref<File | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
 const sessionId = ref('')
+const extractionProgress = ref(0)
+const extractionMessage = ref('')
+let currentEventSource: EventSource | null = null
+
+function stopProgressListening() {
+  if (currentEventSource) {
+    currentEventSource.close()
+    currentEventSource = null
+  }
+}
+
+function listenForProgress(sid: string) {
+  stopProgressListening()
+
+  // SSE endpoint for state streaming
+  const url = `${BASE_URL}/papers/upload/status/${sid}`
+  currentEventSource = new EventSource(url)
+
+  currentEventSource.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data)
+      if (data.progress !== undefined) extractionProgress.value = data.progress
+      if (data.message) extractionMessage.value = data.message
+
+      if (data.status === 'completed' || data.status === 'failed') {
+        stopProgressListening()
+      }
+    } catch (err) {
+      console.warn('[SSE] Failed to parse message:', err)
+    }
+  }
+
+  currentEventSource.onerror = (err) => {
+    console.warn('[SSE] Connection error:', err)
+    stopProgressListening()
+  }
+}
 
 interface PageData {
   page_num: number;
@@ -328,9 +366,28 @@ const uploadMetadata = reactive<PartialPaperMetadata>({
   project_type: 'Thesis',
   degree_program: 'N/A',
   detected_subheadings: [],
-  trim_points: {}
+  trim_points: {},
+  media: {} as Record<string, string>
 })
 const activeImradTab = ref<'introduction' | 'methods' | 'results' | 'discussion'>('introduction')
+
+// Keep in sync with imrad_service.py METHODOLOGY_SUBHEADINGS labels
+const METHODOLOGY_SUBHEADING_LABELS = [
+  'Research Design', 'Research Approach', 'Research Settings', 'Business Process',
+  'Participants of the Study', 'Sampling Technique', 'Research Instruments',
+  'Data Collection, Instrument, and Procedure', 'Sources of Data',
+  'Statistical Treatment of Data', 'Data Analysis', 'Ethical Considerations',
+  'Development Model',
+]
+
+const SECTION_KEY_MAP = {
+  'Introduction': 'introduction',
+  'Methodology': 'methods',
+  'Results': 'results',
+  'Discussion': 'discussion'
+} as const
+
+const REQUIRED_SECTIONS = Object.keys(SECTION_KEY_MAP) as (keyof typeof SECTION_KEY_MAP)[]
 
 type ImradKey = 'introduction' | 'methods' | 'results' | 'discussion'
 const ALL_IMRAD_TABS: ImradKey[] = ['introduction', 'methods', 'results', 'discussion']
@@ -342,46 +399,19 @@ const imradSections = reactive({
   discussion: ''
 })
 
-// Pre-generated summaries from the preview step — passed through to confirmUpload
-// so the backend doesn't re-run the summariser on every confirm
-const sectionsSummary = reactive<Record<string, string>>({
-  introduction: '',
-  methods: '',
-  results: '',
-  discussion: ''
-})
 
 // RAD combined detection: results and discussion have identical text
 // when the backend stored a single combined RAD section
-const isRadCombined = computed(() => {
-  const r = imradSections.results
-  const d = imradSections.discussion
-  return !!(r && d && r.trim() === d.trim())
-})
 
-// When combined, user can toggle to inspect them separately
-const radSplitMode = ref(false)
 
-// Label strings as computed — avoids Volar misparsing long ternary strings in mustaches
-const radModeLabel = computed(() =>
-  radSplitMode.value
-    ? 'Showing separate Results and Discussion tabs'
-    : 'Results and Discussion are combined in this document'
-)
-const radMergeBtnLabel = computed(() =>
-  radSplitMode.value ? 'Merge tabs' : 'Split into separate tabs'
-)
-const radTabLabel = computed(() =>
-  isRadCombined.value && !radSplitMode.value ? 'Results and Discussion' : null
-)
-
-// Available tabs — merges R+D into one tab when combined
+// Available tabs — merges R+D into one tab
 const availableImradTabs = computed<ImradKey[]>(() => {
-  const all = ALL_IMRAD_TABS.filter(t => imradSections[t] || sectionsSummary[t])
-  if (isRadCombined.value && !radSplitMode.value) {
-    // Replace both 'results' and 'discussion' with a single merged entry
-    // We use 'results' as the key since it holds the content
-    const merged = all.filter(t => t !== 'discussion')
+  const all = ALL_IMRAD_TABS.filter(t => imradSections[t])
+  const hasResults = all.includes('results')
+  const hasDiscussion = all.includes('discussion')
+  if (hasResults || hasDiscussion) {
+    const merged: ImradKey[] = all.filter(t => t !== 'results' && t !== 'discussion')
+    merged.push('results')
     return merged
   }
   return all
@@ -413,19 +443,31 @@ const selectedPages = ref<number[]>([])
 const sectionPages = ref<Record<string, number[]>>({})
 const isManuscript = ref(false)
 
-const REQUIRED_SECTIONS = ['introduction', 'methods', 'results', 'discussion']
 const missingSections = computed(() => {
   const present = Object.keys(uploadMetadata.section_pages || {})
-  return REQUIRED_SECTIONS.filter(s => !present.includes(s))
+  return REQUIRED_SECTIONS.filter((s) => !present.includes(SECTION_KEY_MAP[s]))
 })
+
+
 
 const triggerFallback = async () => {
   if (!file.value) return
   processingDoc.value = true
   const prevStep = step.value
   step.value = 1
+  uploadError.value = ''
+  extractionProgress.value = 5
+  extractionMessage.value = 'Preparing document...'
+
+  const sid = crypto.randomUUID()
+  sessionId.value = sid
+  listenForProgress(sid)
+
   try {
-    const preview = await api.getUploadPreview(file.value, false)
+    const preview = await api.getUploadPreview(file.value, false, sid)
+    stopProgressListening()
+    extractionProgress.value = 100
+    extractionMessage.value = 'Rendering pages...'
     sessionId.value = preview.session_id
     Object.assign(uploadMetadata, preview.metadata)
     pages.value = preview.pages
@@ -433,11 +475,11 @@ const triggerFallback = async () => {
     sectionPages.value = preview.section_pages || {}
     selectedPages.value = preview.pages.map(p => p.page_num)
     isManuscript.value = false
-    const firstAvailable = ALL_IMRAD_TABS
-      .find(t => imradSections[t] || sectionsSummary[t])
-    if (firstAvailable) activeImradTab.value = firstAvailable
+    const firstAvailable = ALL_IMRAD_TABS.find(t => imradSections[t])
+    if (firstAvailable) activeImradTab.value = firstAvailable === 'discussion' ? 'results' : firstAvailable
     setTimeout(() => { step.value = 2; processingDoc.value = false }, 400)
   } catch (err) {
+    stopProgressListening()
     uploadError.value = (err as Error).message || 'Failed to trigger fallback.'
     step.value = prevStep
     processingDoc.value = false
@@ -460,6 +502,7 @@ const thumbSrc = (thumbnail: string) => {
 }
 
 const handleFileChange = (e: Event) => {
+  if (processingDoc.value) return
   const target = e.target as HTMLInputElement
   if (target.files && target.files[0]) { file.value = target.files[0]; showStrategyModal.value = true }
 }
@@ -469,7 +512,7 @@ const isDragging = ref(false)
 const handleDrop = (e: DragEvent) => {
   e.preventDefault()
   isDragging.value = false
-  if (activeSection.value !== 'upload' || step.value !== 1) return
+  if (processingDoc.value || activeSection.value !== 'upload' || step.value !== 1) return
   const dropped = e.dataTransfer?.files?.[0]
   if (dropped && dropped.type === 'application/pdf') {
     file.value = dropped
@@ -481,7 +524,7 @@ const handleDrop = (e: DragEvent) => {
 
 const handleDragOver = (e: DragEvent) => {
   e.preventDefault()
-  if (activeSection.value === 'upload' && step.value === 1) {
+  if (!processingDoc.value && activeSection.value === 'upload' && step.value === 1) {
     isDragging.value = true
   }
 }
@@ -500,25 +543,36 @@ const startInitialExtraction = async (autoExtract: boolean = true) => {
   if (!file.value) return
   processingDoc.value = true
   uploadError.value = ''
+  extractionProgress.value = 2
+  extractionMessage.value = 'Reading PDF structure...'
+
+  const sid = crypto.randomUUID()
+  sessionId.value = sid
+  listenForProgress(sid)
+
   try {
-    const preview = await api.getUploadPreview(file.value, autoExtract)
+    const preview = await api.getUploadPreview(file.value, autoExtract, sid)
+    stopProgressListening()
+    extractionProgress.value = 100
+    extractionMessage.value = 'Finalizing review screen...'
+
     sessionId.value = preview.session_id
     Object.assign(uploadMetadata, preview.metadata)
     if (preview.metadata.author) {
       const splitAuthors = preview.metadata.author.split(/\s*\|\s*/).map((a: string) => a.trim()).filter((a: string) => a.length > 0)
       authors.value = splitAuthors.length > 0 ? splitAuthors : ['']
     } else { authors.value = [''] }
+
     pages.value = preview.pages
+    selectedPages.value = preview.pages.map((p: PageData) => p.page_num)
     if (preview.sections) Object.assign(imradSections, preview.sections)
-    if (preview.sections_summary) Object.assign(sectionsSummary, preview.sections_summary)
-    sectionPages.value = preview.section_pages || {}
-    selectedPages.value = preview.pages.map(p => p.page_num)
+
     // Set active tab to the first section that actually has content
-    const firstAvailable = ALL_IMRAD_TABS
-      .find(t => imradSections[t] || sectionsSummary[t])
-    if (firstAvailable) activeImradTab.value = firstAvailable
+    const firstAvailable = ALL_IMRAD_TABS.find(t => imradSections[t])
+    if (firstAvailable) activeImradTab.value = firstAvailable === 'discussion' ? 'results' : firstAvailable
     setTimeout(() => { step.value = 2; processingDoc.value = false }, 400)
   } catch (err) {
+    stopProgressListening()
     uploadError.value = (err as Error).message || 'Failed to parse PDF.'
     processingDoc.value = false
   }
@@ -567,8 +621,8 @@ const handleFinalConfirm = async () => {
       introduction: imradSections.introduction,
       methods: imradSections.methods,
       results: imradSections.results,
-      discussion: imradSections.discussion,
-      sections_summary: { ...sectionsSummary },
+      discussion: imradSections.results, // Send identical for combined state
+      media: uploadMetadata.media,
     })
     step.value = 3
     setTimeout(async () => {
@@ -673,7 +727,7 @@ watch(activeSection, (newSection) => {
           <div class="step-item" :class="{ active: step >= 1, done: step > 1 }">
             <div class="step-num">
               <Check v-if="step > 1" :size="12" /><span v-else>1</span>
-              <div v-if="step === 1" class="pulse-ring" />
+              <div v-if="step === 1" class="step-spinner" />
             </div>
             <span class="step-label">Upload</span>
           </div>
@@ -681,7 +735,7 @@ watch(activeSection, (newSection) => {
           <div class="step-item" :class="{ active: step >= 2, done: step > 2 }">
             <div class="step-num">
               <Check v-if="step > 2" :size="12" /><span v-else>2</span>
-              <div v-if="step === 2" class="pulse-ring" />
+              <div v-if="step === 2" class="step-spinner" />
             </div>
             <span class="step-label">Review</span>
           </div>
@@ -689,7 +743,7 @@ watch(activeSection, (newSection) => {
           <div class="step-item" :class="{ active: step >= 3 }">
             <div class="step-num">
               <Check v-if="step > 3" :size="12" /><span v-else>3</span>
-              <div v-if="step === 3" class="pulse-ring" />
+              <div v-if="step === 3" class="step-spinner" />
             </div>
             <span class="step-label">Done</span>
           </div>
@@ -799,35 +853,40 @@ watch(activeSection, (newSection) => {
         <template v-else-if="activeSection === 'upload'">
           <div class="upload-wrap">
             <div v-if="step !== 2" class="upload-center">
-              <div class="upload-card">
-                <div v-if="step === 1">
-                  <div class="upload-card-head">
-                    <div class="upload-card-icon">
-                      <FileUp :size="22" color="#00a651" />
-                    </div>
-                    <h1 class="upload-card-title">Upload Document</h1>
-                    <p>Upload a PDF to index into the research repository.</p>
+
+              <!-- Clean Processing View (Visible only during parsing) -->
+              <div v-if="processingDoc" class="processing-container">
+                <BookLoader :progress="extractionProgress" :message="extractionMessage" />
+              </div>
+
+              <!-- Initial Upload State -->
+              <div v-else-if="step === 1" class="upload-card">
+                <div class="upload-card-head">
+                  <div class="upload-card-icon">
+                    <FileUp :size="22" color="#00a651" />
                   </div>
-                  <div v-if="uploadError" class="error-banner">
-                    <AlertCircle :size="16" /> {{ uploadError }}
-                  </div>
-                  <div class="drop-zone" @click="fileInput?.click()" @drop="handleDrop" @dragover="handleDragOver"
-                    @dragleave="handleDragLeave" :class="{ processing: processingDoc, dragging: isDragging }">
-                    <input type="file" ref="fileInput" @change="handleFileChange" style="display:none"
-                      accept="application/pdf" />
-                    <div v-if="processingDoc" class="drop-loading">
-                      <Loader2 :size="40" class="spin" color="#00a651" />
-                      <h3>Parsing PDF…</h3>
-                      <p>Running OCR and generating thumbnails</p>
-                    </div>
-                    <template v-else>
-                      <FileUp :size="40" color="#00a651" />
-                      <div class="drop-text"><strong>Click to upload</strong> or drag and drop<span>PDF files
-                          only</span></div>
-                    </template>
+                  <h1 class="upload-card-title">Upload Document</h1>
+                  <p>Upload a PDF to index into the research repository.</p>
+                </div>
+                <div v-if="uploadError" class="error-banner">
+                  <AlertCircle :size="16" /> {{ uploadError }}
+                </div>
+                <div class="drop-zone" @click="!processingDoc && fileInput?.click()" @drop="handleDrop"
+                  @dragover="handleDragOver" @dragleave="handleDragLeave"
+                  :class="{ processing: processingDoc, dragging: isDragging }">
+                  <input type="file" ref="fileInput" @change="handleFileChange" style="display:none"
+                    accept="application/pdf" :disabled="processingDoc" />
+                  <FileUp :size="40" color="#00a651" />
+                  <div class="drop-text">
+                    <strong>Click to upload</strong> or drag and drop
+                    <span>PDF files only</span>
                   </div>
                 </div>
-                <div v-else-if="step === 3" class="upload-success">
+              </div>
+
+              <!-- Success State -->
+              <div v-else-if="step === 3" class="upload-card">
+                <div class="upload-success">
                   <CheckCircle :size="56" color="#00a651" />
                   <h2>Research Indexed!</h2>
                   <p>Paper and selected vectors have been stored in the repository.</p>
@@ -885,8 +944,10 @@ watch(activeSection, (newSection) => {
                   <AlertTriangle :size="18" color="#f59e0b" />
                 </div>
                 <div class="notice-body">
-                  <p class="notice-title">Incomplete IMRAD structure detected</p>
-                  <p class="notice-desc">The following sections could not be found. Search accuracy may be reduced.</p>
+                  <p class="notice-title">Document uploaded has incomplete IMRAD structure.</p>
+                  <p class="notice-desc">The following sections could not be found. Search accuracy may be reduced.
+                    Canceling the indexing is recommended.
+                  </p>
                   <div class="missing-list">
                     <span v-for="s in missingSections" :key="s" class="missing-badge"><span class="missing-dot" />{{ s
                       }}</span>
@@ -974,67 +1035,52 @@ watch(activeSection, (newSection) => {
 
                     <div v-if="uploadMetadata.detected_subheadings && uploadMetadata.detected_subheadings.length > 0"
                       class="subheadings-preview">
-                      <label class="fg-label">Detected Methodology Components:</label>
-                      <div class="sub-tags">
-                        <span v-for="sub in uploadMetadata.detected_subheadings" :key="sub" class="sub-tag">
-                          <Check :size="12" /> {{ sub }}
-                        </span>
-                      </div>
-                    </div>
+                      <template
+                        v-if="uploadMetadata.detected_subheadings.some(s => METHODOLOGY_SUBHEADING_LABELS.includes(s))">
+                        <label class="fg-label">Detected Methodology Components:</label>
+                        <div class="sub-tags" style="margin-bottom:0.75rem">
+                          <span
+                            v-for="sub in uploadMetadata.detected_subheadings.filter(s => METHODOLOGY_SUBHEADING_LABELS.includes(s))"
+                            :key="sub" class="sub-tag">
+                            <Check :size="12" /> {{ sub }}
+                          </span>
+                        </div>
+                      </template>
 
+                      <template
+                        v-if="uploadMetadata.detected_subheadings.some(s => !METHODOLOGY_SUBHEADING_LABELS.includes(s))">
+                        <label class="fg-label">Detected Results Components:</label>
+                        <div class="sub-tags">
+                          <span
+                            v-for="sub in uploadMetadata.detected_subheadings.filter(s => !METHODOLOGY_SUBHEADING_LABELS.includes(s))"
+                            :key="sub" class="sub-tag sub-tag-results">
+                            <Check :size="12" /> {{ sub }}
+                          </span>
+                        </div>
+                      </template>
+                    </div>
                     <div class="imrad-tabs">
                       <button v-for="tab in availableImradTabs" :key="tab" type="button" class="imrad-tab-btn"
-                        :class="{ active: activeImradTab === tab }" @click="activeImradTab = tab">
-                        <!-- Show merged label when results tab is the combined RAD -->
-                        {{ (tab === 'results' && radTabLabel) ? radTabLabel : tab.charAt(0).toUpperCase() + tab.slice(1)
-                        }}
+                        :class="{ active: activeImradTab === tab }" @click="activeImradTab = tab as ImradKey">
+                        {{ tab === 'results' ? 'Results and Discussion' : tab.charAt(0).toUpperCase() + tab.slice(1) }}
                       </button>
                     </div>
 
-                    <!-- RAD split/merge toggle — only shown when relevant -->
-                    <div v-if="isRadCombined" class="rad-mode-bar">
-                      <span class="rad-mode-label">
-                        {{ radModeLabel }}
-                      </span>
-                      <button type="button" class="rad-mode-btn"
-                        @click="radSplitMode = !radSplitMode; activeImradTab = 'results'">
-                        {{ radMergeBtnLabel }}
-                      </button>
-                    </div>
 
                     <div class="imrad-content">
                       <div v-if="uploadMetadata.trim_points && uploadMetadata.trim_points[activeImradTab]"
                         class="trim-alert">
                         <AlertCircle :size="16" />
                         <span>
-                          <strong>Auto-Trimmed:</strong>
-                          This section was trimmed at <strong>"{{ uploadMetadata.trim_points[activeImradTab]
-                          }}"</strong>
-                          to avoid including sub-heading content.
+                          <strong>Auto-Trimmed:</strong> This section was trimmed at
+                          <strong>"{{ uploadMetadata.trim_points[activeImradTab] }}"</strong>
                         </span>
                       </div>
 
-                      <!-- Summary preview (shown when a summary was pre-generated) -->
-                      <div v-if="sectionsSummary[activeImradTab]" class="imrad-summary-preview">
-                        <div class="imrad-summary-label">
-                          <span>Summary Preview</span>
-                          <span class="imrad-summary-hint">All sub-headings of the IMRAD sections have been summarized
-                            to make the
-                            context shorter.</span>
-                        </div>
-                        <div class="imrad-summary-body">{{ sectionsSummary[activeImradTab] }}</div>
-                      </div>
-
-                      <!-- Raw extracted text (always editable) -->
-                      <details class="imrad-raw-toggle" :open="!sectionsSummary[activeImradTab]">
-                        <summary class="imrad-raw-label">
-                          <FileText :size="13" />
-                          {{ sectionsSummary[activeImradTab] ? 'Edit raw extracted text' : 'Raw extracted text' }}
-                        </summary>
-                        <textarea v-model="imradSections[activeImradTab]" class="imrad-textarea"
-                          placeholder="No content detected for this section. You can manually paste it here if needed."
-                          @input="autoResizeTextarea" ref="imradTextarea"></textarea>
-                      </details>
+                      <!-- Editable textarea for the section text -->
+                      <textarea ref="imradTextarea" v-model="imradSections[activeImradTab]"
+                        class="imrad-textarea maximized" @input="autoResizeTextarea"
+                        placeholder="No text extracted for this section…"></textarea>
                     </div>
                   </section>
 
@@ -1610,20 +1656,20 @@ watch(activeSection, (newSection) => {
                   <div class="form-grid">
                     <div class="form-group">
                       <label class="form-lbl">Username</label>
-                      <input v-model="newUser.username" type="text" class="form-input" placeholder="e.g. jdoe" />
+                      <input v-model="newUser.username" type="text" class="form-input" placeholder="e.g. maruf" />
                     </div>
                     <div class="form-group">
                       <label class="form-lbl">Full Name</label>
-                      <input v-model="newUser.full_name" type="text" class="form-input" placeholder="e.g. John Doe" />
+                      <input v-model="newUser.full_name" type="text" class="form-input" placeholder="e.g. Yna Maruf" />
                     </div>
                   </div>
                   <div class="form-group">
                     <label class="form-lbl">Email Address</label>
                     <input v-model="newUser.email" type="email" class="form-input"
-                      placeholder="e.g. john@example.com" />
+                      placeholder="e.g. yna.maruf@email.com" />
                   </div>
                   <div class="form-group">
-                    <label class="form-lbl">Role</label>
+                    <label class="form-lbl">Create user with role</label>
                     <div class="role-opts">
                       <label class="role-opt" :class="{ selected: newUser.role === 'Faculty' }">
                         <input type="radio" v-model="newUser.role" value="Faculty" />
@@ -1984,7 +2030,8 @@ watch(activeSection, (newSection) => {
 }
 
 .step-item.active .step-num {
-  border-color: var(--green);
+  border-color: var(--rule);
+  /* Remove stationary green border */
   color: var(--green);
   background: var(--paper);
 }
@@ -2013,25 +2060,15 @@ watch(activeSection, (newSection) => {
   margin: 0 0.4rem;
 }
 
-.pulse-ring {
+.step-spinner {
   position: absolute;
   inset: -4px;
   border-radius: 50%;
-  border: 2px solid var(--green);
-  animation: pulse 1.6s ease-out infinite;
-  opacity: 0;
-}
-
-@keyframes pulse {
-  0% {
-    opacity: .7;
-    transform: scale(1)
-  }
-
-  100% {
-    opacity: 0;
-    transform: scale(1.6)
-  }
+  border: 2px solid transparent;
+  border-top-color: var(--green);
+  border-right-color: var(--green);
+  animation: spin 1.5s linear infinite;
+  pointer-events: none;
 }
 
 @media (max-width: 480px) {
@@ -2055,8 +2092,9 @@ watch(activeSection, (newSection) => {
 
 .content {
   flex: 1;
-  padding: 2rem 2rem 4rem;
-  max-width: 1200px;
+  padding: 2rem 2.5rem 5rem;
+  max-width: 1440px;
+  /* Expanded for widescreen */
   width: 100%;
   margin: 0 auto;
   box-sizing: border-box;
@@ -2753,6 +2791,22 @@ watch(activeSection, (newSection) => {
   margin: 0;
 }
 
+.processing-container {
+  width: 100%;
+  max-width: 600px;
+  margin: 2rem auto;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 300px;
+}
+
+.drop-zone.processing {
+  cursor: wait;
+  opacity: 0.6;
+  pointer-events: none;
+}
+
 .error-banner {
   display: flex;
   align-items: center;
@@ -3077,35 +3131,34 @@ watch(activeSection, (newSection) => {
   margin-bottom: 0.9rem;
 }
 
-.fg label {
-  font-size: 0.72rem;
+.fg-label {
+  font-size: 0.68rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.07rem;
   color: var(--ink-3);
 }
 
 .fg input,
 .fg select,
 .fg textarea {
-  background: var(--surface);
-  border: 1px solid var(--rule);
-  border-radius: 5px;
-  padding: 0.5rem 0.7rem;
-  font-family: 'Source Sans 3', sans-serif;
-  font-size: 0.88rem;
-  color: var(--ink);
-  outline: none;
-  transition: border-color 0.13s;
   width: 100%;
+  padding: 0.65rem 0.8rem;
+  border: 1.5px solid var(--rule);
+  border-radius: 3px;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.9rem;
+  transition: border-color 0.14s;
   box-sizing: border-box;
 }
 
 .fg input:focus,
 .fg select:focus,
 .fg textarea:focus {
+  outline: none;
   border-color: var(--green);
-  background: var(--paper);
 }
 
 .fg textarea {
@@ -3711,6 +3764,17 @@ watch(activeSection, (newSection) => {
 
 /* ══ MODALS ════════════════════════════════════════════════════ */
 .modal-overlay {
+  --ink: #181c18;
+  --ink-2: #3d4239;
+  --ink-3: #7a7f75;
+  --rule: #dfe0db;
+  --surface: #f5f5f2;
+  --paper: #ffffff;
+  --green: #00a651;
+  --green-dk: #007d3d;
+  --green-dim: #e6f4ed;
+  --hero: #0d1f12;
+
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.55);
@@ -3720,6 +3784,12 @@ watch(activeSection, (newSection) => {
   justify-content: center;
   padding: 1rem;
 }
+
+.modal-body {
+  padding: 1.25rem
+}
+
+
 
 .modal-card {
   background: #ffffff;
@@ -3795,6 +3865,12 @@ watch(activeSection, (newSection) => {
   max-width: 480px !important;
 }
 
+.creation-modal .role-opts {
+  padding: 0;
+}
+
+
+
 .modal-head-icon.purple {
   background: #f5f3ff;
   color: #7c3aed;
@@ -3811,30 +3887,41 @@ watch(activeSection, (newSection) => {
   margin-bottom: 1.25rem;
 }
 
+.form-group:last-child {
+  margin-bottom: 0;
+}
+
 .form-lbl {
   display: block;
-  font-size: 0.78rem;
+  font-size: 0.68rem;
   font-weight: 700;
-  color: var(--ink-2);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--ink-3);
   margin-bottom: 0.5rem;
-  letter-spacing: 0.01em;
 }
 
 .form-input {
   width: 100%;
-  padding: 0.65rem 0.85rem;
+  padding: 0.65rem 0.8rem;
   background: var(--paper);
   border: 1.5px solid var(--rule);
-  border-radius: 8px;
+  border-radius: 3px;
   font-size: 0.9rem;
   color: var(--ink);
-  transition: border-color 0.15s, box-shadow 0.15s;
+  font-family: 'Source Sans 3', sans-serif;
+  box-sizing: border-box;
+  transition: border-color 0.13s;
+}
+
+.form-input::placeholder {
+  color: var(--ink-3);
+  opacity: 0.5;
 }
 
 .form-input:focus {
   outline: none;
   border-color: var(--green);
-  box-shadow: 0 0 0 3px var(--green-dim);
 }
 
 /* Success display */
@@ -4239,6 +4326,11 @@ watch(activeSection, (newSection) => {
   border-radius: 4px;
 }
 
+.sub-tag-results {
+  background: #fff7ed;
+  color: #c2410c;
+}
+
 .imrad-tabs {
   display: flex;
   gap: 0.25rem;
@@ -4276,6 +4368,7 @@ watch(activeSection, (newSection) => {
 .imrad-content {
   display: flex;
   flex-direction: column;
+  gap: 0.75rem;
 }
 
 .trim-alert {
@@ -4298,7 +4391,8 @@ watch(activeSection, (newSection) => {
 
 .imrad-textarea {
   width: 100%;
-  min-height: 300px;
+  min-height: 480px;
+  /* Taller for better text review */
   max-height: 600px;
   background: var(--paper);
   border: 1.5px solid var(--rule);
@@ -4316,117 +4410,5 @@ watch(activeSection, (newSection) => {
   outline: none;
   border-color: var(--green);
   box-shadow: 0 0 0 3px var(--green-dim);
-}
-
-/* ── IMRAD summary preview (Step 2) ──────────────────────── */
-.imrad-summary-preview {
-  background: var(--green-dim);
-  border: 1.5px solid rgba(0, 166, 81, 0.3);
-  border-radius: 8px;
-  padding: 1rem 1.25rem;
-  margin-bottom: 0.75rem;
-}
-
-.imrad-summary-label {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.72rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: var(--green-dk);
-  margin-bottom: 0.65rem;
-}
-
-.imrad-summary-hint {
-  font-weight: 400;
-  text-transform: none;
-  letter-spacing: 0;
-  color: var(--ink-3);
-  font-size: 0.71rem;
-  margin-left: 0.25rem;
-}
-
-.imrad-summary-body {
-  font-size: 0.9rem;
-  line-height: 1.75;
-  color: var(--ink-2);
-  white-space: pre-wrap;
-}
-
-/* collapsible raw text toggle */
-.imrad-raw-toggle {
-  margin-top: 0.25rem;
-}
-
-.imrad-raw-toggle[open]>.imrad-raw-label {
-  margin-bottom: 0.5rem;
-}
-
-.imrad-raw-label {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: var(--ink-3);
-  cursor: pointer;
-  user-select: none;
-  list-style: none;
-  padding: 0.3rem 0;
-}
-
-.imrad-raw-label::-webkit-details-marker {
-  display: none;
-}
-
-.imrad-raw-label:hover {
-  color: var(--ink);
-}
-
-/* ══ UPLOADED BY CHIP ══════════════════════════════════════════ */
-.uploader-chip {
-  display: inline-block;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--ink-2);
-  background: var(--surface);
-  border: 1px solid var(--rule);
-  border-radius: 20px;
-  padding: 0.15rem 0.55rem;
-  white-space: nowrap;
-}
-
-/* ══ ACTIVITY LOG BADGES ════════════════════════════════════════ */
-.log-badge {
-  display: inline-block;
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  padding: 0.2rem 0.55rem;
-  border-radius: 4px;
-}
-
-.log-badge.green {
-  background: var(--green-dim);
-  color: var(--green-dk);
-}
-
-.log-badge.blue {
-  background: #eff6ff;
-  color: #2563eb;
-}
-
-.log-badge.red {
-  background: #fef2f2;
-  color: #dc2626;
-}
-
-.log-date {
-  font-size: 0.78rem;
-  color: var(--ink-3);
-  white-space: nowrap;
 }
 </style>

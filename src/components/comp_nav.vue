@@ -2,7 +2,7 @@
 import { ref, onMounted, watch, onUnmounted } from 'vue'
 import { useRouter, useRoute, RouterLink } from 'vue-router'
 import {
-  Search, BookOpen, Settings, ArrowRight, LogOut,
+  Search, BookOpen, ArrowRight, LogOut, Settings,
   ChevronDown, Home, Info, Compass, UserCircle, X, Menu
 } from 'lucide-vue-next'
 import { api } from '../services/api'
@@ -67,6 +67,7 @@ const handleSearch = () => {
 }
 
 const logout = () => {
+  if (!confirm('Are you sure you want to sign out?')) return
   api.logout()
   isLoggedIn.value = false
   showProfileMenu.value = false
@@ -82,7 +83,7 @@ const logout = () => {
       <RouterLink :to="{ name: 'home' }" class="nav-logo">
         <img src="/lumia_logo.ico" style="width: 32px; height: 32px;" />
         <div class="logo-text">
-          UMIA <span class="logo-text--sub">Discovery</span>
+          UMIA <span class="logo-text--sub">Archiving</span>
         </div>
       </RouterLink>
 
@@ -102,8 +103,11 @@ const logout = () => {
       <!-- Right: Desktop Actions & Profile -->
       <div class="nav-actions-desktop">
         <RouterLink :to="{ name: 'home' }" class="nav-item">Home</RouterLink>
-        <RouterLink :to="{ name: 'about' }" class="nav-item">About</RouterLink>
+        <!-- <RouterLink :to="{ name: 'about' }" class="nav-item">About</RouterLink> -->
         <RouterLink :to="{ name: 'explore' }" class="nav-item">Explore</RouterLink>
+        <RouterLink v-if="isLoggedIn && isStaff" :to="{ name: 'management' }" class="nav-item nav-item--active">
+          Management
+        </RouterLink>
 
         <template v-if="isLoggedIn">
           <div class="nav-divider"></div>
@@ -125,9 +129,6 @@ const logout = () => {
                 <div class="dropdown-header">Account</div>
                 <RouterLink :to="{ name: 'profile' }" class="dropdown-item">
                   <UserCircle :size="16" /> My Profile
-                </RouterLink>
-                <RouterLink v-if="isStaff" :to="{ name: 'management' }" class="dropdown-item">
-                  <Settings :size="16" /> Management
                 </RouterLink>
                 <div class="dropdown-divider"></div>
                 <button @click="logout" class="dropdown-item logout-btn">
@@ -208,7 +209,8 @@ const logout = () => {
                 <UserCircle :size="18" /> My Profile
               </RouterLink>
               <RouterLink v-if="isStaff" :to="{ name: 'management' }" class="drawer-item">
-                <Settings :size="18" /> Management
+                <Settings :size="18" />
+                Management
               </RouterLink>
               <button @click="logout" class="drawer-item logout-mobile">
                 <LogOut :size="18" /> Sign Out
@@ -274,7 +276,8 @@ const logout = () => {
 
 .nav-container {
   width: 100%;
-  max-width: 1300px;
+  max-width: 1440px;
+  /* Expanded for widescreen */
   margin: 0 auto;
   padding: 0 24px;
   display: flex;
@@ -430,8 +433,7 @@ const logout = () => {
 }
 
 .nav-item.nav-item--active {
-  background: #181c18;
-  color: #fff;
+  color: #000000;
 }
 
 /* ── Profile Trigger ───────────────────────────────────────────── */

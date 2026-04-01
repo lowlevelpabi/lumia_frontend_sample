@@ -12,7 +12,7 @@
           <RouterLink to="/" class="footer-logo">
             <img src="/lumia_logo.ico" style="width: 28px; height: 28px;" />
             <div class="logo-text">
-              UMIA <span class="logo-text--sub">Discovery</span>
+              UMIA <span class="logo-text--sub">Archiving</span>
             </div>
           </RouterLink>
           <p class="brand-desc">
@@ -49,16 +49,6 @@
         </div>
          -->
 
-      </div>
-
-      <!-- Bottom bar -->
-      <div class="footer-bottom">
-        <span class="copyright">
-          &copy; {{ new Date().getFullYear() }} Lumia · Institutional Research Repository
-        </span>
-        <span class="powered">
-          Powered by <em>BERT-NLP</em>
-        </span>
       </div>
 
     </div>

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter, RouterLink } from 'vue-router'
-import { Search, User, ArrowRight, BookOpen, Hash, Clock } from 'lucide-vue-next'
+import { Search, User, ArrowRight, BookOpen, Clock } from 'lucide-vue-next'
 import { api, type Paper } from '../services/api'
 
 const router = useRouter()
@@ -43,13 +43,8 @@ const handleSearch = () => {
         </div>
 
         <h1 class="hero-heading">
-          Lumia Discovery
+          Lumia Archiving
         </h1>
-
-        <p class="hero-sub">
-          Experience the next-level of thesis archiving system with smarter ways using,
-          OCR + IMRAD services and BERT embedding for semantic search.
-        </p>
 
         <div class="search-row">
           <div class="search-field">
@@ -107,7 +102,7 @@ const handleSearch = () => {
           </div>
 
           <!-- Papers list -->
-          <ol v-else class="paper-list">
+          <ol v-else-if="recentPapers.length > 0" class="paper-list">
             <li v-for="(paper) in recentPapers" :key="paper.id" class="paper-item">
               <span class="item-num"></span>
 
@@ -139,7 +134,13 @@ const handleSearch = () => {
             </li>
           </ol>
 
-          <RouterLink :to="{ name: 'explore' }" class="view-more">
+          <!-- Empty state when no papers are found -->
+          <div v-else class="empty-feed">
+            <p class="empty-feed-title">The archive is currently empty</p>
+            <p class="empty-feed-sub">No research papers or capstone projects have been uploaded yet.</p>
+          </div>
+
+          <RouterLink v-if="recentPapers.length > 0" :to="{ name: 'explore' }" class="view-more">
             View the full repository
             <ArrowRight :size="14" />
           </RouterLink>
@@ -171,20 +172,22 @@ const handleSearch = () => {
               </RouterLink>
             </div>
           </div>
-
+          <!--
           <div class="sb-panel">
             <div class="sb-title">
               <Hash :size="13" />
               <span>Search Tips</span>
             </div>
+
             <ul class="tips">
               <li>Use <code>"exact phrase"</code> for precise matches</li>
               <li>Search by author name to find all their works</li>
               <li>Abstract keywords yield broader results than titles alone</li>
               <li>Combine terms: <code>neural network classification</code></li>
             </ul>
-          </div>
 
+          </div>
+-->
         </aside>
 
       </div>
@@ -234,7 +237,8 @@ const handleSearch = () => {
 }
 
 .hero-inner {
-  max-width: 780px;
+  max-width: 1200px;
+  /* Expanded for widescreen */
   margin: 0 auto;
   position: relative;
   z-index: 1;
@@ -387,11 +391,13 @@ const handleSearch = () => {
 }
 
 .content-grid {
-  max-width: 1080px;
+  max-width: 1440px;
+  /* Expanded for widescreen */
   margin: 0 auto;
   display: grid;
-  grid-template-columns: 1fr 224px;
-  gap: 3rem;
+  grid-template-columns: 1fr 360px;
+  /* Increased sidebar width */
+  gap: 3.5rem;
   align-items: start;
 }
 
@@ -711,6 +717,29 @@ const handleSearch = () => {
   padding: 0.1rem 0.3rem;
   border-radius: 3px;
   color: var(--ink);
+}
+
+/* ── Empty Feed ────────────────────────────────────────── */
+.empty-feed {
+  padding: 4rem 2rem;
+  text-align: center;
+  border-radius: 8px;
+  margin: 1.5rem 0;
+}
+
+.empty-feed-title {
+  font-family: 'Lora', serif;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 0.25rem;
+}
+
+.empty-feed-sub {
+  font-size: 0.88rem;
+  color: var(--ink-3);
+  max-width: 320px;
+  margin: 0 auto;
 }
 
 /* ── Responsive ────────────────────────────────────────── */
