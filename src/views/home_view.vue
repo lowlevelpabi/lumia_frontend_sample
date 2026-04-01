@@ -157,7 +157,7 @@ const handleSearch = () => {
             </div>
 
             <div class="sb-group">
-              <p class="sb-group-label">By Document Type</p>
+              <p class="sb-group-label">By Document Type:</p>
               <RouterLink :to="{ name: 'explore', query: { q: 'Thesis' } }" class="sb-link">Thesis / Research
               </RouterLink>
               <RouterLink :to="{ name: 'explore', query: { q: 'Capstone Project' } }" class="sb-link">Capstone Project
@@ -165,7 +165,7 @@ const handleSearch = () => {
             </div>
 
             <div class="sb-group">
-              <p class="sb-group-label">By Department</p>
+              <p class="sb-group-label">Department of:</p>
               <RouterLink :to="{ name: 'explore', query: { q: 'computer science' } }" class="sb-link">Department of
                 Computer
                 Studies
