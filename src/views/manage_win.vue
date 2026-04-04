@@ -399,6 +399,13 @@ const imradSections = reactive({
   discussion: ''
 })
 
+// Raw sections keep [[TABLE_IMAGE:...]] markers intact so they are saved to DB
+const rawImradSections = reactive({
+  introduction: '',
+  methods: '',
+  results: '',
+  discussion: ''
+})
 
 // RAD combined detection: results and discussion have identical text
 // when the backend stored a single combined RAD section
@@ -471,7 +478,18 @@ const triggerFallback = async () => {
     sessionId.value = preview.session_id
     Object.assign(uploadMetadata, preview.metadata)
     pages.value = preview.pages
-    if (preview.sections) Object.assign(imradSections, preview.sections)
+    if (preview.sections) {
+      // Store raw (with markers) for DB submission
+      Object.assign(rawImradSections, preview.sections as Record<string, string>)
+      // Strip markers for clean display
+      const cleaned = { ...preview.sections as Record<string, string> }
+      for (const k of ALL_IMRAD_TABS) {
+        if (cleaned[k]) cleaned[k] = cleaned[k].replace(/\[\[(?:TABLE|FIGURE)_IMAGE:.*?\]\]/g, '')
+      }
+      Object.assign(imradSections, cleaned)
+    }
+    // Capture media so it is passed to confirmUpload
+    if (preview.media) uploadMetadata.media = preview.media
     sectionPages.value = preview.section_pages || {}
     selectedPages.value = preview.pages.map(p => p.page_num)
     isManuscript.value = false
@@ -565,7 +583,18 @@ const startInitialExtraction = async (autoExtract: boolean = true) => {
 
     pages.value = preview.pages
     selectedPages.value = preview.pages.map((p: PageData) => p.page_num)
-    if (preview.sections) Object.assign(imradSections, preview.sections)
+    if (preview.sections) {
+      // Store raw (with markers) for DB submission
+      Object.assign(rawImradSections, preview.sections as Record<string, string>)
+      // Strip markers for clean display
+      const cleaned = { ...preview.sections as Record<string, string> }
+      for (const k of ALL_IMRAD_TABS) {
+        if (cleaned[k]) cleaned[k] = cleaned[k].replace(/\[\[(?:TABLE|FIGURE)_IMAGE:.*?\]\]/g, '')
+      }
+      Object.assign(imradSections, cleaned)
+    }
+    // Capture media so it is passed to confirmUpload
+    if (preview.media) uploadMetadata.media = preview.media
 
     // Set active tab to the first section that actually has content
     const firstAvailable = ALL_IMRAD_TABS.find(t => imradSections[t])
@@ -618,10 +647,11 @@ const handleFinalConfirm = async () => {
         keywords: uploadMetadata.keywords || '',
       },
       selected_pages: selectedPages.value,
-      introduction: imradSections.introduction,
-      methods: imradSections.methods,
-      results: imradSections.results,
-      discussion: imradSections.results, // Send identical for combined state
+      // Send RAW sections (with markers) so backend can match images correctly
+      introduction: rawImradSections.introduction || imradSections.introduction,
+      methods: rawImradSections.methods || imradSections.methods,
+      results: rawImradSections.results || imradSections.results,
+      discussion: rawImradSections.results || imradSections.results, // Combined RAD
       media: uploadMetadata.media,
     })
     step.value = 3

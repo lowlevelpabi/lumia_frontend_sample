@@ -2,7 +2,7 @@
 import { ref, onMounted, watch, computed } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { useAuth } from '../composables/useAuth'
-import { Calendar, User, FileText, BookOpen, Eye, Award, CheckCircle, Sparkles, TrendingUp, Loader2, ChevronRight, Columns } from 'lucide-vue-next'
+import { Eye, Award, CheckCircle, Loader2, ChevronRight } from 'lucide-vue-next'
 import { api, type Paper, type SearchResult } from '../services/api'
 
 const route = useRoute()
@@ -18,15 +18,7 @@ const hasCited = ref(false)
 const citeLoading = ref(false)
 const { isLoggedIn } = useAuth()
 
-// Document view state
-// 'rad' is a virtual tab key used only internally when RAD is combined —
-// it maps to the 'results' field on Paper (both fields are identical when combined)
-type TabKey = 'abstract' | 'introduction' | 'methods' | 'results' | 'discussion' | 'rad' | 'authors' | 'document' | 'imrad'
-const activeTab = ref<TabKey>('abstract')
-const pdfUrl = computed(() => {
-  const base = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000/api/v1'
-  return paper.value ? `${base}/papers/${paper.value.id}/pdf` : ''
-})
+
 
 // ── RAD combined detection ────────────────────────────────────────────────────
 // The backend stores identical text in both results + discussion when combined.
@@ -44,8 +36,8 @@ const isRadCombined = computed(() => {
 const resolveKey = (key: string): 'introduction' | 'methods' | 'results' | 'discussion' =>
   key === 'rad' ? 'results' : key as 'introduction' | 'methods' | 'results' | 'discussion'
 
-// IMRAD section config — computed so it reacts to combined/split mode
-type SectionCfg = { key: TabKey; label: string; summaryKey: keyof Paper }
+// IMRAD section config
+type SectionCfg = { key: string; label: string; summaryKey: keyof Paper }
 const IMRAD_SECTION_CONFIGS = computed((): SectionCfg[] => {
   return [
     { key: 'introduction', label: 'Introduction', summaryKey: 'introduction_summary' },
@@ -77,9 +69,6 @@ const parseSummaryBlocks = (text: string): { heading: string; body: string }[] =
   return blocks.filter(b => b.body.trim())
 }
 
-
-const showFullAbstract = ref(false)
-const ABSTRACT_PREVIEW_LIMIT = 400
 
 const loadPaperData = async (id: string) => {
   loading.value = true
@@ -148,13 +137,6 @@ const authorList = computed(() => {
   return [raw]
 })
 
-const abstractPreview = computed(() => {
-  if (!paper.value?.abstract) return ''
-  return paper.value.abstract.length > ABSTRACT_PREVIEW_LIMIT && !showFullAbstract.value
-    ? paper.value.abstract.substring(0, ABSTRACT_PREVIEW_LIMIT) + '...'
-    : paper.value.abstract
-})
-
 // ── IMRAD structured rendering ────────────────────────────────────────────────
 // The backend pre-parses flat text into typed blocks via imrad_structure_service.
 // We just render them here — no client-side regex or label lists needed.
@@ -176,310 +158,151 @@ const getStructuredBlocks = (key: string): ImradBlock[] => {
   return paper.value.imrad_structured[key as keyof typeof paper.value.imrad_structured] ?? []
 }
 
+
 // Whether a section has structured blocks available from the backend
 const hasStructured = (key: string): boolean => getStructuredBlocks(key).length > 0
 
+// Strip any [[TABLE_IMAGE:X]] or [TABLE_IMAGE:X] markers from raw text
+// Used in the fallback path for older papers without structured data
+const stripMarkers = (text: string): string =>
+  text.replace(/\[{1,2}(?:TABLE|FIGURE)_IMAGE:.*?\]{1,2}/gi, '').replace(/\s{2,}/g, ' ').trim()
 
 </script>
 
 <template>
   <div class="detail-page" v-if="!loading && paper">
 
-    <!-- ══ HEADER ═════════════════════════════════════════════════ -->
-    <div class="paper-header-wrap">
-      <div class="header-inner">
-
-        <!-- Breadcrumb -->
+    <!-- ══ TOP NAV BAR ════════════════════════════════════════════ -->
+    <div class="journal-topbar">
+      <div class="journal-topbar-inner">
         <nav class="breadcrumb">
           <RouterLink :to="{ name: 'home' }" class="bc-link">Home</RouterLink>
           <ChevronRight :size="12" class="bc-sep" />
           <button @click="goBack" class="bc-link">Results</button>
           <ChevronRight :size="12" class="bc-sep" />
-          <span class="bc-active">{{ paper.title.length > 55 ? paper.title.substring(0, 55) + '…' : paper.title
-          }}</span>
+          <span class="bc-active">{{ paper.title.length > 55 ? paper.title.substring(0, 55) + '…' : paper.title }}</span>
         </nav>
-
-        <!-- Badges -->
-        <div class="header-badges">
-          <span class="badge badge-dept">{{ paper.department }}</span>
-          <span class="badge badge-type">{{ paper.project_type }}</span>
-          <span v-if="paper.degree_program !== 'N/A'" class="badge badge-degree">{{ paper.degree_program }}</span>
-        </div>
-
-        <!-- Title -->
-        <h1 class="paper-title">{{ paper.title }}</h1>
-
-        <!-- Metadata -->
-        <div class="meta-row">
-          <span class="meta-item">
-            <User :size="13" />
-            {{ paper.author }}
-          </span>
-          <span class="meta-dot">·</span>
-          <span class="meta-item">
-            <Calendar :size="13" />
-            {{ paper.year }}
-          </span>
-        </div>
-
-        <!-- Engagement -->
-        <div class="engagement-row">
-          <span class="stat-chip">
-            <Eye :size="13" />{{ viewCount.toLocaleString() }} views
-          </span>
-          <span class="stat-chip">
-            <Award :size="13" />{{ citationCount.toLocaleString() }} citations
-          </span>
-          <button v-if="isLoggedIn" class="cite-btn" :class="{ cited: hasCited, loading: citeLoading }"
-            :disabled="hasCited || citeLoading" @click="handleCite">
-            <CheckCircle v-if="hasCited" :size="14" />
-            <Award v-else :size="14" />
-            {{ hasCited ? 'Cited' : citeLoading ? 'Citing…' : 'Cite this study' }}
-          </button>
-          <span v-else class="cite-hint">Sign in with your student account to cite this study</span>
-        </div>
-
       </div>
     </div>
 
-    <!-- ══ BODY ════════════════════════════════════════════════════ -->
-    <div class="detail-layout">
+    <!-- ══ PAGE LAYOUT ════════════════════════════════════════════ -->
+    <div class="journal-page-layout">
 
-      <!-- Left: Document nav sidebar -->
-      <aside class="doc-nav-aside">
-        <p class="aside-group-label">Document Content</p>
-        <nav class="aside-nav">
-          <button class="aside-item" :class="{ active: activeTab === 'abstract' }" @click="activeTab = 'abstract'">
-            Abstract
-          </button>
-          <button v-if="paper.introduction" class="aside-item" :class="{ active: activeTab === 'introduction' }"
-            @click="activeTab = 'introduction'">
-            Introduction
-          </button>
-          <button v-if="paper.methods" class="aside-item" :class="{ active: activeTab === 'methods' }"
-            @click="activeTab = 'methods'">
-            Methods
-          </button>
-          <!-- RAD: combined tab or separate tabs depending on document type -->
-          <button v-if="paper.results || paper.discussion" class="aside-item"
-            :class="{ active: activeTab === 'rad' || activeTab === 'results' || activeTab === 'discussion' }"
-            @click="activeTab = 'rad'">
-            Results and Discussion
-          </button>
+      <!-- ── Main Journal Paper ── -->
+      <div class="journal-paper-wrap">
+        <article class="imrad-journal-page">
 
-          <button
-            v-if="paper.introduction_summary || paper.methods_summary || paper.results_summary || paper.discussion_summary"
-            class="aside-item aside-item-imrad" :class="{ active: activeTab === 'imrad' }" @click="activeTab = 'imrad'">
-            IMRAD Format
-            <span class="imrad-new-tag">NEW</span>
-          </button>
-        </nav>
+          <!-- ── Journal Header (Title / Authors / Abstract) ── -->
+          <header class="journal-header">
 
-        <p class="aside-group-label" style="margin-top: 1.5rem">Study Info</p>
-        <nav class="aside-nav">
-          <button class="aside-item" :class="{ active: activeTab === 'authors' }" @click="activeTab = 'authors'">
-            Authors
-          </button>
-        </nav>
-      </aside>
-
-      <!-- Center: Main content -->
-      <main class="paper-main">
-
-        <!-- Tabs (horizontal, visible on all sizes) -->
-        <div class="doc-tabs" v-if="activeTab !== 'imrad'">
-          <button class="doc-tab" :class="{ active: activeTab === 'abstract' }"
-            @click="activeTab = 'abstract'">Abstract</button>
-          <button v-if="paper.introduction" class="doc-tab" :class="{ active: activeTab === 'introduction' }"
-            @click="activeTab = 'introduction'">Introduction</button>
-          <button v-if="paper.methods" class="doc-tab" :class="{ active: activeTab === 'methods' }"
-            @click="activeTab = 'methods'">Methods</button>
-          <!-- RAD merged tab or split tabs -->
-          <button v-if="paper.results || paper.discussion" class="doc-tab"
-            :class="{ active: activeTab === 'rad' || activeTab === 'results' || activeTab === 'discussion' }"
-            @click="activeTab = 'rad'">
-            Results and Discussion
-          </button>
-        </div>
-
-        <!-- ── IMRAD availability notice banner ───────────────── -->
-        <div
-          v-if="activeTab !== 'imrad' && (paper.introduction_summary || paper.methods_summary || paper.results_summary || paper.discussion_summary)"
-          class="imrad-avail-banner" @click="activeTab = 'imrad'">
-          <span class="imrad-avail-tag">NOTICE</span>
-          <span class="imrad-avail-text"><strong>IMRAD Format</strong> is available for this study.</span>
-          <span class="imrad-avail-cta">Take me there →</span>
-        </div>
-
-        <!-- ── Abstract Tab ─────────────────────────────────────── -->
-        <div v-if="activeTab === 'abstract'">
-          <section class="paper-section">
-            <h3 class="section-heading">
-              <FileText :size="15" /> Abstract
-            </h3>
-            <p class="body-text">{{ abstractPreview }}</p>
-            <button v-if="paper.abstract && paper.abstract.length > ABSTRACT_PREVIEW_LIMIT" class="read-more-btn"
-              @click="showFullAbstract = !showFullAbstract">
-              {{ showFullAbstract ? 'Show less' : 'Read full abstract' }}
-            </button>
-          </section>
-
-          <section class="paper-section" v-if="paper.keywords">
-            <h3 class="section-heading">
-              <BookOpen :size="15" /> Keywords
-            </h3>
-            <div class="tags">
-              <RouterLink v-for="tag in paper.keywords.split(',')" :key="tag"
-                :to="{ name: 'explore', query: { q: tag.trim() } }" class="tag">{{ tag.trim() }}</RouterLink>
+            <div class="journal-meta-top">
+              <span class="journal-badge">{{ paper.department }}</span>
+              <span class="journal-badge journal-badge-type">{{ paper.project_type }}</span>
+              <span v-if="paper.degree_program !== 'N/A'" class="journal-badge journal-badge-degree">{{ paper.degree_program }}</span>
+              <span class="journal-badge">{{ paper.year }}</span>
             </div>
-          </section>
-        </div>
 
-        <!-- ── IMRAD Sections — Regular per-tab view ──────────── -->
-        <template v-if="activeTab !== 'imrad'">
-          <template v-for="cfg in IMRAD_SECTION_CONFIGS" :key="cfg.key">
-            <section v-if="activeTab === cfg.key" class="paper-section">
+            <h1 class="journal-title">{{ paper.title }}</h1>
 
-              <h3 class="section-heading">
-                <BookOpen v-if="cfg.key === 'introduction'" :size="15" />
-                <Sparkles v-else-if="cfg.key === 'methods'" :size="15" />
-                <TrendingUp v-else :size="15" />
-                {{ cfg.label }}
-              </h3>
-
-              <!-- Section text — rendered from pre-structured backend blocks -->
-              <div v-if="hasStructured(cfg.key)" class="section-text-outer">
-                <div class="section-text-wrap">
-                  <div class="section-text">
-                    <template v-for="(block, i) in getStructuredBlocks(cfg.key)" :key="i">
-                      <div v-if="block.type === 'subheading'" class="section-subheading">{{ block.text }}</div>
-                      <span v-else class="section-text-block">{{ block.text }}</span>
-                    </template>
-                  </div>
-                </div>
-              </div>
-              <div v-else-if="paper[resolveKey(cfg.key)]" class="section-text-outer">
-                <div class="section-text-wrap">
-                  <div class="section-text">
-                    {{ paper[resolveKey(cfg.key)] }}
-                    <template v-if="cfg.key === 'rad' && paper.discussion && !isRadCombined">
-                      <br><br>
-                      {{ paper.discussion }}
-                    </template>
-                  </div>
-                </div>
-              </div>
-              <p v-else class="no-content">No extracted text available for this section.</p>
-            </section>
-          </template>
-        </template>
-
-        <!-- ── IMRAD View — All sections, 2-column layout ──────── -->
-        <div v-if="activeTab === 'imrad'" class="imrad-full-view">
-
-          <!-- Top bar -->
-          <div class="imrad-full-bar">
-            <div class="imrad-full-bar-left">
-              <Columns :size="15" />
-              <span>IMRAD Format</span>
-              <span class="imrad-full-hint">Introduction summarized · Methods, Results &amp; Discussion in full</span>
+            <div class="journal-authors">
+              <span v-for="(author, idx) in authorList" :key="idx" class="journal-author">
+                {{ author }}<span v-if="idx < authorList.length - 1" class="author-sep"> · </span>
+              </span>
             </div>
-          </div>
 
-          <!-- ONE unified 2-column flow — all sections, no section-level gaps -->
-          <div class="imrad-unified-wrap">
-            <div class="imrad-unified-col">
-              <template v-for="cfg in IMRAD_SECTION_CONFIGS" :key="cfg.key">
-                <div class="imrad-col-block imrad-section-label">
-                  <div class="imrad-full-section-head">
-                    <span>{{ cfg.label }}</span>
-                  </div>
-                </div>
+            <div class="journal-stats">
+              <span class="j-stat"><Eye :size="12" /> {{ viewCount.toLocaleString() }} views</span>
+              <span class="j-stat"><Award :size="12" /> {{ citationCount.toLocaleString() }} citations</span>
+              <button v-if="isLoggedIn" class="j-cite-btn" :class="{ cited: hasCited }" :disabled="hasCited || citeLoading" @click="handleCite">
+                <CheckCircle v-if="hasCited" :size="13" />
+                <Award v-else :size="13" />
+                {{ hasCited ? 'Cited' : citeLoading ? 'Citing…' : 'Cite this study' }}
+              </button>
+              <span v-else class="j-login-hint">Sign in to cite this study</span>
+            </div>
 
-                <!-- Introduction: show summary (parsed into heading blocks) -->
+            <!-- Plain Abstract -->
+            <div class="journal-abstract-plain">
+              <span class="journal-abstract-label">Abstract</span>
+              <p class="journal-abstract-text">{{ paper.abstract }}</p>
+              <div v-if="paper.keywords" class="journal-keywords">
+                <strong>Keywords: </strong>
+                <span>{{ paper.keywords }}</span>
+              </div>
+            </div>
+
+            <hr class="journal-divider" />
+          </header>
+
+          <!-- ── 2-Column IMRAD Body ── -->
+          <div class="journal-body">
+            <template v-for="cfg in IMRAD_SECTION_CONFIGS" :key="cfg.key">
+              <div class="journal-section-heading">
+                <span>{{ cfg.label }}</span>
+              </div>
+
+              <!-- Section Wrapper to reset CSS counter -->
+              <div class="journal-section-content">
+                <!-- Introduction → AI summary blocks -->
                 <template v-if="cfg.key === 'introduction'">
-                  <template v-if="paper[cfg.summaryKey]">
-                    <div v-for="(block, idx) in parseSummaryBlocks(paper[cfg.summaryKey] as string)" :key="idx"
-                      class="imrad-col-block">
-                      <p v-if="block.heading" class="imrad-block-heading">{{ block.heading }}</p>
-                      <p class="imrad-block-body">{{ block.body }}</p>
+                  <template v-if="paper.introduction_summary">
+                    <div v-for="(block, idx) in parseSummaryBlocks(paper.introduction_summary as string)" :key="idx">
+                      <p v-if="block.heading" class="journal-subheading">{{ block.heading }}</p>
+                      <p class="journal-para">{{ block.body }}</p>
                     </div>
                   </template>
-                  <div v-else class="imrad-col-block imrad-no-summary">
-                    <p>No introduction summary available.</p>
+                  <div v-else-if="paper.introduction">
+                    <p class="journal-para">{{ stripMarkers(paper.introduction) }}</p>
                   </div>
+                  <p v-else class="journal-para journal-no-content">No introduction available.</p>
                 </template>
 
-                <!-- Methods, Results, Discussion: structured blocks from backend -->
+                <!-- Methods / Results / Discussion → structured blocks -->
                 <template v-else>
-                  <div v-if="hasStructured(cfg.key)" class="imrad-col-block imrad-raw-block">
+                  <div v-if="hasStructured(cfg.key)">
                     <template v-for="(block, i) in getStructuredBlocks(cfg.key)" :key="i">
-                      <div v-if="block.type === 'subheading'" class="imrad-inline-subheading">{{ block.text }}</div>
-                      <p v-else class="imrad-block-body imrad-raw-para">{{ block.text }}</p>
+                      <div v-if="block.type === 'subheading'" class="journal-subheading">{{ block.text }}</div>
+                      <div v-else-if="block.type === 'table-image'" class="journal-figure">
+                        <img :src="block.text" :alt="block.id" class="journal-figure-img" />
+                      </div>
+                      <p v-else-if="block.type === 'table-label'" class="journal-figure-caption">{{ block.text }}</p>
+                      <p v-else class="journal-para">{{ block.text }}</p>
                     </template>
                   </div>
-                  <div v-else-if="paper[resolveKey(cfg.key)]" class="imrad-col-block imrad-raw-block">
-                    <p class="imrad-block-body imrad-raw-para">{{
-                      paper[resolveKey(cfg.key)] }}</p>
+                  <div v-else-if="paper[resolveKey(cfg.key)]">
+                    <p class="journal-para">{{ stripMarkers(paper[resolveKey(cfg.key)] as string) }}</p>
                     <template v-if="cfg.key === 'rad' && paper.discussion && !isRadCombined">
-                      <p class="imrad-block-body imrad-raw-para">
-                        {{ paper.discussion }}
-                      </p>
+                      <p class="journal-para">{{ stripMarkers(paper.discussion as string) }}</p>
                     </template>
                   </div>
-                  <div v-else class="imrad-col-block imrad-no-summary">
-                    <p>No extracted text available for this section.</p>
-                  </div>
+                  <p v-else class="journal-para journal-no-content">No extracted text available for this section.</p>
                 </template>
-
-              </template>
-            </div>
-          </div>
-        </div>
-
-        <!-- ── Authors Tab ──────────────────────────────────────── -->
-        <div v-if="activeTab === 'authors'" class="paper-section">
-          <h3 class="section-heading">
-            <User :size="15" /> Authors
-          </h3>
-          <div v-if="authorList.length > 0" class="authors-list">
-            <div v-for="(author, idx) in authorList" :key="idx" class="author-row">
-              <div class="author-initial">{{ author.charAt(0).toUpperCase() }}</div>
-              <div class="author-info">
-                <p class="author-name">{{ author }}</p>
-                <p class="author-label">Author {{ idx + 1 }}</p>
               </div>
+            </template>
+          </div>
+
+        </article>
+      </div>
+
+      <!-- ── Related Studies Sidebar ── -->
+      <aside class="journal-sidebar">
+        <div class="sidebar-inner">
+          <p class="sidebar-label">Related Studies</p>
+          <p class="sidebar-sub">Based on semantic similarity</p>
+
+          <div v-if="recommendations.length > 0" class="rec-list">
+            <div v-for="rec in recommendations" :key="rec.id" class="rec-card" @click="viewDetail(rec.id)">
+              <span v-if="rec.payload.degree_program" class="rec-badge">{{ rec.payload.degree_program }}</span>
+              <p class="rec-title">{{ rec.payload.title }}</p>
+              <p class="rec-meta">{{ rec.payload.author }} · {{ rec.payload.year }}</p>
+              <div class="rec-score">{{ (rec.score * 100).toFixed(0) }}% match</div>
             </div>
           </div>
-          <p v-else class="no-content">No author information available.</p>
-        </div>
 
-        <!-- ── Full Document Tab ────────────────────────────────── -->
-        <div v-if="activeTab === 'document'" class="pdf-viewer-wrap">
-          <iframe :src="pdfUrl" class="pdf-iframe" title="Full Research Document" allowfullscreen />
-        </div>
-
-      </main>
-
-      <!-- Right: Related Studies -->
-      <aside class="rec-aside">
-        <div class="rec-head">
-          <p class="aside-group-label">Related Studies</p>
-          <p class="rec-sub">Based on semantic similarity</p>
-        </div>
-
-        <div v-if="recommendations.length > 0" class="rec-list">
-          <div v-for="rec in recommendations" :key="rec.id" class="rec-card" @click="viewDetail(rec.id)">
-            <span v-if="rec.payload.degree_program" class="rec-badge">{{ rec.payload.degree_program }}</span>
-            <p class="rec-title">{{ rec.payload.title }}</p>
-            <p class="rec-meta">{{ rec.payload.author }} · {{ rec.payload.year }}</p>
-            <div class="rec-score">{{ (rec.score * 100).toFixed(0) }}% match</div>
+          <div v-else class="rec-empty">
+            <img src="/book_empty.ico" alt="Empty" class="rec-empty-icon" />
+            <p>No related studies found.</p>
           </div>
-        </div>
-
-        <div v-else class="rec-empty">
-          <img src="/book_empty.ico" alt="Empty" class="rec-empty-icon" />
-          <p>No related studies found.</p>
         </div>
       </aside>
 
@@ -493,6 +316,7 @@ const hasStructured = (key: string): boolean => getStructuredBlocks(key).length 
   </div>
 </template>
 
+
 <style scoped>
 @import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400;1,600&family=Source+Sans+3:wght@400;500;600;700&display=swap');
 
@@ -502,7 +326,7 @@ const hasStructured = (key: string): boolean => getStructuredBlocks(key).length 
   --ink-2: #3d4239;
   --ink-3: #7a7f75;
   --rule: #dfe0db;
-  --surface: #f5f5f2;
+  --surface: #f0f0ec;
   --paper: #ffffff;
   --green: #00a651;
   --green-dk: #007d3d;
@@ -514,6 +338,109 @@ const hasStructured = (key: string): boolean => getStructuredBlocks(key).length 
   font-family: 'Source Sans 3', sans-serif;
   color: var(--ink);
 }
+
+/* ══ TOP NAV BAR ══════════════════════════════════════════ */
+.journal-topbar {
+  background: var(--hero-bg);
+  border-bottom: 3px solid var(--green);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.journal-topbar::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 28px 28px;
+  pointer-events: none;
+}
+
+.journal-topbar-inner {
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 0.7rem 2rem;
+  position: relative;
+}
+
+/* Breadcrumb */
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0;
+}
+
+.bc-link {
+  font-size: 0.73rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.35);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: none;
+  transition: color 0.14s;
+  font-family: 'Source Sans 3', sans-serif;
+}
+
+.bc-link:hover { color: rgba(255, 255, 255, 0.75); }
+
+.bc-sep { color: rgba(255, 255, 255, 0.18); }
+
+.bc-active {
+  font-size: 0.73rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+/* ══ PAGE LAYOUT ══════════════════════════════════════════ */
+.journal-page-layout {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.5rem;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 4rem;
+}
+
+.journal-paper-wrap {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ══ RELATED STUDIES SIDEBAR ══════════════════════════════ */
+.journal-sidebar {
+  width: 260px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 60px;
+}
+
+.sidebar-inner {
+  background: #fff;
+  border-radius: 8px;
+  border: 1px solid var(--rule);
+  padding: 1.25rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.sidebar-label {
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--green-dk);
+  margin: 0 0 0.2rem;
+}
+
+.sidebar-sub {
+  font-size: 0.72rem;
+  color: var(--ink-3);
+  margin: 0 0 1rem;
+}
+
 
 /* ══ HEADER ══════════════════════════════════════════════ */
 .paper-header-wrap {
@@ -1491,198 +1418,394 @@ const hasStructured = (key: string): boolean => getStructuredBlocks(key).length 
   }
 }
 
-/* ── IMRAD Full View (all sections at once) ──────────────── */
-.imrad-full-view {
+
+/* ═══════════════════════════════════════════════════════════
+   IMRAD JOURNAL PAGE
+   A white academic paper layout matching real IMRAD format.
+   ═══════════════════════════════════════════════════════════ */
+
+.imrad-journal-page {
+  background: #fff;
+  border-radius: 6px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08), 0 1px 4px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+  margin-bottom: 2rem;
+}
+
+/* ── Journal Header (Title / Authors / Abstract) ── */
+.journal-header {
+  padding: 2.5rem 3rem 2rem;
+  border-bottom: 1px solid #e8e8e0;
+  text-align: center;
+}
+
+.journal-meta-top {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  justify-content: center;
+  margin-bottom: 1.25rem;
+}
+
+.journal-badge {
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 0.2rem 0.6rem;
+  border-radius: 3px;
+  background: var(--green-dim);
+  color: var(--green-dk);
+  border: 1px solid rgba(0, 125, 61, 0.15);
+}
+
+.journal-badge-type {
+  background: rgba(96, 165, 250, 0.1);
+  color: #1d4ed8;
+  border-color: rgba(96, 165, 250, 0.2);
+}
+
+.journal-badge-degree {
+  background: rgba(251, 191, 36, 0.1);
+  color: #92400e;
+  border-color: rgba(251, 191, 36, 0.2);
+}
+
+.journal-title {
+  font-family: 'Lora', Georgia, serif;
+  font-size: clamp(1.35rem, 2.5vw, 1.95rem);
+  font-weight: 700;
+  line-height: 1.3;
+  color: #111;
+  margin: 0 auto 1.1rem;
+  max-width: 820px;
+}
+
+.journal-authors {
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.9rem;
+  color: #555;
+  margin-bottom: 0.65rem;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 0;
 }
 
-.imrad-full-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.75rem 1.25rem;
-  background: var(--hero-bg);
-  border-radius: 8px 8px 0 0;
-  border-bottom: 2px solid var(--green);
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-
-.imrad-notice-banner {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
-  padding: 0.6rem 1.25rem;
-  background: #fffbeb;
-  border-bottom: 1px solid #f59e0b;
-  font-size: 0.78rem;
-  color: #92400e;
-  line-height: 1.5;
-}
-
-.imrad-notice-icon {
-  flex-shrink: 0;
-  margin-top: 1px;
-  color: #f59e0b;
-}
-
-.imrad-full-bar-left {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: rgba(255, 255, 255, 0.85);
-  font-size: 0.85rem;
+.journal-author {
   font-weight: 600;
 }
 
-.imrad-full-hint {
-  font-size: 0.72rem;
+.author-sep {
+  color: #bbb;
   font-weight: 400;
-  color: rgba(255, 255, 255, 0.4);
-  margin-left: 0.25rem;
+  padding: 0 0.2rem;
 }
 
-.toggle-opt.active-green {
+.journal-stats {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.j-stat {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  padding: 0.3rem 0.85rem;
+  font-size: 0.73rem;
+  color: #999;
+  font-weight: 500;
+}
+
+.j-cite-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
   background: var(--green);
+  color: #fff;
   border: none;
-  border-radius: 5px;
+  padding: 0.32rem 0.85rem;
+  border-radius: 4px;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.74rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.14s;
+}
+
+.j-cite-btn:hover:not(:disabled) { background: var(--green-dk); }
+
+.j-cite-btn.cited {
+  background: transparent;
+  border: 1px solid #ccc;
+  color: #999;
+  cursor: default;
+}
+
+/* Plain Abstract layout */
+.journal-abstract-plain {
+  text-align: left;
+  margin: 1.5rem 0 1.25rem;
+  max-width: 100%;
+}
+
+.journal-abstract-label {
+  display: block;
   font-family: 'Source Sans 3', sans-serif;
   font-size: 0.75rem;
-  font-weight: 700;
-  color: #fff;
-  cursor: pointer;
-  transition: background 0.13s;
-  white-space: nowrap;
-}
-
-.toggle-opt.active-green:hover {
-  background: var(--green-dk);
-}
-
-.imrad-unified-wrap {
-  background: var(--paper);
-  border-left: 1px solid var(--rule);
-  border-right: 1px solid var(--rule);
-  border-bottom: 1px solid var(--rule);
-  border-radius: 0 0 8px 8px;
-}
-
-/* Single unified 2-column flow — all IMRAD content in one container */
-.imrad-unified-col {
-  columns: 2;
-  column-gap: 2rem;
-  padding: 1.5rem 1.75rem;
-}
-
-/* Section label: keep heading pinned to its first content block */
-.imrad-section-label {
-  margin-top: 1.25rem;
-  break-after: avoid;
-}
-
-.imrad-section-label:first-child {
-  margin-top: 0;
-}
-
-.imrad-full-section-head {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.72rem;
-  font-weight: 700;
+  font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: var(--green-dk);
-  margin-bottom: 1rem;
-  padding-bottom: 0.6rem;
-  border-bottom: 1.5px solid var(--green-dim);
+  margin-bottom: 0.4rem;
+}
+
+.journal-abstract-text {
+  font-family: 'Lora', Georgia, serif;
+  font-size: 0.9rem;
+  line-height: 1.8;
+  color: #2a2a2a;
+  margin: 0 0 0.75rem;
+  text-align: justify;
+  text-indent: 2rem;
+}
+
+.journal-keywords {
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.78rem;
+  color: var(--ink-2);
+  margin-top: 0.5rem;
+}
+
+.journal-divider {
+  border: none;
+  border-top: 2.5px solid var(--green);
+  margin: 2.5rem auto 1.5rem;
+  max-width: 80px;
+  opacity: 0.35;
+}
+
+/* ── 2-Column Body ── */
+.journal-body {
+  padding: 3rem 4rem 4rem;
+  columns: 2;
+  column-gap: 4rem;
+  column-rule: 1px solid #eee;
+  text-align: justify;
+}
+
+.journal-section-heading {
+  break-after: avoid;
+  margin: 2rem 0 1rem;
+}
+
+.journal-section-heading:first-child {
+  margin-top: 0;
+}
+
+.journal-section-heading span {
+  display: block;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--green-dk);
+  padding-bottom: 0.4rem;
+  border-bottom: 2.5px solid var(--green);
+  width: fit-content;
+}
+
+/* Section content resets the A. B. C. counter */
+.journal-section-content {
+  counter-reset: subheading;
+}
+
+.journal-subheading {
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #111;
+  margin: 1.25rem 0 0.5rem;
+  break-after: avoid;
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+
+.journal-subheading::before {
+  counter-increment: subheading;
+  content: counter(subheading, upper-alpha) ". ";
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.journal-para {
+  font-family: 'Lora', Georgia, serif;
+  font-size: 0.92rem;
+  line-height: 1.85;
+  color: #333;
+  margin: 0 0 0.75rem;
+  padding-left: 2rem; /* Academic indentation */
+  text-indent: 1.5rem; /* First-line indentation */
+}
+
+.journal-no-content {
+  color: var(--ink-3);
+  font-style: italic;
+  padding-left: 2rem;
+}
+
+/* Figures / Tables inline */
+.journal-figure {
+  break-inside: avoid;
+  text-align: center;
+  margin: 1.5rem 0 1.2rem;
+}
+
+.journal-figure-img {
+  max-width: 100%;
+  height: auto;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.journal-figure-caption {
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.73rem;
+  color: #777;
+  text-align: center;
+  font-style: italic;
+  margin: 0.3rem 0 0.7rem;
+  break-inside: avoid;
 }
 
 
+/* ── Loading ───────────────────────────────────────────────── */
+.loading-full {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 6rem 2rem;
+  font-size: 0.9rem;
+  color: var(--ink-3);
+}
 
-
-/* ── Responsive ────────────────────────────────────────── */
-@media (max-width: 1200px) {
-  .rec-aside {
+/* ── Responsive ────────────────────────────────────────────── */
+@media (max-width: 1100px) {
+  .journal-sidebar {
     display: none;
   }
 }
 
-@media (max-width: 1024px) {
-  .detail-layout {
-    gap: 1.5rem;
-  }
-
-  .paper-main {
-    padding: 1.5rem;
-  }
-}
-
 @media (max-width: 768px) {
-  .detail-layout {
-    flex-direction: column;
+  .journal-page-layout {
+    padding: 1.25rem 1rem 3rem;
   }
 
-  .doc-nav-aside {
-    width: 100%;
-    position: static;
-  }
-
-  .imrad-unified-col {
+  .journal-body {
     columns: 1;
+    column-rule: none;
+    column-gap: 0;
+    padding: 1.5rem 1.25rem;
   }
 
-  .paper-title {
-    font-size: 1.45rem;
+  .journal-header {
+    padding: 1.75rem 1.25rem 1.5rem;
+  }
+
+  .journal-abstract-box {
+    max-width: 100%;
   }
 }
 
-@media (max-width: 480px) {
-  .paper-header-wrap {
-    padding: 1.5rem 1rem;
-  }
+/* ── Rec Cards (used in sidebar) ───────────────────────────── */
+.rec-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
 
-  .header-inner {
-    padding: 0;
-  }
+.rec-card {
+  padding: 0.75rem;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: border-color 0.14s, box-shadow 0.14s;
+}
 
-  .doc-tabs {
-    gap: 0.75rem;
-  }
+.rec-card:hover {
+  border-color: var(--green);
+  box-shadow: 0 2px 8px rgba(0, 166, 81, 0.1);
+}
 
-  .doc-tab {
-    font-size: 0.75rem;
-  }
+.rec-badge {
+  display: inline-block;
+  font-size: 0.58rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.15rem 0.45rem;
+  border-radius: 3px;
+  background: var(--green-dim);
+  color: var(--green-dk);
+  margin-bottom: 0.35rem;
+}
+
+.rec-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.4;
+  color: var(--ink);
+  margin: 0 0 0.3rem;
+}
+
+.rec-meta {
+  font-size: 0.7rem;
+  color: var(--ink-3);
+  margin: 0 0 0.4rem;
+}
+
+.rec-score {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--green-dk);
+  background: var(--green-dim);
+  display: inline-block;
+  padding: 0.1rem 0.4rem;
+  border-radius: 3px;
 }
 
 .rec-empty {
-  padding: 3rem 1.5rem;
+  padding: 2rem 1rem;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1rem;
+  gap: 0.6rem;
   text-align: center;
-  border-radius: 6px;
-  margin-top: 1rem;
 }
 
 .rec-empty-icon {
-  width: 48px;
-  height: 48px;
-  opacity: 0.40;
+  width: 36px;
+  height: 36px;
+  opacity: 0.35;
   filter: grayscale(1);
 }
 
 .rec-empty p {
-  font-size: 0.85rem;
+  font-size: 0.78rem;
   color: var(--ink-3);
   margin: 0;
+}
+
+.j-login-hint {
+  font-size: 0.73rem;
+  color: #999;
+  font-style: italic;
 }
 </style>

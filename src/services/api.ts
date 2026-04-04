@@ -293,6 +293,7 @@ export const api = {
     sections_summary?: Record<string, string>
     section_pages?: Record<string, number[]>
     trim_points?: Record<string, string>
+    media?: Record<string, string>
   }> {
     const formData = new FormData()
     formData.append('file', file)
