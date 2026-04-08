@@ -17,26 +17,56 @@
 - [x] **Comma Caption Delimiter Support** (`imrad_service.py`): Added `,` to `TRUE_CAP_RE` so `Table 3,` (author typo using comma instead of period) is recognized as a true caption in both the spatial extractor and the text injection pass.
 - [x] **Remove Table Image Border** (`detail_win.vue`): Stripped `border`, `border-radius`, and `box-shadow` from `.journal-figure-img` so extracted table images render cleanly without a visible frame.
 - [x] **Table Crop: Description-Above Bleed** (`imrad_service.py`): Resolved by reverting to including the description/caption within the table crop. While descriptions above the table will still show up in the image, this guarantees that no part of the table or caption is clipped (using a safe 10px top buffer). Validated across multiple documents.
+- [x] **Document Library Management — Delete & Upload History** _(Admin & Faculty only)_ : Successfully implemented `Trash` tab in `manage_win.vue`. Adjustment with backend services is also done for the UI feature implementation
+- [x] **Time & Date Bug** (`manage_win.vue`): Fixed the bug where the time and date of the uploaded, deleted, and restored document was not displayed in the correct timezone format. Backend adjustment is also needed for this one to finally resolve.
+- [x] **Search Precision**: Evaluate if IMRAD-weighted searching can improve the relevance of top results.
+- [x] **Hybrid Search**: Implement hybrid search (keyword + vector) to improve search relevance.
+- [x] **Reference Inclusion**: Include in OCR and extraction the references from PDF and display it in UI.
+- [x] **UI and Layout**: Revamp the `profile_win.vue` design and layout. Use a sidebar for clear navigation between user dashboard, update credentials, citated study, users who cited your study.
+- [x] **Citation Track**: Revamp the `profile_win.vue` design and layout. Include the tracking of what study user citated.
+- [x] **Citation Track #2**: A tracker for who citated your study.
+- [x] **Issue in Reference**: The university used in citation reference is `Cavite State University, Indang, Cavite.`, the system should detect where campus the thesis was conducted and finished. **SOLVED (Partially)**: Satellite Campus location/place hardcoded name in `citation_gen.py` is removed.
 
-## Active Issues & Current Sprint
+## Possible Implementation
 
+- [ ] **A4 Formatted IMRAD Export**
+      Implement a "Download as PDF" feature that generates a professionally formatted document (A4, 12pt Serif, justified text, proper IMRAD structure) matching the approved design.
 
-- [ ] **Search Precision**: Evaluate if IMRAD-weighted searching can improve the relevance of top results.
+- [ ] **Realtime System Time**
+      Make the system's time or timezone to be local and make sure that the functions that has timer in the system is working if we try to alter the time of the os manually. For example if a thesis is in trash or for deletion within 15 days, if we change the clock of the OS to advance in 3 days, if we came back in the UI and refresh the page, the timer should show 12 days remaining.
 
-- [ ] **Document Library Management — Delete & Upload History** _(Admin & Faculty only)_
+- [ ] **Implement Functionality for Oldest, Newest, and Most Cited Filter**
+      Implement a functionality for the filtering option of Oldest, Newest and Most Cited Study in `explore_win.vue`.
 
-  A full document lifecycle management feature accessible only to `Admin` and `Faculty` roles via a new **"Library"** tab in `manage_win.vue`.
+  **Basis of each filter option:**
+  - Newest and Oldest: Query the whole `paper` table in `thesis.db` to rank the oldest to older, newest to newer and return the result in UI search result.
+  - Most Cited: Query the `user_citation` table in `thesis.db` to count the number of citations for each paper and rank them accordingly and return the result in UI search result.
+  - Rename `Good Match`, `Perfect Match` in Recommendation Panel to `Similar Study` or `Recommended Study` in `explore_win.vue`.
 
-  **Backend tasks:**
-  - [ ] `papers.py` — Add `DELETE /api/v1/papers/{id}` endpoint, guarded by `faculty_or_admin_required`. Must delete from both SQLite (`papers` table) and Qdrant vector store. Log the action to `activity_logs`.
-  - [ ] `papers.py` — Add `GET /api/v1/papers/` (list all) endpoint for the management view (title, author, year, uploader, uploaded_at, id).
-  - [ ] `logs.py` — Add `GET /api/v1/logs/` endpoint to return all `activity_logs` rows, guarded by `faculty_or_admin_required`. Support optional filters: `action`, `performed_by`, date range.
-  - [ ] `api.ts` (frontend service) — Add `deletePaper(id)`, `getAllPapers()`, and `getActivityLogs()` API methods.
+---
 
-  **Frontend tasks (`manage_win.vue`):**
-  - [ ] Add a **"Library"** tab — visible only when `userRole` is `Admin` or `Faculty`.
-  - [ ] **Documents sub-panel**: Table listing all uploaded papers (title, author, year, uploader, date). Each row has a **Delete** button with a confirmation modal. Bulk-select + delete is a stretch goal.
-  - [ ] **Upload History sub-panel**: Table of `activity_logs` rows (action badge, paper title, performed by, timestamp). Filterable by action type (Upload / Delete) and date.
-  - [ ] Role guard: hide the tab entirely for `User` (student) role — same pattern as existing `processingDoc` guards.
+### Possible Approaches for Citation
+
+- [ ] **Option A — Citation Context**
+      When a user clicks "Cite this study", instead of just incrementing a counter, show a small optional prompt:
+
+  > _"What paper are you writing this for?"_ `[ Title of your paper ]` — a free-text field, optional
+
+  **Store this as a citation_context on the existing UserCitation record. Now we have:**
+  - Who cited it (the user, already tracked)
+  - What paper they claim to be writing (self-reported, unverified)
+  - When they cited it
+
+- [ ] **Option B — Internal Citation Gaph**
+      Add a cited_paper_id foreign key to UserCitation. When a student clicks Cite on Paper A, optionally ask:
+
+  > _"Are you citing this in one of the papers already in our repository?"_ `[ Search our repository ]`
+
+  If they pick Paper B from the repository, you now have a real A → B edge in a citation graph. This only works for papers already indexed, but that's still meaningful for your department's internal research lineage.
+
+- [ ] **Option C — Self-Declaration Upload**
+      Let students upload a draft or manuscript of their own paper (not for indexing, just for citation verification). The backend runs `_postprocess_references()` on the references section and checks if any extracted entries fuzzy-match papers already in the repository. Matches create verified citation links automatically.
+
+  This is essentially what Semantic Scholar does, just scoped to your repository. It reuses your entire existing IMRAD extraction pipeline.
 
 ---

@@ -8,7 +8,7 @@ import {
   Settings, ArrowLeft, Save, BookOpen,
   UserCheck, Menu, X, Clock, TrendingUp,
   FileUp, Sparkles, Eye, Settings2, CheckCircle, AlertCircle, Check,
-  AlertTriangle, RefreshCw, SquareArrowRight, ShieldAlert, ShieldCheck, UserCog, UserPlus
+  AlertTriangle, RefreshCw, SquareArrowRight, ShieldAlert, ShieldCheck, UserCog, UserPlus, ArchiveRestore
 } from 'lucide-vue-next'
 import { api, BASE_URL, type Paper, type UserResponse, type PartialPaperMetadata, type ActivityLog } from '../services/api'
 import { useAuth } from '../composables/useAuth'
@@ -52,7 +52,7 @@ onUnmounted(() => {
 })
 
 // ── Sidebar ─────────────────────────────────────────────────────
-type Section = 'dashboard' | 'repository' | 'users' | 'upload' | 'logs'
+type Section = 'dashboard' | 'repository' | 'users' | 'upload' | 'logs' | 'trash'
 const activeSection = ref<Section>('dashboard')
 
 const baseNavItems: { id: Section; label: string; icon: Component; description: string }[] = [
@@ -64,8 +64,15 @@ const adminNavItems: { id: Section; label: string; icon: Component; description:
   { id: 'users', label: 'User Manager', icon: Users, description: 'Manage students & faculty' },
   { id: 'logs', label: 'Activity Log', icon: Clock, description: 'Track uploads, edits & deletes' },
 ]
+const canEditNavItems: { id: Section; label: string; icon: Component; description: string }[] = [
+  { id: 'trash', label: 'Trash', icon: Trash2, description: 'Deleted docs · 15-day window' },
+]
 const navItems = computed(() =>
-  isAdmin.value ? [...baseNavItems, ...adminNavItems] : canEdit.value ? [...baseNavItems, { id: 'logs' as Section, label: 'Activity Log', icon: Clock, description: 'Track uploads, edits & deletes' }] : baseNavItems
+  isAdmin.value
+    ? [...baseNavItems, ...adminNavItems, ...canEditNavItems]
+    : canEdit.value
+      ? [...baseNavItems, { id: 'logs' as Section, label: 'Activity Log', icon: Clock, description: 'Track uploads, edits & deletes' }, ...canEditNavItems]
+      : baseNavItems
 )
 
 const activeLabel = computed(() => {
@@ -206,15 +213,86 @@ const logActionColor = (action: string) => {
   if (action === 'Upload') return 'green'
   if (action === 'Edit') return 'blue'
   if (action === 'Delete') return 'red'
+  if (action === 'Restore') return 'green'
+  if (action === 'Purge') return 'red'
   return ''
 }
 
 const formatLogDate = (iso: string) => {
-  const d = new Date(iso)
+  // Backend stores UTC as naive datetime (no 'Z'), so we append it
+  // so the browser correctly converts UTC → local time.
+  const utcIso = iso.endsWith('Z') ? iso : iso + 'Z'
+  const d = new Date(utcIso)
   return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 }
 
 watch(activeSection, (s) => { if (s === 'logs') fetchLogs() })
+
+// ── Trash / Recycle Bin ───────────────────────────────────────────
+const trashedPapers = ref<Paper[]>([])
+const loadingTrash = ref(false)
+const showPurgeModal = ref(false)
+const purgeTarget = ref<Paper | null>(null)
+const purging = ref(false)
+
+const fetchTrashedPapers = async () => {
+  loadingTrash.value = true
+  try { trashedPapers.value = await api.getTrashedPapers() }
+  catch (e) { console.error('Failed to fetch trash:', e) }
+  finally { loadingTrash.value = false }
+}
+
+const daysRemaining = (deletedAt: string): number => {
+  // Backend naive UTC → append 'Z' for correct local time conversion
+  const utcIso = deletedAt.endsWith('Z') ? deletedAt : deletedAt + 'Z'
+  const deleted = new Date(utcIso)
+  const now = new Date()
+  const diffMs = now.getTime() - deleted.getTime()
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+  return Math.max(0, 15 - diffDays)
+}
+
+const daysBadgeClass = (days: number): string => {
+  if (days >= 8) return 'days-green'
+  if (days >= 4) return 'days-amber'
+  return 'days-red'
+}
+
+const handleRestore = async (paper: Paper) => {
+  try {
+    await api.restorePaper(paper.id)
+    await fetchTrashedPapers()
+    await fetchPapers()
+  } catch {
+    alert('Failed to restore paper.')
+  }
+}
+
+const openPurgeModal = (paper: Paper) => {
+  purgeTarget.value = paper
+  showPurgeModal.value = true
+}
+
+const closePurgeModal = () => {
+  showPurgeModal.value = false
+  purgeTarget.value = null
+}
+
+const handlePurgeConfirm = async () => {
+  if (!purgeTarget.value) return
+  purging.value = true
+  try {
+    await api.purgePaper(purgeTarget.value.id)
+    await fetchTrashedPapers()
+    closePurgeModal()
+  } catch {
+    alert('Failed to purge paper.')
+  } finally {
+    purging.value = false
+  }
+}
+
+watch(activeSection, (s) => { if (s === 'trash') fetchTrashedPapers() })
 
 // ── Role Change ───────────────────────────────────────────────────
 const roleTarget = ref<UserResponse | null>(null)
@@ -369,7 +447,7 @@ const uploadMetadata = reactive<PartialPaperMetadata>({
   trim_points: {},
   media: {} as Record<string, string>
 })
-const activeImradTab = ref<'introduction' | 'methods' | 'results' | 'discussion'>('introduction')
+const activeImradTab = ref<'introduction' | 'methods' | 'results' | 'discussion' | 'references'>('introduction')
 
 // Keep in sync with imrad_service.py METHODOLOGY_SUBHEADINGS labels
 const METHODOLOGY_SUBHEADING_LABELS = [
@@ -389,14 +467,15 @@ const SECTION_KEY_MAP = {
 
 const REQUIRED_SECTIONS = Object.keys(SECTION_KEY_MAP) as (keyof typeof SECTION_KEY_MAP)[]
 
-type ImradKey = 'introduction' | 'methods' | 'results' | 'discussion'
-const ALL_IMRAD_TABS: ImradKey[] = ['introduction', 'methods', 'results', 'discussion']
+type ImradKey = 'introduction' | 'methods' | 'results' | 'discussion' | 'references'
+const ALL_IMRAD_TABS: ImradKey[] = ['introduction', 'methods', 'results', 'discussion', 'references']
 
 const imradSections = reactive({
   introduction: '',
   methods: '',
   results: '',
-  discussion: ''
+  discussion: '',
+  references: ''
 })
 
 // Raw sections keep [[TABLE_IMAGE:...]] markers intact so they are saved to DB
@@ -404,7 +483,8 @@ const rawImradSections = reactive({
   introduction: '',
   methods: '',
   results: '',
-  discussion: ''
+  discussion: '',
+  references: ''
 })
 
 // RAD combined detection: results and discussion have identical text
@@ -444,6 +524,94 @@ watch(
     autoResizeTextarea()
   }
 )
+
+// ── References preview helpers ────────────────────────────────────────────────
+// Mirrors the logic in detail_win.vue so the upload preview shows the same
+// formatted list that students will see on the paper detail page.
+
+const parsedReferencesPreview = computed((): string[] => {
+  const raw = imradSections.references?.trim()
+  if (!raw) return []
+
+  // Primary: blank-line separation (output of backend _postprocess_references)
+  const byBlankLine = raw.split(/\n\n+/).map(s => s.replace(/\n/g, ' ').trim()).filter(Boolean)
+  if (byBlankLine.length > 1) return byBlankLine
+
+  // Fallback A: IEEE-style numeric markers [1] [2] …
+  const byIEEE = raw.split(/(?=\[\d+\])/).map(s => s.trim()).filter(Boolean)
+  if (byIEEE.length > 1) return byIEEE
+
+  // Fallback B: numbered list "1. " "2. " …
+  const byNumbered = raw.split(/(?=\d+\.\s)/).map(s => s.trim()).filter(Boolean)
+  if (byNumbered.length > 1) return byNumbered
+
+  // Last resort: one entry
+  return [raw]
+})
+
+/**
+ * formatReferenceEntry (upload preview version)
+ * -----------------------------------------------
+ * APA parser: bold authors, italic title, live DOI/URL links.
+ */
+const linkifyReferences = (raw: string): string => {
+  const esc = (s: string) =>
+    s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+  const linkify = (s: string): string => {
+    let out = s.replace(
+      /https?:\/\/[^\s,)\]&]+/g,
+      url => `<a href="${url}" target="_blank" rel="noopener noreferrer" class="ref-link-preview">${url}</a>`
+    )
+    out = out.replace(
+      /(?<!href=")(?:doi:\s*)(10\.[^\s,)\]&]+)/gi,
+      (_, doi) =>
+        `doi: <a href="https://doi.org/${doi}" target="_blank" rel="noopener noreferrer" class="ref-link-preview">${doi}</a>`
+    )
+    return out
+  }
+
+  const escapedRaw = esc(raw)
+
+  // APA: "Authors. (Year). Title. Source."
+  const yearMatch = escapedRaw.match(/^(.*?)\((\d{4}[a-z]?(?:,\s*[A-Z][a-z]+)?)\)\.\s*(.*)$/s)
+  if (yearMatch) {
+    const authorBlock = (yearMatch[1] ?? '').trim().replace(/\.$/, '').trim()
+    const year = yearMatch[2] ?? ''
+    const remainder = (yearMatch[3] ?? '').trim()
+    const titleSourceMatch = remainder.match(/^(.*?[.!?])\s+([A-Z\d*(].*)$/s)
+    let titleHtml = ''
+    let sourceHtml = ''
+    if (titleSourceMatch) {
+      const titleText = (titleSourceMatch[1] ?? '').replace(/\.$/, '').trim()
+      const sourceText = (titleSourceMatch[2] ?? '').trim()
+      titleHtml = `<em class="ref-title-preview">${titleText}.</em> `
+      sourceHtml = linkify(sourceText)
+    } else {
+      titleHtml = `<em class="ref-title-preview">${linkify(remainder)}</em>`
+    }
+    return (
+      `<span class="ref-authors-preview">${esc(authorBlock)}.</span> ` +
+      `<span class="ref-year-preview">(${year}).</span> ` +
+      titleHtml +
+      sourceHtml
+    )
+  }
+
+  // IEEE [1]
+  const ieeeMatch = escapedRaw.match(/^(\[\d+\])\s+(.*)$/s)
+  if (ieeeMatch) {
+    return `<span class="ref-num-preview">${ieeeMatch[1] ?? ''}</span> ` + linkify(ieeeMatch[2] ?? '')
+  }
+
+  // Numbered 1.
+  const numMatch = escapedRaw.match(/^(\d+\.)\s+(.*)$/s)
+  if (numMatch) {
+    return `<span class="ref-num-preview">${numMatch[1] ?? ''}</span> ` + linkify(numMatch[2] ?? '')
+  }
+
+  return linkify(escapedRaw)
+}
 
 const authors = ref<string[]>([''])
 const selectedPages = ref<number[]>([])
@@ -490,6 +658,11 @@ const triggerFallback = async () => {
     }
     // Capture media so it is passed to confirmUpload
     if (preview.media) uploadMetadata.media = preview.media
+    // Capture references
+    if (preview.references) {
+      imradSections.references = preview.references
+      rawImradSections.references = preview.references
+    }
     sectionPages.value = preview.section_pages || {}
     selectedPages.value = preview.pages.map(p => p.page_num)
     isManuscript.value = false
@@ -595,6 +768,11 @@ const startInitialExtraction = async (autoExtract: boolean = true) => {
     }
     // Capture media so it is passed to confirmUpload
     if (preview.media) uploadMetadata.media = preview.media
+    // Capture references
+    if (preview.references) {
+      imradSections.references = preview.references
+      rawImradSections.references = preview.references
+    }
 
     // Set active tab to the first section that actually has content
     const firstAvailable = ALL_IMRAD_TABS.find(t => imradSections[t])
@@ -652,6 +830,7 @@ const handleFinalConfirm = async () => {
       methods: rawImradSections.methods || imradSections.methods,
       results: rawImradSections.results || imradSections.results,
       discussion: rawImradSections.results || imradSections.results, // Combined RAD
+      references: rawImradSections.references || imradSections.references,
       media: uploadMetadata.media,
     })
     step.value = 3
@@ -980,7 +1159,7 @@ watch(activeSection, (newSection) => {
                   </p>
                   <div class="missing-list">
                     <span v-for="s in missingSections" :key="s" class="missing-badge"><span class="missing-dot" />{{ s
-                      }}</span>
+                    }}</span>
                   </div>
                 </div>
                 <div class="notice-actions">
@@ -1107,8 +1286,38 @@ watch(activeSection, (newSection) => {
                         </span>
                       </div>
 
-                      <!-- Editable textarea for the section text -->
-                      <textarea ref="imradTextarea" v-model="imradSections[activeImradTab]"
+                      <!-- References tab: formatted preview + raw editor side by side -->
+                      <template v-if="activeImradTab === 'references'">
+                        <div class="ref-split-wrap">
+                          <!-- Left: formatted list preview -->
+                          <div class="ref-preview-pane">
+                            <div class="ref-pane-label">
+                              <span>Preview</span>
+                              <span class="ref-count-badge">{{ parsedReferencesPreview.length }} entr{{
+                                parsedReferencesPreview.length === 1 ? 'y' : 'ies' }} detected</span>
+                            </div>
+                            <div v-if="parsedReferencesPreview.length > 0" class="ref-preview-list">
+                              <div v-for="(entry, idx) in parsedReferencesPreview" :key="idx" class="ref-preview-entry"
+                                v-html="linkifyReferences(entry)" />
+                            </div>
+                            <div v-else class="ref-preview-empty">
+                              <span>No references extracted yet.</span>
+                            </div>
+                          </div>
+                          <!-- Right: raw editable textarea -->
+                          <div class="ref-editor-pane">
+                            <div class="ref-pane-label">
+                              <span>Raw Text <span class="ref-pane-hint">(editable)</span></span>
+                            </div>
+                            <textarea ref="imradTextarea" v-model="imradSections[activeImradTab]"
+                              class="imrad-textarea ref-textarea" @input="autoResizeTextarea"
+                              placeholder="No references extracted for this section…" />
+                          </div>
+                        </div>
+                      </template>
+
+                      <!-- All other tabs: single editable textarea -->
+                      <textarea v-else ref="imradTextarea" v-model="imradSections[activeImradTab]"
                         class="imrad-textarea maximized" @input="autoResizeTextarea"
                         placeholder="No text extracted for this section…"></textarea>
                     </div>
@@ -1547,6 +1756,103 @@ watch(activeSection, (newSection) => {
           </div>
         </template>
 
+        <!-- ══ TRASH ══════════════════════════════════════════════ -->
+        <template v-else-if="activeSection === 'trash'">
+          <div class="page-head">
+            <div>
+              <h1 class="page-title">Trash</h1>
+              <p class="page-sub">Deleted documents are automatically purged after 15 days. Restore them anytime before
+                the deadline.</p>
+            </div>
+          </div>
+
+          <div class="tbl-card">
+            <div class="tbl-card-head" style="display:flex;align-items:center;justify-content:space-between">
+              <span class="tbl-count">{{ trashedPapers.length }} document{{ trashedPapers.length !== 1 ? 's' : '' }} in
+                Trash</span>
+              <button @click="fetchTrashedPapers" class="ghost-btn" title="Refresh">
+                <RefreshCw :size="13" />
+              </button>
+            </div>
+            <div class="tbl-scroll">
+              <table class="tbl">
+                <thead>
+                  <tr>
+                    <th>Research Paper</th>
+                    <th>Year</th>
+                    <th>Type</th>
+                    <th>Deleted By</th>
+                    <th>Days Remaining</th>
+                    <th class="th-r">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <template v-if="loadingTrash">
+                    <tr v-for="i in 4" :key="'tr-sk' + i" class="skel-row">
+                      <td>
+                        <div class="skel skel-t1" />
+                      </td>
+                      <td>
+                        <div class="skel skel-chip" />
+                      </td>
+                      <td>
+                        <div class="skel skel-type" />
+                      </td>
+                      <td>
+                        <div class="skel skel-chip" />
+                      </td>
+                      <td>
+                        <div class="skel skel-chip" />
+                      </td>
+                      <td>
+                        <div class="skel skel-chip" />
+                      </td>
+                    </tr>
+                  </template>
+                  <tr v-else-if="trashedPapers.length === 0">
+                    <td colspan="6">
+                      <div class="tbl-empty">
+                        <Trash2 :size="40" />
+                        <h3>Trash is empty</h3>
+                        <p>Deleted documents will appear here for 15 days before being permanently removed.</p>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr v-else v-for="paper in trashedPapers" :key="paper.id" class="tbl-row">
+                    <td class="td-paper">
+                      <div class="paper-cell">
+                        <div class="paper-av" :data-t="typeColor(paper.project_type)">{{ initials(paper.title) }}</div>
+                        <div class="paper-info">
+                          <span class="paper-name">{{ paper.title }}</span>
+                          <span class="paper-author">{{ paper.author }}</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td><span class="year-chip">{{ paper.year }}</span></td>
+                    <td><span class="type-badge" :class="typeColor(paper.project_type)">{{ paper.project_type }}</span>
+                    </td>
+                    <td><span class="uploader-chip">{{ paper.deleted_by ?? '—' }}</span></td>
+                    <td>
+                      <span class="days-badge" :class="daysBadgeClass(daysRemaining(paper.deleted_at!))">
+                        {{ daysRemaining(paper.deleted_at!) }}d left
+                      </span>
+                    </td>
+                    <td class="td-r">
+                      <button @click="handleRestore(paper)" class="row-btn restore-btn" title="Restore">
+                        <ArchiveRestore :size="13" />
+                      </button>
+                      <button v-if="isAdmin" @click="openPurgeModal(paper)" class="row-btn danger"
+                        title="Purge permanently">
+                        <Trash2 :size="13" />
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </template>
+
         <p class="foot-notice">
           <ShieldAlert :size="12" /> Only Admin, Faculty, and Librarians can upload or modify papers.
         </p>
@@ -1753,6 +2059,46 @@ watch(activeSection, (newSection) => {
             </div>
           </div>
 
+          <!-- ── PURGE CONFIRM MODAL ──────────────────────────────── -->
+          <div v-if="showPurgeModal" class="modal-overlay" @click.self="closePurgeModal">
+            <div class="modal-card purge-modal">
+              <div class="modal-head">
+                <div class="modal-head-icon red">
+                  <Trash2 :size="20" />
+                </div>
+                <div>
+                  <h3>Permanently Delete</h3>
+                  <p>This action cannot be undone.</p>
+                </div>
+                <button @click="closePurgeModal" class="modal-close">
+                  <X :size="18" />
+                </button>
+              </div>
+              <div class="modal-body purge-body">
+                <p class="purge-warning">You are about to permanently remove this document from the system. All vectors
+                  and the
+                  original PDF will be deleted.</p>
+                <div class="purge-paper-box">
+                  <div class="paper-av" :data-t="typeColor(purgeTarget?.project_type ?? '')">{{
+                    initials(purgeTarget?.title ??
+                      '') }}</div>
+                  <div>
+                    <span class="paper-name">{{ purgeTarget?.title }}</span>
+                    <span class="paper-author">{{ purgeTarget?.author }} · {{ purgeTarget?.year }}</span>
+                  </div>
+                </div>
+              </div>
+              <div class="modal-foot">
+                <button @click="closePurgeModal" class="ghost-btn">Cancel</button>
+                <button @click="handlePurgeConfirm" class="purge-confirm-btn" :disabled="purging">
+                  <Loader2 v-if="purging" :size="13" class="spin" />
+                  <Trash2 v-else :size="13" />
+                  {{ purging ? 'Purging…' : 'Delete Permanently' }}
+                </button>
+              </div>
+            </div>
+          </div>
+
         </Teleport>
       </div>
     </div>
@@ -1949,6 +2295,23 @@ watch(activeSection, (newSection) => {
 .sidebar.collapsed .sb-footer span {
   opacity: 0;
   pointer-events: none;
+}
+
+/* Center icons perfectly when sidebar is collapsed to 56px */
+.sidebar.collapsed .sb-item {
+  justify-content: center;
+  padding: 0.55rem 0;
+}
+
+/* Also center the brand icon and footer icon */
+.sidebar.collapsed .sb-brand {
+  justify-content: center;
+  padding: 1rem 0;
+}
+
+.sidebar.collapsed .sb-footer {
+  justify-content: center;
+  padding: 1rem 0;
 }
 
 .sb-backdrop {
@@ -4440,5 +4803,250 @@ watch(activeSection, (newSection) => {
   outline: none;
   border-color: var(--green);
   box-shadow: 0 0 0 3px var(--green-dim);
+}
+
+/* ══ TRASH TAB ══════════════════════════════════════════════════ */
+
+/* Days-remaining countdown badges */
+.days-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.22rem 0.6rem;
+  border-radius: 999px;
+  letter-spacing: 0.03em;
+}
+
+.days-badge.days-green {
+  background: var(--green-dim);
+  color: var(--green-dk);
+}
+
+.days-badge.days-amber {
+  background: #fffbeb;
+  color: #b45309;
+  border: 1px solid #fde68a;
+}
+
+.days-badge.days-red {
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+  animation: pulse-red 1.8s ease-in-out infinite;
+}
+
+@keyframes pulse-red {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.7;
+  }
+}
+
+/* Restore button — green hover */
+.row-btn.restore-btn:hover {
+  border-color: var(--green);
+  color: var(--green-dk);
+  background: var(--green-dim);
+}
+
+/* Red modal head icon */
+.modal-head-icon.red {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+/* Purge modal */
+.purge-modal {
+  max-width: 460px;
+}
+
+.purge-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.purge-warning {
+  font-size: 0.86rem;
+  color: var(--ink-2);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.purge-paper-box {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: 0.85rem 1rem;
+}
+
+.purge-confirm-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: #dc2626;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 0.5rem 1.1rem;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.14s;
+}
+
+.purge-confirm-btn:hover:not(:disabled) {
+  background: #b91c1c;
+}
+
+/* ══ REFERENCES SPLIT PANE (upload preview) ═══════════════════════════════ */
+.ref-split-wrap {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+
+.ref-preview-pane,
+.ref-editor-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.ref-pane-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--ink-3);
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.ref-pane-hint {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  font-style: italic;
+}
+
+.ref-count-badge {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: 0;
+  background: var(--green-dim);
+  color: var(--green-dk);
+  padding: 0.12rem 0.45rem;
+  border-radius: 3px;
+}
+
+.ref-preview-list {
+  background: var(--paper);
+  border: 1.5px solid var(--rule);
+  border-radius: 8px;
+  padding: 1rem;
+  max-height: 560px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.ref-preview-entry {
+  font-size: 0.82rem;
+  line-height: 1.7;
+  color: #2a2a2a;
+  /* APA hanging indent */
+  padding: 0.65rem 0 0.65rem 1.75rem;
+  text-indent: -1.75rem;
+  border-bottom: 1px solid var(--rule);
+  text-align: left;
+  word-break: break-word;
+}
+
+/* Bold author block */
+.ref-authors-preview {
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+/* Year — slightly muted */
+.ref-year-preview {
+  font-weight: 600;
+  color: #444;
+}
+
+/* Title in italics */
+.ref-title-preview {
+  font-style: italic;
+  font-weight: 400;
+  color: #222;
+}
+
+/* IEEE / numbered marker */
+.ref-num-preview {
+  font-weight: 700;
+  color: var(--green-dk);
+  margin-right: 0.2rem;
+}
+
+.ref-preview-entry:last-child {
+  border-bottom: none;
+}
+
+.ref-link-preview {
+  color: var(--green-dk);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.ref-link-preview:hover {
+  text-decoration: underline;
+}
+
+.ref-preview-empty {
+  background: var(--surface);
+  border: 1.5px dashed var(--rule);
+  border-radius: 8px;
+  padding: 2rem 1rem;
+  text-align: center;
+  font-size: 0.82rem;
+  color: var(--ink-3);
+  font-style: italic;
+}
+
+.ref-textarea {
+  min-height: 560px;
+  max-height: 560px;
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+
+/* Stack vertically on narrow screens */
+@media (max-width: 900px) {
+  .ref-split-wrap {
+    grid-template-columns: 1fr;
+  }
+
+  .ref-textarea {
+    min-height: 300px;
+    max-height: 400px;
+  }
 }
 </style>

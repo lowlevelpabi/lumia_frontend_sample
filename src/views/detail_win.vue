@@ -2,8 +2,15 @@
 import { ref, onMounted, watch, computed } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { useAuth } from '../composables/useAuth'
-import { Eye, Award, CheckCircle, Loader2, ChevronRight } from 'lucide-vue-next'
+import { Eye, Award, CheckCircle, Loader2, ChevronRight, Copy, Check, X } from 'lucide-vue-next'
 import { api, type Paper, type SearchResult } from '../services/api'
+ 
+// ── Confidence badge helper ────────────────────────────────────────────────────────
+const getConfidence = (score: number): { label: string; cls: string } => {
+  if (score >= 0.60) return { label: 'Strong Match', cls: 'badge-strong' }
+  if (score >= 0.35) return { label: 'Good Match',   cls: 'badge-good'   }
+  return                      { label: 'Related',      cls: 'badge-related' }
+}
 
 const route = useRoute()
 const router = useRouter()
@@ -17,6 +24,65 @@ const citationCount = ref(0)
 const hasCited = ref(false)
 const citeLoading = ref(false)
 const { isLoggedIn } = useAuth()
+
+// Citation Modal State
+const showCiteModal = ref(false)
+const citeModalLoading = ref(false)
+const citeModalError = ref(false)
+const formattedCitations = ref<{
+  apa_6: string
+  apa_7: string
+  apa_intext: string
+  ieee: string
+  mla: string
+  bibtex: string
+} | null>(null)
+
+const activeCiteTab = ref<'apa' | 'ieee' | 'mla' | 'bibtex'>('apa')
+const apaVariation = ref<'6' | '7' | 'intext'>('6')
+const copyStatus = ref<Record<string, boolean>>({})
+
+const openCiteModal = async () => {
+  showCiteModal.value = true
+  // Skip re-fetch if we already have data
+  if (formattedCitations.value) return
+  // Don't retry if already loading
+  if (citeModalLoading.value) return
+
+  citeModalError.value = false
+  citeModalLoading.value = true
+  try {
+    const res = await api.getFormattedCitations(String(route.params.id))
+    formattedCitations.value = res
+  } catch (err) {
+    console.error('Failed to load citations:', err)
+    citeModalError.value = true
+  } finally {
+    citeModalLoading.value = false
+  }
+}
+
+const retryCitations = () => {
+  // Reset so openCiteModal will re-fetch
+  formattedCitations.value = null
+  citeModalError.value = false
+  openCiteModal()
+}
+
+const copyToClipboard = async (text: string, key: string) => {
+  try {
+    await navigator.clipboard.writeText(text)
+    copyStatus.value[key] = true
+    setTimeout(() => { copyStatus.value[key] = false }, 2000)
+
+    // Auto-vouch if copying a reference for the first time
+    if (!hasCited.value && isLoggedIn.value) {
+      handleCite()
+    }
+  } catch (err) {
+    console.error('Copy failed:', err)
+  }
+}
 
 
 
@@ -108,14 +174,25 @@ const goBack = () => router.back()
 const viewDetail = (id: string) => router.push({ name: 'detail', params: { id } })
 
 const handleCite = async () => {
-  if (!isLoggedIn.value || hasCited.value || citeLoading.value || !paper.value) return
+  if (!isLoggedIn.value || citeLoading.value || !paper.value) return
+
+  // If already cited, just open the modal
+  if (hasCited.value) {
+    openCiteModal()
+    return
+  }
+
   citeLoading.value = true
   try {
     const res = await api.citePaper(paper.value.id)
     hasCited.value = res.has_cited
     citationCount.value = res.citation_count
+
+    // After successful DB increment, open the modal for the student
+    openCiteModal()
   } catch {
     hasCited.value = true
+    openCiteModal()
   } finally {
     citeLoading.value = false
   }
@@ -167,6 +244,127 @@ const hasStructured = (key: string): boolean => getStructuredBlocks(key).length 
 const stripMarkers = (text: string): string =>
   text.replace(/\[{1,2}(?:TABLE|FIGURE)_IMAGE:.*?\]{1,2}/gi, '').replace(/\s{2,}/g, ' ').trim()
 
+// ── References helpers ────────────────────────────────────────────────────────
+
+// Parse the flat references string into individual entries.
+// The backend's _postprocess_references() separates entries with blank lines.
+// We fall back to splitting on common citation markers for older records.
+const parsedReferences = computed((): string[] => {
+  if (!paper.value?.references) return []
+  const raw = paper.value.references.trim()
+
+  // Primary: blank-line separation (output of _postprocess_references)
+  const byBlankLine = raw.split(/\n\n+/).map(s => s.replace(/\n/g, ' ').trim()).filter(Boolean)
+  if (byBlankLine.length > 1) return byBlankLine
+
+  // Fallback A: IEEE-style numeric markers [1] [2] ...
+  const byIEEE = raw.split(/(?=\[\d+\])/).map(s => s.trim()).filter(Boolean)
+  if (byIEEE.length > 1) return byIEEE
+
+  // Fallback B: numbered list "1. " "2. " ...
+  const byNumbered = raw.split(/(?=\d+\.\s)/).map(s => s.trim()).filter(Boolean)
+  if (byNumbered.length > 1) return byNumbered
+
+  // Last resort: treat the whole string as one entry
+  return [raw]
+})
+
+// Turn DOIs and bare URLs inside a reference entry into clickable links.
+/**
+ * formatReferenceEntry
+ * --------------------
+ * Renders a single APA reference entry with semantic HTML so it matches the
+ * target visual style (bold authors, italic title/journal, live DOI links).
+ *
+ * Parsing strategy (handles APA 6th / 7th and IEEE numeric styles):
+ *   1. Author block  — everything up to the first "(YEAR)" token
+ *   2. Year          — the (YEAR) token itself
+ *   3. Rest          — title + source + DOI/URL, split further heuristically
+ *
+ * Falls back to plain text + linkification for entries that don't match.
+ */
+const formatReferenceEntry = (raw: string): string => {
+  // ── 0. HTML-escape the raw string to prevent XSS ──────────────────────
+  const esc = (s: string) =>
+    s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
+  // ── 1. Linkify URLs and bare DOIs (operates on already-escaped text) ──
+  const linkify = (s: string): string => {
+    // URLs
+    let out = s.replace(
+      /https?:\/\/[^\s,)\]&]+/g,
+      url => `<a href="${url}" target="_blank" rel="noopener noreferrer" class="ref-link">${url}</a>`
+    )
+    // bare doi: 10.xxx not already inside an href
+    out = out.replace(
+      /(?<!href=")(?:doi:\s*)(10\.[^\s,)\]&]+)/gi,
+      (_, doi) =>
+        `doi: <a href="https://doi.org/${doi}" target="_blank" rel="noopener noreferrer" class="ref-link">${doi}</a>`
+    )
+    return out
+  }
+
+  const escapedRaw = esc(raw)
+
+  // ── 2. Try to detect APA format: "Authors. (Year). Title. Source." ────
+  //   Match the first (4-digit year) or (Year, Month) parenthetical
+  const yearMatch = escapedRaw.match(/^(.*?)\((\d{4}[a-z]?(?:,\s*[A-Z][a-z]+)?)\)\.\s*(.*)$/s)
+
+  if (yearMatch) {
+    const authorBlock = (yearMatch[1] ?? '').trim().replace(/\.$/, '').trim()
+    const year = yearMatch[2] ?? ''
+    const remainder = (yearMatch[3] ?? '').trim()
+
+    // Split remainder into title vs. source at the first ". " that follows
+    // a lowercase letter or closing paren/bracket — heuristic boundary.
+    // Title ends at the first period that is followed by a space + capital or digit.
+    const titleSourceMatch = remainder.match(/^(.*?[.!?])\s+([A-Z\d*(].*)$/s)
+
+    let titleHtml = ''
+    let sourceHtml = ''
+
+    if (titleSourceMatch) {
+      // Title: strip trailing period for display, render in italics
+      const titleText = (titleSourceMatch[1] ?? '').replace(/\.$/, '').trim()
+      const sourceText = (titleSourceMatch[2] ?? '').trim()
+
+      titleHtml = `<em class="ref-title">${titleText}.</em> `
+      sourceHtml = linkify(sourceText)
+    } else {
+      // Can't split — treat the whole remainder as title
+      titleHtml = `<em class="ref-title">${linkify(remainder)}</em>`
+    }
+
+    return (
+      `<span class="ref-authors">${esc(authorBlock)}.</span> ` +
+      `<span class="ref-year">(${year}).</span> ` +
+      titleHtml +
+      sourceHtml
+    )
+  }
+
+  // ── 3. IEEE numeric  [1] Authors, "Title," Journal, … ─────────────────
+  const ieeeMatch = escapedRaw.match(/^(\[\d+\])\s+(.*)$/s)
+  if (ieeeMatch) {
+    return (
+      `<span class="ref-number">${ieeeMatch[1] ?? ''}</span> ` +
+      linkify(ieeeMatch[2] ?? '')
+    )
+  }
+
+  // ── 4. Numbered list  1. Authors … ────────────────────────────────────
+  const numMatch = escapedRaw.match(/^(\d+\.)\s+(.*)$/s)
+  if (numMatch) {
+    return (
+      `<span class="ref-number">${numMatch[1] ?? ''}</span> ` +
+      linkify(numMatch[2] ?? '')
+    )
+  }
+
+  // ── 5. Fallback: plain linkified text ─────────────────────────────────
+  return linkify(escapedRaw)
+}
+
 </script>
 
 <template>
@@ -180,7 +378,8 @@ const stripMarkers = (text: string): string =>
           <ChevronRight :size="12" class="bc-sep" />
           <button @click="goBack" class="bc-link">Results</button>
           <ChevronRight :size="12" class="bc-sep" />
-          <span class="bc-active">{{ paper.title.length > 55 ? paper.title.substring(0, 55) + '…' : paper.title }}</span>
+          <span class="bc-active">{{ paper.title.length > 55 ? paper.title.substring(0, 55) + '…' : paper.title
+            }}</span>
         </nav>
       </div>
     </div>
@@ -198,7 +397,8 @@ const stripMarkers = (text: string): string =>
             <div class="journal-meta-top">
               <span class="journal-badge">{{ paper.department }}</span>
               <span class="journal-badge journal-badge-type">{{ paper.project_type }}</span>
-              <span v-if="paper.degree_program !== 'N/A'" class="journal-badge journal-badge-degree">{{ paper.degree_program }}</span>
+              <span v-if="paper.degree_program !== 'N/A'" class="journal-badge journal-badge-degree">{{
+                paper.degree_program }}</span>
               <span class="journal-badge">{{ paper.year }}</span>
             </div>
 
@@ -211,12 +411,19 @@ const stripMarkers = (text: string): string =>
             </div>
 
             <div class="journal-stats">
-              <span class="j-stat"><Eye :size="12" /> {{ viewCount.toLocaleString() }} views</span>
-              <span class="j-stat"><Award :size="12" /> {{ citationCount.toLocaleString() }} citations</span>
-              <button v-if="isLoggedIn" class="j-cite-btn" :class="{ cited: hasCited }" :disabled="hasCited || citeLoading" @click="handleCite">
+              <span class="j-stat">
+                <Eye :size="12" /> {{ viewCount.toLocaleString() }} views
+              </span>
+              <span class="j-stat">
+                <Award :size="12" /> {{ citationCount.toLocaleString() }} citations
+              </span>
+
+              <!-- One button for both Vouching and Getting Reference -->
+              <button v-if="isLoggedIn" class="j-cite-btn" :class="{ cited: hasCited }" :disabled="citeLoading"
+                @click="handleCite">
                 <CheckCircle v-if="hasCited" :size="13" />
                 <Award v-else :size="13" />
-                {{ hasCited ? 'Cited' : citeLoading ? 'Citing…' : 'Cite this study' }}
+                {{ hasCited ? 'Cited (Get Ref)' : citeLoading ? 'Citing…' : 'Cite this study' }}
               </button>
               <span v-else class="j-login-hint">Sign in to cite this study</span>
             </div>
@@ -281,21 +488,38 @@ const stripMarkers = (text: string): string =>
             </template>
           </div>
 
+          <!-- ── References — full-width below the 2-column body ── -->
+          <section v-if="parsedReferences.length > 0" class="journal-references-section">
+            <div class="journal-references-heading">
+              <span>References</span>
+            </div>
+            <ol class="journal-references-list">
+              <li v-for="(entry, idx) in parsedReferences" :key="idx" class="journal-reference-entry"
+                v-html="formatReferenceEntry(entry)" />
+            </ol>
+          </section>
+
         </article>
       </div>
 
       <!-- ── Related Studies Sidebar ── -->
       <aside class="journal-sidebar">
         <div class="sidebar-inner">
-          <p class="sidebar-label">Related Studies</p>
-          <p class="sidebar-sub">Based on semantic similarity</p>
+          <p class="sidebar-label">Recommended Studies</p>
+          <p class="sidebar-sub">Expert recommended matches</p>
 
           <div v-if="recommendations.length > 0" class="rec-list">
             <div v-for="rec in recommendations" :key="rec.id" class="rec-card" @click="viewDetail(rec.id)">
-              <span v-if="rec.payload.degree_program" class="rec-badge">{{ rec.payload.degree_program }}</span>
+              <div class="rec-card-top">
+                <span v-if="rec.payload.degree_program" class="rec-badge">{{ rec.payload.degree_program }}</span>
+              </div>
               <p class="rec-title">{{ rec.payload.title }}</p>
-              <p class="rec-meta">{{ rec.payload.author }} · {{ rec.payload.year }}</p>
-              <div class="rec-score">{{ (rec.score * 100).toFixed(0) }}% match</div>
+              <div class="rec-score-row">
+                <span :class="['confidence-badge', getConfidence(rec.score).cls]">
+                  {{ getConfidence(rec.score).label }}
+                  <span class="badge-pct">&nbsp;·&nbsp;{{ (rec.score * 100).toFixed(0) }}%</span>
+                </span>
+              </div>
             </div>
           </div>
 
@@ -314,6 +538,117 @@ const stripMarkers = (text: string): string =>
     <Loader2 :size="24" class="spin" />
     <span>Loading paper…</span>
   </div>
+
+  <!-- ══ CITATION MODAL ══════════════════════════════════════════ -->
+  <Teleport to="body">
+    <Transition name="cite-fade">
+      <div v-if="showCiteModal" class="modal-overlay" @click.self="showCiteModal = false">
+        <div class="citation-modal">
+
+          <!-- Dark header band -->
+          <div class="modal-header">
+            <div class="modal-header-left">
+              <Award :size="15" class="modal-header-icon" />
+              <span class="modal-title">Cite this Study</span>
+            </div>
+            <button class="modal-close" @click="showCiteModal = false">
+              <X :size="15" />
+            </button>
+          </div>
+
+          <!-- Loading -->
+          <div v-if="citeModalLoading" class="modal-loading">
+            <Loader2 :size="18" class="spin" />
+            <span>Generating citations…</span>
+          </div>
+
+          <!-- Error -->
+          <div v-else-if="citeModalError" class="modal-error">
+            <span>Could not load citation data.</span>
+            <button class="m-retry-btn" @click="retryCitations">Retry</button>
+          </div>
+
+          <!-- Body -->
+          <div v-else-if="formattedCitations" class="modal-body">
+
+            <!-- Format + Edition selectors -->
+            <div class="modal-selectors">
+              <div class="selector-field">
+                <label class="selector-label">Citation Format</label>
+                <div class="select-wrap">
+                  <select class="m-select" v-model="activeCiteTab">
+                    <option value="apa">APA</option>
+                    <option value="ieee">IEEE</option>
+                    <option value="mla">MLA</option>
+                    <option value="bibtex">BibTeX</option>
+                  </select>
+                  <span class="select-arrow">
+                    <svg width="10" height="6" viewBox="0 0 10 6" fill="none">
+                      <path d="M1 1L5 5L9 1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
+                        stroke-linejoin="round" />
+                    </svg>
+                  </span>
+                </div>
+              </div>
+              <Transition name="slide-in">
+                <div v-if="activeCiteTab === 'apa'" class="selector-field">
+                  <label class="selector-label">Edition</label>
+                  <div class="select-wrap">
+                    <select class="m-select" v-model="apaVariation">
+                      <option value="6">6th Edition</option>
+                      <option value="7">7th Edition</option>
+                      <option value="intext">In-Text</option>
+                    </select>
+                    <span class="select-arrow">
+                      <svg width="10" height="6" viewBox="0 0 10 6" fill="none">
+                        <path d="M1 1L5 5L9 1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
+                          stroke-linejoin="round" />
+                      </svg>
+                    </span>
+                  </div>
+                </div>
+              </Transition>
+            </div>
+
+            <!-- Citation text area -->
+            <div class="citation-area">
+              <div class="citation-area-inner">
+                <p v-if="activeCiteTab === 'apa'" class="citation-text">
+                  {{ apaVariation === '6' ? formattedCitations.apa_6 : apaVariation === '7' ? formattedCitations.apa_7 :
+                    formattedCitations.apa_intext }}
+                </p>
+                <p v-else-if="activeCiteTab === 'ieee'" class="citation-text">{{ formattedCitations.ieee }}</p>
+                <p v-else-if="activeCiteTab === 'mla'" class="citation-text">{{ formattedCitations.mla }}</p>
+                <pre v-else class="citation-bibtex">{{ formattedCitations.bibtex }}</pre>
+              </div>
+              <p class="selector-note">Note: If you are citating this study, please make sure that you are manually
+                adding
+                it to your reference list.<br><br>
+                Auto-citation detection in the system is not available at this time due to lack of resources and local
+                development and testing.</p>
+            </div>
+
+            <!-- Footer -->
+            <div class="modal-footer">
+              <button class="m-copy-btn" :class="{ copied: copyStatus[activeCiteTab + apaVariation] }" @click="copyToClipboard(
+                activeCiteTab === 'apa'
+                  ? (apaVariation === '6' ? formattedCitations.apa_6 : apaVariation === '7' ? formattedCitations.apa_7 : formattedCitations.apa_intext)
+                  : activeCiteTab === 'ieee' ? formattedCitations.ieee
+                    : activeCiteTab === 'mla' ? formattedCitations.mla
+                      : formattedCitations.bibtex,
+                activeCiteTab + apaVariation
+              )">
+                <Check v-if="copyStatus[activeCiteTab + apaVariation]" :size="13" />
+                <Copy v-else :size="13" />
+                {{ copyStatus[activeCiteTab + apaVariation] ? 'Copied!' : 'Copy Citation' }}
+              </button>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
 </template>
 
 
@@ -385,9 +720,13 @@ const stripMarkers = (text: string): string =>
   font-family: 'Source Sans 3', sans-serif;
 }
 
-.bc-link:hover { color: rgba(255, 255, 255, 0.75); }
+.bc-link:hover {
+  color: rgba(255, 255, 255, 0.75);
+}
 
-.bc-sep { color: rgba(255, 255, 255, 0.18); }
+.bc-sep {
+  color: rgba(255, 255, 255, 0.18);
+}
 
 .bc-active {
   font-size: 0.73rem;
@@ -438,7 +777,41 @@ const stripMarkers = (text: string): string =>
 .sidebar-sub {
   font-size: 0.72rem;
   color: var(--ink-3);
-  margin: 0 0 1rem;
+  margin: 0 0 1.25rem;
+}
+ 
+/* ── Confidence badges ──────────────────────────────────────────── */
+.confidence-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.58rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.12rem 0.4rem;
+  border-radius: 99px;
+  white-space: nowrap;
+}
+ 
+.badge-strong {
+  background: #d4f0e2;
+  color: #0a6639;
+}
+ 
+.badge-good {
+  background: #dceeff;
+  color: #1a5fa8;
+}
+ 
+.badge-related {
+  background: #efefed;
+  color: #6b7068;
+}
+ 
+.badge-pct {
+  font-weight: 500;
+  opacity: 0.75;
+  font-variant-numeric: tabular-nums;
 }
 
 
@@ -501,6 +874,335 @@ const stripMarkers = (text: string): string =>
   font-weight: 600;
   color: rgba(255, 255, 255, 0.55);
 }
+
+/* ══ CITATION MODAL ══════════════════════════════════════════ */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 14, 8, 0.72);
+  backdrop-filter: blur(6px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+
+.citation-modal {
+  background: #fff;
+  width: 100%;
+  max-width: 540px;
+  border-radius: 2px;
+  box-shadow:
+    0 0 0 1px rgba(0, 166, 81, 0.18),
+    0 24px 48px rgba(0, 0, 0, 0.3),
+    0 4px 12px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+}
+
+/* ── Header — dark theme band ── */
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.25rem;
+  background: var(--hero-bg);
+  border-bottom: 2.5px solid var(--green);
+  position: relative;
+}
+
+.modal-header::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 22px 22px;
+  pointer-events: none;
+}
+
+.modal-header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  position: relative;
+  z-index: 1;
+}
+
+.modal-header-icon {
+  color: var(--green);
+  flex-shrink: 0;
+}
+
+.modal-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #000000;
+  font-family: 'Source Sans 3', sans-serif;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  color: rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+  padding: 4px;
+  line-height: 1;
+  display: flex;
+  border-radius: 2px;
+  transition: color 0.15s, background 0.15s;
+  position: relative;
+  z-index: 1;
+}
+
+.modal-close:hover {
+  color: var(--green-dk);
+  background: rgb(255, 255, 255);
+}
+
+/* ── Loading state ── */
+.modal-loading {
+  padding: 3.5rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.7rem;
+  color: var(--ink-3);
+  font-size: 0.82rem;
+  font-family: 'Source Sans 3', sans-serif;
+}
+
+/* ── Error state ── */
+.modal-error {
+  padding: 2.5rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.82rem;
+  color: var(--ink-3);
+  font-family: 'Source Sans 3', sans-serif;
+}
+
+.m-retry-btn {
+  background: none;
+  border: 1.5px solid var(--green);
+  border-radius: 2px;
+  padding: 0.4rem 1.1rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--green-dk);
+  cursor: pointer;
+  font-family: 'Source Sans 3', sans-serif;
+  transition: background 0.15s, color 0.15s;
+}
+
+.m-retry-btn:hover {
+  background: var(--green-dim);
+}
+
+/* ── Body ── */
+.modal-body {
+  padding: 0;
+}
+
+/* ── Selectors row ── */
+.modal-selectors {
+  display: flex;
+  align-items: flex-end;
+  gap: 1rem;
+  padding: 1.1rem 1.4rem 1rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--rule);
+}
+
+.selector-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.selector-note {
+  font-size: 0.70rem;
+  color: var(--ink-3);
+  margin: 0.25rem 0 0;
+  font-style: italic;
+}
+
+.selector-label {
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--green-dk);
+  font-family: 'Source Sans 3', sans-serif;
+}
+
+.select-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.m-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background: #fff;
+  border: 1.5px solid #c8cdc4;
+  border-radius: 3px;
+  padding: 0.4rem 2.2rem 0.4rem 0.75rem;
+  font-size: 0.84rem;
+  font-weight: 600;
+  font-family: 'Source Sans 3', sans-serif;
+  color: var(--ink);
+  cursor: pointer;
+  outline: none;
+  min-width: 140px;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  line-height: 1.3;
+}
+
+.m-select:hover {
+  border-color: var(--green);
+}
+
+.m-select:focus {
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px rgba(0, 166, 81, 0.12);
+}
+
+.select-arrow {
+  position: absolute;
+  right: 0.65rem;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--green-dk);
+  display: flex;
+  align-items: center;
+  transition: color 0.15s;
+}
+
+/* ── Citation text area ── */
+.citation-area {
+  padding: 1.4rem 1.4rem 1.1rem;
+  min-height: 110px;
+}
+
+.citation-area-inner {
+  background: #f8faf8;
+  border: 1px solid #dfe8e2;
+  border-radius: 3px;
+  border-left: 3px solid var(--green);
+  padding: 1rem 1.1rem;
+}
+
+.citation-text {
+  font-family: 'Lora', Georgia, serif;
+  font-size: 0.91rem;
+  line-height: 1.85;
+  margin: 0;
+  color: var(--ink);
+}
+
+.citation-bibtex {
+  font-family: 'Courier New', monospace;
+  font-size: 0.76rem;
+  line-height: 1.7;
+  margin: 0;
+  white-space: pre-wrap;
+  color: var(--ink-2);
+  background: none;
+  padding: 0;
+  width: 100%;
+}
+
+/* ── Footer ── */
+.modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1.4rem;
+  border-top: 1px solid var(--rule);
+  background: #fafbfa;
+  gap: 1rem;
+}
+
+.m-copy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: var(--green);
+  color: #000000;
+  border: none;
+  border-radius: 3px;
+  padding: 0.45rem 1.1rem;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+  font-family: 'Source Sans 3', sans-serif;
+  transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
+  box-shadow: 0 1px 4px rgba(0, 166, 81, 0.25);
+}
+
+.m-copy-btn:hover {
+  background: var(--green-dk);
+  box-shadow: 0 2px 8px rgba(0, 166, 81, 0.3);
+}
+
+.m-copy-btn:active {
+  transform: scale(0.97);
+}
+
+.m-copy-btn.copied {
+  background: #1a6b3a;
+}
+
+.citation-hint {
+  font-size: 0.6rem;
+  color: var(--ink-3);
+  margin: 0;
+  line-height: 1.4;
+  text-align: right;
+  font-family: 'Source Sans 3', sans-serif;
+  letter-spacing: 0.02em;
+}
+
+/* ── Transitions ── */
+.cite-fade-enter-active,
+.cite-fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.cite-fade-enter-from,
+.cite-fade-leave-to {
+  opacity: 0;
+}
+
+.slide-in-enter-active {
+  transition: all 0.18s ease-out;
+}
+
+.slide-in-leave-active {
+  transition: all 0.14s ease-in;
+}
+
+.slide-in-enter-from {
+  opacity: 0;
+  transform: translateX(-8px);
+}
+
+.slide-in-leave-to {
+  opacity: 0;
+  transform: translateX(-4px);
+}
+
+
 
 /* Badges */
 .header-badges {
@@ -588,7 +1290,7 @@ const stripMarkers = (text: string): string =>
   border-radius: 4px;
 }
 
-.cite-btn {
+.j-cite-btn {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
@@ -604,18 +1306,24 @@ const stripMarkers = (text: string): string =>
   transition: background 0.14s;
 }
 
-.cite-btn:hover:not(:disabled) {
+.j-cite-btn:hover:not(:disabled) {
   background: var(--green-dk);
 }
 
-.cite-btn.cited {
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  color: rgba(255, 255, 255, 0.5);
-  cursor: default;
+.j-cite-btn.cited {
+  background: var(--paper);
+  border: 1px solid var(--green);
+  color: var(--green-dk);
+  cursor: pointer;
 }
 
-.cite-btn.loading {
+.j-cite-btn.cited:hover {
+  background: var(--green-dim);
+  border-color: var(--green-dk);
+  color: var(--green-dk);
+}
+
+.j-cite-btn.loading {
   opacity: 0.6;
   cursor: wait;
 }
@@ -1074,10 +1782,40 @@ const stripMarkers = (text: string): string =>
   margin: 0 0 0.4rem;
 }
 
-.rec-score {
-  font-size: 0.68rem;
+.rec-score-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.rec-score-bar {
+  flex: 1;
+  height: 4px;
+  background: var(--surface);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.rec-score-fill {
+  height: 100%;
+  background: var(--green);
+  border-radius: 2px;
+  transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.rec-score-pct {
+  font-size: 0.65rem;
   font-weight: 700;
   color: var(--green-dk);
+  white-space: nowrap;
+}
+
+.rec-card-top {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 0.4rem;
 }
 
 /* Loading */
@@ -1339,7 +2077,7 @@ const stripMarkers = (text: string): string =>
 }
 
 .imrad-two-col {
-  columns: 2;
+  column-count: 2;
   column-gap: 1.75rem;
   padding: 1.25rem 1.5rem;
   background: var(--paper);
@@ -1536,13 +2274,21 @@ const stripMarkers = (text: string): string =>
   transition: background 0.14s;
 }
 
-.j-cite-btn:hover:not(:disabled) { background: var(--green-dk); }
+.j-cite-btn:hover:not(:disabled) {
+  background: var(--green-dk);
+}
 
 .j-cite-btn.cited {
   background: transparent;
-  border: 1px solid #ccc;
-  color: #999;
-  cursor: default;
+  border: 1px solid var(--green);
+  color: var(--green-dk);
+  cursor: pointer;
+}
+
+.j-cite-btn.cited:hover {
+  background: var(--green-dim);
+  border-color: var(--green-dk);
+  color: var(--green-dk);
 }
 
 /* Plain Abstract layout */
@@ -1588,18 +2334,20 @@ const stripMarkers = (text: string): string =>
   opacity: 0.35;
 }
 
-/* ── 2-Column Body ── */
 .journal-body {
-  padding: 3rem 4rem 4rem;
-  columns: 2;
-  column-gap: 4rem;
-  column-rule: 1px solid #eee;
+  display: block;
+  width: 100%;
+  padding: 2.5rem 3rem 4rem;
+  column-count: 2;
+  column-gap: 3.5rem;
+  column-rule: 1.5px solid rgba(0, 0, 0, 0.04);
   text-align: justify;
 }
 
 .journal-section-heading {
+  break-inside: avoid; /* Prevents heading from being orphaned at column bottom */
   break-after: avoid;
-  margin: 2rem 0 1rem;
+  margin: 0 0 1rem;
 }
 
 .journal-section-heading:first-child {
@@ -1622,6 +2370,7 @@ const stripMarkers = (text: string): string =>
 /* Section content resets the A. B. C. counter */
 .journal-section-content {
   counter-reset: subheading;
+  margin-bottom: 2rem;
 }
 
 .journal-subheading {
@@ -1649,8 +2398,94 @@ const stripMarkers = (text: string): string =>
   line-height: 1.85;
   color: #333;
   margin: 0 0 0.75rem;
-  padding-left: 2rem; /* Academic indentation */
-  text-indent: 1.5rem; /* First-line indentation */
+  padding-left: 2rem;
+  /* Academic indentation */
+  text-indent: 1.5rem;
+  /* First-line indentation */
+}
+
+/* ── References — full-width section below the 2-col body ── */
+.journal-references-section {
+  padding: 2.5rem 4rem 3.5rem;
+  border-top: 2.5px solid var(--green);
+  background: #fafafa;
+  /* Explicitly single-column — must NOT inherit the parent's column layout */
+  columns: 1 !important;
+  column-rule: none !important;
+}
+
+.journal-references-heading {
+  margin-bottom: 1.5rem;
+}
+
+.journal-references-heading span {
+  display: inline-block;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--green-dk);
+  padding-bottom: 0.4rem;
+  border-bottom: 2.5px solid var(--green);
+}
+
+.journal-references-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  /* Two-column reference list, matching Nature / IEEE style */
+  column-count: 2;
+  column-gap: 3rem;
+}
+
+.journal-reference-entry {
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.86rem;
+  line-height: 1.7;
+  color: #2a2a2a;
+  /* APA hanging indent */
+  padding-left: 2.5rem;
+  text-indent: -2.5rem;
+  margin-bottom: 1rem;
+  break-inside: avoid;
+  text-align: left;
+}
+
+/* Bold author block */
+.ref-authors {
+  font-weight: 700;
+  color: #1a1a1a;
+}
+
+/* Year in parentheses — slightly muted */
+.ref-year {
+  font-weight: 600;
+  color: #444;
+}
+
+/* Title in italics */
+.ref-title {
+  font-style: italic;
+  font-weight: 400;
+  color: #222;
+}
+
+/* IEEE / numbered citation marker */
+.ref-number {
+  font-weight: 700;
+  color: var(--green-dk);
+  margin-right: 0.2rem;
+}
+
+.ref-link {
+  color: var(--green-dk);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.ref-link:hover {
+  text-decoration: underline;
 }
 
 .journal-no-content {
@@ -1709,7 +2544,7 @@ const stripMarkers = (text: string): string =>
   }
 
   .journal-body {
-    columns: 1;
+    column-count: 1;
     column-rule: none;
     column-gap: 0;
     padding: 1.5rem 1.25rem;
@@ -1721,6 +2556,14 @@ const stripMarkers = (text: string): string =>
 
   .journal-abstract-box {
     max-width: 100%;
+  }
+
+  .journal-references-section {
+    padding: 2rem 1.25rem 2.5rem;
+  }
+
+  .journal-references-list {
+    column-count: 1;
   }
 }
 

@@ -46,10 +46,11 @@ const imradSections = reactive({
   introduction: '',
   methods: '',
   results: '',
-  discussion: ''
+  discussion: '',
+  references: ''
 })
 
-const activeImradTab = ref<'introduction' | 'methods' | 'results' | 'discussion'>('introduction')
+const activeImradTab = ref<'introduction' | 'methods' | 'results' | 'discussion' | 'references'>('introduction')
 
 const authors = ref<string[]>([''])
 const sectionPages = ref<Record<string, number[]>>({})
@@ -118,6 +119,9 @@ const startInitialExtraction = async (autoExtract: boolean = true) => {
     // Fill IMRAD sections
     if (preview.sections) {
       Object.assign(imradSections, preview.sections)
+    }
+    if (preview.references) {
+      imradSections.references = preview.references
     }
 
     // Store section→pages mapping for badge display
@@ -204,7 +208,8 @@ const handleFinalConfirm = async () => {
       introduction: imradSections.introduction,
       methods: imradSections.methods,
       results: imradSections.results,
-      discussion: imradSections.discussion
+      discussion: imradSections.discussion,
+      references: imradSections.references
     })
     step.value = 3
     setTimeout(() => {
@@ -463,7 +468,7 @@ const goBack = () => {
               </div>
 
               <div class="imrad-tabs">
-                <button v-for="tab in (['introduction', 'methods', 'results', 'discussion'] as const)" :key="tab"
+                <button v-for="tab in (['introduction', 'methods', 'results', 'discussion', 'references'] as const)" :key="tab"
                   type="button" class="imrad-tab-btn" :class="{ active: activeImradTab === tab }"
                   @click="activeImradTab = tab">
                   {{ tab.charAt(0).toUpperCase() + tab.slice(1) }}

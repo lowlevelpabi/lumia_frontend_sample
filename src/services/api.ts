@@ -25,6 +25,7 @@ export interface Paper {
   methods?: string
   results?: string
   discussion?: string
+  references?: string
   introduction_summary?: string | null
   methods_summary?: string | null
   results_summary?: string | null
@@ -43,6 +44,9 @@ export interface Paper {
   uploaded_by?: string
   uploader_role?: string
   media?: Record<string, string> // Table images/visuals indexed by ID
+  // Soft-delete / Recycle Bin
+  deleted_at?: string | null
+  deleted_by?: string | null
 }
 
 export type PaperMetadata = Omit<Paper, 'id' | 'view_count' | 'citation_count'>
@@ -116,6 +120,7 @@ export interface PaperUpdate {
   sections?: Record<string, string>
   section_pages?: Record<string, number[]>
   detected_subheadings?: string[]
+  references?: string
 }
 
 export interface UserData {
@@ -188,7 +193,7 @@ export interface DashboardStats {
 
 export interface ActivityLog {
   id: number
-  action: 'Upload' | 'Edit' | 'Delete'
+  action: 'Upload' | 'Edit' | 'Delete' | 'Restore' | 'Purge'
   paper_title: string
   performed_by: string
   performed_at: string
@@ -294,6 +299,7 @@ export const api = {
     section_pages?: Record<string, number[]>
     trim_points?: Record<string, string>
     media?: Record<string, string>
+    references?: string
   }> {
     const formData = new FormData()
     formData.append('file', file)
@@ -318,6 +324,7 @@ export const api = {
     methods?: string
     results?: string
     discussion?: string
+    references?: string
     sections_summary?: Record<string, string>
     media?: Record<string, string>
   }) {
@@ -379,6 +386,19 @@ export const api = {
     return response.json()
   },
 
+  async getFormattedCitations(id: string): Promise<{
+    apa_6: string
+    apa_7: string
+    apa_intext: string
+    ieee: string
+    mla: string
+    bibtex: string
+  }> {
+    const response = await fetch(`${BASE_URL}/papers/${id}/formatted-citations`)
+    if (!response.ok) throw new Error('Failed to fetch citations')
+    return response.json()
+  },
+
   async listUsers(): Promise<UserResponse[]> {
     const response = await apiFetch(`${BASE_URL}/users/`, {
       headers: getAuthHeaders(),
@@ -429,6 +449,18 @@ export const api = {
     })
     if (!response.ok) throw new Error('Failed to fetch citations')
     return response.json()
+  },
+
+  async updatePassword(data: { current_password: string; new_password: string }): Promise<void> {
+    const response = await apiFetch(`${BASE_URL}/users/me/password`, {
+      method: 'PATCH',
+      headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    })
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}))
+      throw new Error((error as { detail?: string }).detail || 'Failed to update password')
+    }
   },
 
   async getSystemHealth(): Promise<SystemHealth> {
@@ -498,5 +530,29 @@ export const api = {
     })
     if (!response.ok) throw new Error('Failed to fetch logs')
     return response.json()
+  },
+
+  async getTrashedPapers(): Promise<Paper[]> {
+    const response = await apiFetch(`${BASE_URL}/papers/trash`, {
+      headers: getAuthHeaders(),
+    })
+    if (!response.ok) throw new Error('Failed to fetch trashed papers')
+    return response.json()
+  },
+
+  async restorePaper(id: string): Promise<void> {
+    const response = await apiFetch(`${BASE_URL}/papers/${id}/restore`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+    })
+    if (!response.ok) throw new Error('Failed to restore paper')
+  },
+
+  async purgePaper(id: string): Promise<void> {
+    const response = await apiFetch(`${BASE_URL}/papers/${id}/purge`, {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+    })
+    if (!response.ok) throw new Error('Failed to purge paper')
   },
 }

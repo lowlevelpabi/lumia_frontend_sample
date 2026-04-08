@@ -1,8 +1,17 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Filter, SlidersHorizontal, ArrowRight, User, Search, X, Compass } from 'lucide-vue-next'
+import { Filter, SlidersHorizontal, ArrowRight, User, Search, X } from 'lucide-vue-next'
 import { api, type SearchResult, type SearchParams } from '../services/api'
+
+// ── Confidence badge helper ────────────────────────────────────────────────────────
+// Section weights in vector_db.py can push cosine scores above 1.0
+// (title x1.5), so we use 0.6 / 0.35 as thresholds after weighting.
+const getConfidence = (score: number): { label: string; cls: string } => {
+  if (score >= 0.60) return { label: 'Strong Match', cls: 'badge-strong' }
+  if (score >= 0.35) return { label: 'Good Match',   cls: 'badge-good'   }
+  return                      { label: 'Related',      cls: 'badge-related' }
+}
 
 const route = useRoute()
 const router = useRouter()
@@ -14,10 +23,6 @@ const showMobileSearch = ref(false)
 const mobileSearchInput = ref('')
 const windowWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1024)
 const isDesktop = computed(() => windowWidth.value > 1100)
-const showRecommendations = computed(() => windowWidth.value > 1200)
-
-const recommended = ref<SearchResult[]>([])
-const loadingRecs = ref(false)
 
 // Filters
 const threshold = ref(0.2)
@@ -65,50 +70,7 @@ const load = () => {
 onMounted(async () => {
   query.value = (route.query.q as string) || ''
 
-  // Fetch default threshold from backend
-  try {
-    const config = await api.getSearchConfig()
-    if (config && config.default_threshold !== undefined) {
-      threshold.value = config.default_threshold
-      console.log(`[Search] Default threshold synced from backend: ${threshold.value}`)
-    }
-  } catch {
-    console.warn('[Search] Failed to fetch backend search config, using local default:', threshold.value)
-  }
-
   await performSearch()
-  
-  // Fetch recommendations (random/recent)
-  loadingRecs.value = true
-  try {
-    const all = await api.listAllPapers()
-    
-    // Deduplicate: filter out papers that are already in the results list
-    const filtered = all.filter(p => !results.value.some(r => r.id === String(p.id)))
-    
-    // Shuffle and pick 3
-    recommended.value = filtered
-      .sort(() => 0.5 - Math.random())
-      .slice(0, 3)
-      .map(p => ({
-        id: String(p.id),
-        score: 1.0,
-        payload: {
-          title: p.title,
-          author: p.author,
-          year: String(p.year || ''),
-          abstract: p.abstract || '',
-          project_type: p.project_type || 'Research',
-          department: p.department || 'N/A',
-          degree_program: p.degree_program || 'N/A',
-          citation_count: 0
-        }
-      }))
-  } catch (e) {
-    console.error('Failed to load recommendations:', e)
-  } finally {
-    loadingRecs.value = false
-  }
 
   const onResize = () => { windowWidth.value = window.innerWidth }
   window.addEventListener('resize', onResize)
@@ -256,7 +218,7 @@ const openMobileSearch = () => {
             </div>
           </div>
 
-          <!-- Similarity Threshold (search mode only) -->
+          <!-- Similarity Threshold -->
           <div class="sb-panel" v-if="!browseMode">
             <div class="sb-title">
               <span>Similarity Threshold</span>
@@ -332,7 +294,16 @@ const openMobileSearch = () => {
                   <span class="type-tag">{{ res.payload.project_type }}</span>
                   <span v-if="res.payload.degree_program && res.payload.degree_program !== 'N/A'" class="degree-tag">{{
                     res.payload.degree_program }}</span>
-                  <span v-if="!browseMode" class="score-tag">{{ (res.score * 100).toFixed(0) }}% match</span>
+                  <!-- Confidence badge (search mode only) -->
+                  <template v-if="!browseMode">
+                    <span :class="['confidence-badge', getConfidence(res.score).cls]">
+                      {{ getConfidence(res.score).label }}
+                      <span class="badge-pct">&nbsp;·&nbsp;{{ (res.score * 100).toFixed(0) }}%</span>
+                    </span>
+                    <span v-if="selectedSection" class="section-target-tag">
+                      ► {{ selectedSection.charAt(0).toUpperCase() + selectedSection.slice(1) }}
+                    </span>
+                  </template>
                 </div>
 
                 <span class="item-title">{{ res.payload.title }}</span>
@@ -354,33 +325,6 @@ const openMobileSearch = () => {
             </li>
           </ol>
         </section>
-
-        <!-- ── RECOMMENDATIONS SIDEBAR ────────────────────────── -->
-        <aside v-if="showRecommendations" class="recommend-sidebar">
-          <div class="sb-panel">
-            <div class="sb-title">
-              <Compass :size="12" />
-              <span>Recommended</span>
-            </div>
-            
-            <div v-if="loadingRecs" class="rec-list">
-              <div v-for="i in 3" :key="i" class="rec-item skeleton-mini"></div>
-            </div>
-            
-            <div v-else-if="recommended.length > 0" class="rec-list">
-              <div v-for="rec in recommended" :key="rec.id" class="rec-item" @click="viewDetail(rec.id)">
-                <span class="rec-tag">{{ rec.payload.project_type }}</span>
-                <span class="rec-title">{{ rec.payload.title }}</span>
-                <div class="rec-meta">{{ rec.payload.author }} · {{ rec.payload.year }}</div>
-              </div>
-            </div>
-            
-            <div v-else class="rec-empty">
-              <img src="/book_empty.ico" alt="Empty" class="rec-empty-icon" />
-              <p>No other recommendations at this time.</p>
-            </div>
-          </div>
-        </aside>
 
       </div>
     </main>
@@ -636,7 +580,7 @@ const openMobileSearch = () => {
   max-width: 1440px; /* Expanded for widescreen */
   margin: 0 auto;
   display: grid;
-  grid-template-columns: 220px 1fr 340px; /* 3-Column: Filters | Feed | Recommendations */
+  grid-template-columns: 220px 1fr; /* 2-Column: Filters | Feed */
   gap: 3.5rem;
   align-items: start;
 }
@@ -879,6 +823,50 @@ const openMobileSearch = () => {
   font-variant-numeric: tabular-nums;
 }
 
+/* ── Confidence badges ──────────────────────────────────────────── */
+.confidence-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.60rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 0.13rem 0.45rem;
+  border-radius: 99px;
+  white-space: nowrap;
+  transition: opacity 0.15s;
+}
+
+.badge-strong {
+  background: #d4f0e2;
+  color: #0a6639;
+}
+
+.badge-good {
+  background: #dceeff;
+  color: #1a5fa8;
+}
+
+.badge-related {
+  background: #efefed;
+  color: #6b7068;
+}
+
+.section-target-tag {
+  font-size: 0.60rem;
+  font-weight: 600;
+  color: var(--ink-3);
+  letter-spacing: 0.04em;
+  opacity: 0.72;
+  white-space: nowrap;
+}
+
+.badge-pct {
+  font-weight: 500;
+  opacity: 0.75;
+  font-variant-numeric: tabular-nums;
+}
+
 .item-title {
   display: block;
   font-family: 'Lora', Georgia, serif;
@@ -924,101 +912,6 @@ const openMobileSearch = () => {
   font-weight: 600;
   color: var(--green-dk);
   transition: gap 0.14s, color 0.14s;
-}
-
-/* ── RECOMMENDATIONS SIDEBAR ───────────────────────── */
-.recommend-sidebar {
-  display: flex;
-  flex-direction: column;
-  gap: 2rem;
-  position: sticky;
-  top: calc(44px + 1.75rem);
-}
-
-.rec-list {
-  display: flex;
-  flex-direction: column;
-}
-
-.rec-item {
-  padding: 1.25rem 0;
-  border-bottom: 1px solid var(--rule);
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.rec-item:last-child {
-  border-bottom: none;
-}
-
-.rec-item:hover .rec-title {
-  color: var(--green-dk);
-}
-
-.rec-tag {
-  font-size: 0.58rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  color: var(--green-dk);
-  background: var(--green-dim);
-  padding: 0.1rem 0.4rem;
-  border-radius: 2px;
-  display: inline-block;
-  margin-bottom: 0.5rem;
-}
-
-.rec-title {
-  display: block;
-  font-family: 'Lora', Georgia, serif;
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--ink);
-  line-height: 1.4;
-  margin-bottom: 0.4rem;
-  transition: color 0.15s ease;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.rec-meta {
-  font-size: 0.72rem;
-  color: var(--ink-3);
-}
-
-.rec-empty {
-  padding: 2.5rem 1rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.75rem;
-  text-align: center;
-}
-
-.rec-empty-icon {
-  width: 48px;
-  height: 48px;
-  opacity: 0.15;
-  filter: grayscale(1);
-}
-
-.rec-empty p {
-  font-size: 0.85rem;
-  color: var(--ink-3);
-  font-style: italic;
-  margin: 0;
-}
-
-/* Mini skeleton shimmer */
-.skeleton-mini {
-  height: 80px;
-  background: linear-gradient(90deg, var(--rule) 25%, #e8e8e3 50%, var(--rule) 75%);
-  background-size: 500px 100%;
-  animation: shimmer 1.4s infinite;
-  border-radius: 6px;
-  margin-bottom: 1rem;
 }
 
 /* Empty state */

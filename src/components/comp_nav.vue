@@ -83,7 +83,7 @@ const logout = () => {
       <RouterLink :to="{ name: 'home' }" class="nav-logo">
         <img src="/lumia_logo.ico" style="width: 32px; height: 32px;" />
         <div class="logo-text">
-          UMIA <span class="logo-text--sub">Archiving</span>
+          UMIA <span class="logo-text--sub">Retrieval</span>
         </div>
       </RouterLink>
 

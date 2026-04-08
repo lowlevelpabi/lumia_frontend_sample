@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter, RouterLink } from 'vue-router'
-import { Search, User, ArrowRight, BookOpen, Clock } from 'lucide-vue-next'
+import { Search, User, ArrowRight, Clock } from 'lucide-vue-next'
 import { api, type Paper } from '../services/api'
 
 const router = useRouter()
@@ -43,13 +43,13 @@ const handleSearch = () => {
         </div>
 
         <h1 class="hero-heading">
-          Lumia Archiving
+          What are we looking for?
         </h1>
 
         <div class="search-row">
           <div class="search-field">
             <Search :size="17" class="s-icon" />
-            <input v-model="searchQuery" type="text" placeholder="Title, author, keywords, abstract…"
+            <input v-model="searchQuery" type="text" placeholder="Title, keywords, context-based search, and more…"
               @keyup.enter="handleSearch" spellcheck="false" autocomplete="off" />
           </div>
           <button class="search-btn" @click="handleSearch">Search</button>
@@ -74,7 +74,7 @@ const handleSearch = () => {
     <main class="content-wrap">
       <div class="content-grid">
 
-        <!-- ── Recent Papers ──────────────────────────────────────── -->
+        <!-- Recent Papers Feed -->
         <section class="feed">
 
           <header class="feed-head">
@@ -82,10 +82,6 @@ const handleSearch = () => {
               <Clock :size="13" />
               <span>Recently Added</span>
             </div>
-            <RouterLink :to="{ name: 'explore', query: { q: '' } }" class="head-link">
-              All records
-              <ArrowRight :size="12" />
-            </RouterLink>
           </header>
 
           <!-- Skeleton state -->
@@ -141,54 +137,11 @@ const handleSearch = () => {
           </div>
 
           <RouterLink v-if="recentPapers.length > 0" :to="{ name: 'explore' }" class="view-more">
-            View the full repository
+            Go to explore
             <ArrowRight :size="14" />
           </RouterLink>
 
         </section>
-
-        <!-- ── Sidebar ────────────────────────────────────────────── -->
-        <aside class="sidebar">
-
-          <div class="sb-panel">
-            <div class="sb-title">
-              <BookOpen :size="13" />
-              <span>Browse Collection</span>
-            </div>
-
-            <div class="sb-group">
-              <p class="sb-group-label">By Document Type:</p>
-              <RouterLink :to="{ name: 'explore', query: { q: 'Thesis' } }" class="sb-link">Thesis / Research
-              </RouterLink>
-              <RouterLink :to="{ name: 'explore', query: { q: 'Capstone Project' } }" class="sb-link">Capstone Project
-              </RouterLink>
-            </div>
-
-            <div class="sb-group">
-              <p class="sb-group-label">Department of:</p>
-              <RouterLink :to="{ name: 'explore', query: { q: 'computer science' } }" class="sb-link">Department of
-                Computer
-                Studies
-              </RouterLink>
-            </div>
-          </div>
-          <!--
-          <div class="sb-panel">
-            <div class="sb-title">
-              <Hash :size="13" />
-              <span>Search Tips</span>
-            </div>
-
-            <ul class="tips">
-              <li>Use <code>"exact phrase"</code> for precise matches</li>
-              <li>Search by author name to find all their works</li>
-              <li>Abstract keywords yield broader results than titles alone</li>
-              <li>Combine terms: <code>neural network classification</code></li>
-            </ul>
-
-          </div>
--->
-        </aside>
 
       </div>
     </main>
@@ -238,10 +191,11 @@ const handleSearch = () => {
 
 .hero-inner {
   max-width: 1200px;
-  /* Expanded for widescreen */
   margin: 0 auto;
   position: relative;
   z-index: 1;
+  text-align: center;
+  /* Center text content */
 }
 
 /* Masthead bar — journal-header feel */
@@ -274,7 +228,8 @@ const handleSearch = () => {
   font-weight: 600;
   line-height: 1.1;
   color: #fff;
-  margin: 0 0 1.25rem;
+  margin: 0 auto 1.25rem;
+  /* Centered margin */
   letter-spacing: -0.01em;
 }
 
@@ -296,7 +251,8 @@ const handleSearch = () => {
   display: flex;
   gap: 0.5rem;
   max-width: 620px;
-  margin-bottom: 1.5rem;
+  margin: 0 auto 1.5rem;
+  /* Centered search row */
 }
 
 .search-field {
@@ -391,13 +347,10 @@ const handleSearch = () => {
 }
 
 .content-grid {
-  max-width: 1440px;
-  /* Expanded for widescreen */
+  max-width: 1100px;
+  /* Centered narrow feed for better readability */
   margin: 0 auto;
-  display: grid;
-  grid-template-columns: 1fr 360px;
-  /* Increased sidebar width */
-  gap: 3.5rem;
+  display: block;
   align-items: start;
 }
 
