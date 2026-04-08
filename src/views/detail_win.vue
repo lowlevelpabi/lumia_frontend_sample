@@ -44,6 +44,15 @@ const activeCiteTab = ref<'apa' | 'ieee' | 'mla' | 'bibtex'>('apa')
 const apaVariation = ref<'6' | '7' | 'intext'>('6')
 const copyStatus = ref<Record<string, boolean>>({})
 
+// Image Zoom Modal State
+const showZoomModal = ref(false)
+const zoomImgSrc = ref('')
+
+const openZoomModal = (src: string) => {
+  zoomImgSrc.value = src
+  showZoomModal.value = true
+}
+
 const openCiteModal = async () => {
   showCiteModal.value = true
   // Skip re-fetch if we already have data
@@ -513,7 +522,7 @@ const formatReferenceEntry = (raw: string): string => {
                     <template v-for="(block, i) in getStructuredBlocks(cfg.key)" :key="i">
                       <div v-if="block.type === 'subheading'" class="journal-subheading">{{ block.text }}</div>
                       <div v-else-if="block.type === 'table-image'" class="journal-figure">
-                        <img :src="block.text" :alt="block.id" class="journal-figure-img" />
+                        <img :src="block.text" :alt="block.id" class="journal-figure-img" @click="openZoomModal(block.text)" />
                       </div>
                       <p v-else-if="block.type === 'table-label'" class="journal-figure-caption">{{ block.text }}</p>
                       <p v-else class="journal-para">{{ block.text }}</p>
@@ -688,6 +697,21 @@ const formatReferenceEntry = (raw: string): string => {
             </div>
 
           </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
+
+  <!-- ══ IMAGE ZOOM MODAL (LIGHTBOX) ════════════════════════════ -->
+  <Teleport to="body">
+    <Transition name="zoom-fade">
+      <div v-if="showZoomModal" class="zoom-overlay" @click="showZoomModal = false">
+        <div class="zoom-container">
+          <button class="zoom-close" @click="showZoomModal = false">
+            <X :size="24" />
+          </button>
+          <img :src="zoomImgSrc" class="zoom-full-img" @click.stop />
+          <p class="zoom-hint">Click outside to close</p>
         </div>
       </div>
     </Transition>
@@ -1243,6 +1267,77 @@ const formatReferenceEntry = (raw: string): string => {
 .slide-in-leave-to {
   opacity: 0;
   transform: translateX(-4px);
+}
+
+/* ── Zoom Modal (Lightbox) Styles ── */
+.zoom-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.9);
+  backdrop-filter: blur(10px);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  cursor: zoom-out;
+}
+
+.zoom-container {
+  position: relative;
+  max-width: 95vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.zoom-full-img {
+  max-width: 100%;
+  max-height: 85vh;
+  object-fit: contain;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #fff; /* White background for transparent table PNGs */
+}
+
+.zoom-close {
+  position: absolute;
+  top: -3rem;
+  right: 0;
+  background: none;
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  padding: 0.5rem;
+  opacity: 0.7;
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.zoom-close:hover {
+  opacity: 1;
+  transform: scale(1.1);
+}
+
+.zoom-hint {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin: 0;
+}
+
+/* Transitions */
+.zoom-fade-enter-active,
+.zoom-fade-leave-active {
+  transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.zoom-fade-enter-from,
+.zoom-fade-leave-to {
+  opacity: 0;
+  transform: scale(0.95);
 }
 
 
@@ -2576,8 +2671,17 @@ const formatReferenceEntry = (raw: string): string => {
   max-width: 100%;
   height: auto;
   border: none;
-  border-radius: 0;
   box-shadow: none;
+  transition: transform 0.22s cubic-bezier(0.2, 0, 0.2, 1), box-shadow 0.22s ease;
+  cursor: zoom-in;
+  position: relative;
+  z-index: 1;
+}
+
+.journal-figure-img:hover {
+  transform: scale(1.15);
+  z-index: 10;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.14), 0 4px 10px rgba(0, 0, 0, 0.08);
 }
 
 .journal-figure-caption {

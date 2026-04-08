@@ -11,11 +11,11 @@ import type { Paper } from "./api";
 // A4 Dimensions in points (72 DPI)
 const A4_WIDTH = 595.28;
 const A4_HEIGHT = 841.89;
-const MARGIN = 50; // Slightly smaller margins for 2-column layout to feel more academic
+const MARGIN = 40; // Reduced margin slightly to expand column width
 const CONTENT_WIDTH = A4_WIDTH - MARGIN * 2;
 
 // Column configuration
-const COLUMN_GAP = 20;
+const COLUMN_GAP = 15; // Slightly reduced gap
 const COLUMN_WIDTH = (CONTENT_WIDTH - COLUMN_GAP) / 2;
 
 // Fonts
@@ -184,6 +184,8 @@ export const pdfExportService = {
                 const imgData = await this.getImageData(block.text);
                 const imgProps = doc.getImageProperties(imgData);
 
+                // Reverted to Column Width as requested.
+                // The backend high DPI ensures this is sharp and readable.
                 const finalWidth = COLUMN_WIDTH;
                 const finalHeight = (imgProps.height * finalWidth) / imgProps.width;
 
