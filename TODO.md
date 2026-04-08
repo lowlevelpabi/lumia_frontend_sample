@@ -26,22 +26,24 @@
 - [x] **Citation Track**: Revamp the `profile_win.vue` design and layout. Include the tracking of what study user citated.
 - [x] **Citation Track #2**: A tracker for who citated your study.
 - [x] **Issue in Reference**: The university used in citation reference is `Cavite State University, Indang, Cavite.`, the system should detect where campus the thesis was conducted and finished. **SOLVED (Partially)**: Satellite Campus location/place hardcoded name in `citation_gen.py` is removed.
-
-## Possible Implementation
-
-- [ ] **A4 Formatted IMRAD Export**
+- [x] **A4 Formatted IMRAD Export**
       Implement a "Download as PDF" feature that generates a professionally formatted document (A4, 12pt Serif, justified text, proper IMRAD structure) matching the approved design.
 
-- [ ] **Realtime System Time**
+- [x] **Realtime System Time**
       Make the system's time or timezone to be local and make sure that the functions that has timer in the system is working if we try to alter the time of the os manually. For example if a thesis is in trash or for deletion within 15 days, if we change the clock of the OS to advance in 3 days, if we came back in the UI and refresh the page, the timer should show 12 days remaining.
 
-- [ ] **Implement Functionality for Oldest, Newest, and Most Cited Filter**
+- [x] **Implement Functionality for Oldest, Newest, and Most Cited Filter**
       Implement a functionality for the filtering option of Oldest, Newest and Most Cited Study in `explore_win.vue`.
 
   **Basis of each filter option:**
-  - Newest and Oldest: Query the whole `paper` table in `thesis.db` to rank the oldest to older, newest to newer and return the result in UI search result.
-  - Most Cited: Query the `user_citation` table in `thesis.db` to count the number of citations for each paper and rank them accordingly and return the result in UI search result.
-  - Rename `Good Match`, `Perfect Match` in Recommendation Panel to `Similar Study` or `Recommended Study` in `explore_win.vue`.
+  - [x] Newest and Oldest: Query the whole `paper` table in `thesis.db` to rank the oldest to older, newest to newer and return the result in UI search result.
+  - [x] Most Cited: Query the `user_citation` table in `thesis.db` to count the number of citations for each paper and rank them accordingly and return the result in UI search result.
+  - [x] Rename `Good Match`, `Perfect Match` in Recommendation Panel to `Similar Study` or `Recommended Study` in `explore_win.vue`.
+
+## Next Sprint
+
+- [ ] **Body Text Bug with the Table**
+      Fix the current bug during extraction, cleaning, and displaying of the body text in UI wherein the table's content such as `FUNCTIONALITY`, `MEAN`, `STANDARD DEVIATION`, `INTERPRETATION` are being displayed as a body text instead it should be filtered during uploading and extraction so it when the backend send it to UI, the UI won't need to display it either. (Give at least 1-2 screenshot of the sample table to see what is the content of the table being extracted also and flagged as body text).
 
 ---
 

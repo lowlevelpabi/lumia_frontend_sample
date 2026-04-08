@@ -49,6 +49,30 @@ onUnmounted(() => {
   window.removeEventListener('dragover', handleDragOver)
   window.removeEventListener('drop', handleDrop)
   window.removeEventListener('dragleave', handleDragLeave)
+  if (clockInterval) clearInterval(clockInterval)
+})
+
+// ── Realtime System Time ─────────────────────────────────────────
+const currentTime = ref(new Date())
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let clockInterval: any = null
+
+onMounted(() => {
+  clockInterval = setInterval(() => {
+    currentTime.value = new Date()
+  }, 1000)
+})
+
+const formattedTime = computed(() => {
+  return currentTime.value.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: true
+  })
 })
 
 // ── Sidebar ─────────────────────────────────────────────────────
@@ -219,10 +243,9 @@ const logActionColor = (action: string) => {
 }
 
 const formatLogDate = (iso: string) => {
-  // Backend stores UTC as naive datetime (no 'Z'), so we append it
-  // so the browser correctly converts UTC → local time.
-  const utcIso = iso.endsWith('Z') ? iso : iso + 'Z'
-  const d = new Date(utcIso)
+  // Backend now stores local PC time.
+  // Native Date constructor treats ISO strings without 'Z' as Local time.
+  const d = new Date(iso)
   return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 }
 
@@ -243,10 +266,9 @@ const fetchTrashedPapers = async () => {
 }
 
 const daysRemaining = (deletedAt: string): number => {
-  // Backend naive UTC → append 'Z' for correct local time conversion
-  const utcIso = deletedAt.endsWith('Z') ? deletedAt : deletedAt + 'Z'
-  const deleted = new Date(utcIso)
-  const now = new Date()
+  // Backend naive Local time (no 'Z') is treated as local by the Date constructor
+  const deleted = new Date(deletedAt)
+  const now = currentTime.value // Uses the reactive system clock
   const diffMs = now.getTime() - deleted.getTime()
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
   return Math.max(0, 15 - diffDays)
@@ -957,6 +979,13 @@ watch(activeSection, (newSection) => {
             <span class="step-label">Done</span>
           </div>
         </div>
+
+        <div class="topbar-right">
+          <div class="live-clock">
+            <Clock :size="13" stroke-width="2.5" />
+            <span>{{ formattedTime }}</span>
+          </div>
+        </div>
       </header>
 
       <!-- ── Content ─────────────────────────────────────────── -->
@@ -1159,7 +1188,7 @@ watch(activeSection, (newSection) => {
                   </p>
                   <div class="missing-list">
                     <span v-for="s in missingSections" :key="s" class="missing-badge"><span class="missing-dot" />{{ s
-                    }}</span>
+                      }}</span>
                   </div>
                 </div>
                 <div class="notice-actions">
@@ -1770,9 +1799,14 @@ watch(activeSection, (newSection) => {
             <div class="tbl-card-head" style="display:flex;align-items:center;justify-content:space-between">
               <span class="tbl-count">{{ trashedPapers.length }} document{{ trashedPapers.length !== 1 ? 's' : '' }} in
                 Trash</span>
-              <button @click="fetchTrashedPapers" class="ghost-btn" title="Refresh">
-                <RefreshCw :size="13" />
-              </button>
+              <div style="display:flex;align-items:center;gap:0.75rem">
+                <span v-if="loadingTrash" class="sync-text">
+                  <RefreshCw :size="11" class="spin" /> Syncing with system clock...
+                </span>
+                <button @click="fetchTrashedPapers" class="ghost-btn" title="Refresh" :disabled="loadingTrash">
+                  <RefreshCw :size="13" :class="{ spin: loadingTrash }" />
+                </button>
+              </div>
             </div>
             <div class="tbl-scroll">
               <table class="tbl">
@@ -2353,10 +2387,57 @@ watch(activeSection, (newSection) => {
   gap: 1rem;
 }
 
+.topbar-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 180px;
+}
+
+.live-clock {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: var(--surface);
+  padding: 0.4rem 0.75rem;
+  border-radius: 6px;
+  border: 1px solid var(--rule);
+  color: var(--ink-2);
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.live-clock span {
+  font-variant-numeric: tabular-nums;
+}
+
 .topbar-left {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+}
+
+.sync-text {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--green);
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  animation: pulse-op 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-op {
+
+  0%,
+  100% {
+    opacity: 0.7;
+  }
+
+  50% {
+    opacity: 1;
+  }
 }
 
 .sb-toggle {

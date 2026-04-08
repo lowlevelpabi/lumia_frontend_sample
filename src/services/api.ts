@@ -64,6 +64,9 @@ export interface SearchResult {
     project_type: string
     degree_program: string
     citation_count: number
+    created_at?: string
+    uploaded_by?: string
+    uploader_role?: string
   }
 }
 
@@ -161,6 +164,7 @@ export interface SearchParams {
   projectType?: string
   degreeProgram?: string
   section?: string
+  sort?: string
 }
 
 export interface BorrowRecord {
@@ -243,6 +247,7 @@ export const api = {
     if (params.projectType) url.searchParams.append('project_type', params.projectType)
     if (params.degreeProgram) url.searchParams.append('degree_program', params.degreeProgram)
     if (params.section) url.searchParams.append('section', params.section)
+    if (params.sort) url.searchParams.append('sort', params.sort)
 
     const response = await fetch(url.toString())
     if (!response.ok) throw new Error('Search failed')

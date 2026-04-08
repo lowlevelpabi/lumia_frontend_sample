@@ -1,16 +1,22 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Filter, SlidersHorizontal, ArrowRight, User, Search, X } from 'lucide-vue-next'
+import { Filter, SlidersHorizontal, ArrowRight, User, Search, X, Award, Calendar } from 'lucide-vue-next'
 import { api, type SearchResult, type SearchParams } from '../services/api'
 
 // ── Confidence badge helper ────────────────────────────────────────────────────────
 // Section weights in vector_db.py can push cosine scores above 1.0
 // (title x1.5), so we use 0.6 / 0.35 as thresholds after weighting.
 const getConfidence = (score: number): { label: string; cls: string } => {
-  if (score >= 0.60) return { label: 'Strong Match', cls: 'badge-strong' }
-  if (score >= 0.35) return { label: 'Good Match',   cls: 'badge-good'   }
-  return                      { label: 'Related',      cls: 'badge-related' }
+  if (score >= 0.60) return { label: 'Recommended Study', cls: 'badge-strong' }
+  if (score >= 0.35) return { label: 'Similar Study', cls: 'badge-good' }
+  return { label: 'Related', cls: 'badge-related' }
+}
+
+const formatDate = (iso: string | undefined) => {
+  if (!iso) return 'Previously indexed'
+  const d = new Date(iso)
+  return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
 }
 
 const route = useRoute()
@@ -50,6 +56,7 @@ const performSearch = async () => {
       projectType: selectedProjectType.value || undefined,
       degreeProgram: selectedDegree.value || undefined,
       section: selectedSection.value || undefined,
+      sort: sortBy.value,
     }
     console.log('[Search] Sending params:', params)
     results.value = await api.searchPapers(params)
@@ -85,11 +92,34 @@ watch(
 )
 
 watch(
-  [threshold, minYear, maxYear, selectedProjectType, selectedDegree, selectedSection],
+  [threshold, minYear, maxYear, selectedProjectType, selectedDegree, selectedSection, sortBy],
   () => { performSearch() }
 )
 
 const viewDetail = (id: string) => router.push({ name: 'detail', params: { id } })
+
+// ── Dynamic Results Header ──────────────────────────────────────────────────
+const feedTitle = computed(() => {
+  const base = browseMode.value ? 'Archive' : 'Search'
+  const filterParts = []
+
+  // 1. Sort context
+  const sortLabels = { newest: 'Newest', oldest: 'Oldest', cited: 'Most Cited' }
+  filterParts.push(sortLabels[sortBy.value])
+
+  // 2. Department / Degree filter context
+  if (selectedDegree.value) filterParts.push(selectedDegree.value)
+
+  // 3. Project Type context
+  if (selectedProjectType.value) filterParts.push(selectedProjectType.value)
+
+  // 4. Section Context (search mode only)
+  if (!browseMode.value && selectedSection.value) {
+    filterParts.push(selectedSection.value.charAt(0).toUpperCase() + selectedSection.value.slice(1))
+  }
+
+  return `${base} — ${filterParts.join(' · ')}`
+})
 
 const submitMobileSearch = () => {
   if (!mobileSearchInput.value.trim()) return
@@ -235,8 +265,8 @@ const openMobileSearch = () => {
             </div>
           </div>
 
-          <!-- Sort (browse mode only) -->
-          <div class="sb-panel" v-if="browseMode">
+          <!-- Sort -->
+          <div class="sb-panel">
             <div class="sb-title">
               <span>Sort By</span>
             </div>
@@ -254,7 +284,7 @@ const openMobileSearch = () => {
 
           <header class="feed-head">
             <div class="feed-head-left">
-              <span>{{ browseMode ? 'Archive' : 'Records' }}</span>
+              <span>{{ feedTitle }}</span>
             </div>
             <span v-if="!loading" class="feed-head-count">
               {{ displayResults.length }} found
@@ -317,10 +347,26 @@ const openMobileSearch = () => {
 
                 <p class="item-abstract">{{ res.payload.abstract.substring(0, 220) }}&hellip;</p>
 
-                <span class="item-action">
-                  See full study
-                  <ArrowRight :size="12" />
-                </span>
+                <div class="item-footer">
+                  <span v-if="(sortBy === 'newest' || sortBy === 'oldest') && res.payload.created_at"
+                    class="upload-date-badge">
+                    <Calendar :size="11" />
+                    Uploaded on {{ formatDate(res.payload.created_at) }}
+                    <template v-if="res.payload.uploaded_by"> · {{ res.payload.uploader_role === 'Admin' ? 'Admin' :
+                      'Verified' }}: {{ res.payload.uploaded_by }}</template>
+                  </span>
+                  <span v-if="sortBy === 'cited' && res.payload.citation_count > 0" class="most-cited-badge"
+                    :data-rank="idx + 1">
+                    <Award :size="11" />
+                    Rank #{{ idx + 1 }} <span class="badge-dot">·</span> Citation Count:
+                    {{
+                      res.payload.citation_count }}
+                  </span>
+                  <span class="item-action">
+                    See full study
+                    <ArrowRight :size="12" />
+                  </span>
+                </div>
               </div>
             </li>
           </ol>
@@ -363,7 +409,8 @@ const openMobileSearch = () => {
 }
 
 .topbar-inner {
-  max-width: 1440px; /* Expanded for widescreen */
+  max-width: 1440px;
+  /* Expanded for widescreen */
   margin: 0 auto;
   padding: 0 2rem;
   height: 44px;
@@ -577,10 +624,12 @@ const openMobileSearch = () => {
 }
 
 .layout-inner {
-  max-width: 1440px; /* Expanded for widescreen */
+  max-width: 1440px;
+  /* Expanded for widescreen */
   margin: 0 auto;
   display: grid;
-  grid-template-columns: 220px 1fr; /* 2-Column: Filters | Feed */
+  grid-template-columns: 220px 1fr;
+  /* 2-Column: Filters | Feed */
   gap: 3.5rem;
   align-items: start;
 }
@@ -902,6 +951,49 @@ const openMobileSearch = () => {
   line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+.item-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 1.25rem;
+}
+
+.most-cited-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--green);
+  background: var(--green-dim);
+  padding: 0.25rem 0.6rem;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.badge-dot {
+  opacity: 0.5;
+}
+
+.most-cited-badge,
+.upload-date-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--ink-2);
+  background: #f0f0ed;
+  padding: 0.25rem 0.6rem;
+  border-radius: 4px;
+}
+
+.most-cited-badge {
+  color: var(--green-dk);
+  background: var(--green-dim);
 }
 
 .item-action {

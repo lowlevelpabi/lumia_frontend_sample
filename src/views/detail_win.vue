@@ -2,14 +2,15 @@
 import { ref, onMounted, watch, computed } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { useAuth } from '../composables/useAuth'
-import { Eye, Award, CheckCircle, Loader2, ChevronRight, Copy, Check, X } from 'lucide-vue-next'
+import { Eye, Award, CheckCircle, Loader2, ChevronRight, Copy, Check, X, FileDown } from 'lucide-vue-next'
 import { api, type Paper, type SearchResult } from '../services/api'
- 
+import { pdfExportService } from '../services/pdf_export_service'
+
 // ── Confidence badge helper ────────────────────────────────────────────────────────
 const getConfidence = (score: number): { label: string; cls: string } => {
-  if (score >= 0.60) return { label: 'Strong Match', cls: 'badge-strong' }
-  if (score >= 0.35) return { label: 'Good Match',   cls: 'badge-good'   }
-  return                      { label: 'Related',      cls: 'badge-related' }
+  if (score >= 0.60) return { label: 'Recommended Study', cls: 'badge-strong' }
+  if (score >= 0.35) return { label: 'Similar Study', cls: 'badge-good' }
+  return { label: 'Related', cls: 'badge-related' }
 }
 
 const route = useRoute()
@@ -23,6 +24,7 @@ const viewCount = ref(0)
 const citationCount = ref(0)
 const hasCited = ref(false)
 const citeLoading = ref(false)
+const exportLoading = ref(false)
 const { isLoggedIn } = useAuth()
 
 // Citation Modal State
@@ -195,6 +197,19 @@ const handleCite = async () => {
     openCiteModal()
   } finally {
     citeLoading.value = false
+  }
+}
+
+const handleDownloadPDF = async () => {
+  if (!paper.value || exportLoading.value) return
+  exportLoading.value = true
+  try {
+    await pdfExportService.downloadPaper(paper.value)
+  } catch (err) {
+    console.error('Export failed:', err)
+    alert('Failed to generate PDF. Please try again.')
+  } finally {
+    exportLoading.value = false
   }
 }
 
@@ -379,13 +394,35 @@ const formatReferenceEntry = (raw: string): string => {
           <button @click="goBack" class="bc-link">Results</button>
           <ChevronRight :size="12" class="bc-sep" />
           <span class="bc-active">{{ paper.title.length > 55 ? paper.title.substring(0, 55) + '…' : paper.title
-            }}</span>
+          }}</span>
         </nav>
       </div>
     </div>
 
     <!-- ══ PAGE LAYOUT ════════════════════════════════════════════ -->
     <div class="journal-page-layout">
+
+      <!-- ── Left Sidebar: Study Navigation ── -->
+      <aside class="journal-toc">
+        <div class="toc-inner">
+          <p class="toc-label">Available Sections</p>
+          <nav class="toc-list">
+            <a href="#abstract-section" class="toc-item">
+              <span class="toc-bullet"></span>
+              Abstract
+            </a>
+            <a v-for="cfg in IMRAD_SECTION_CONFIGS" :key="cfg.key" :href="'#' + cfg.key + '-section'" class="toc-item">
+              <span class="toc-bullet"></span>
+              {{ cfg.label }}
+            </a>
+            <a v-if="parsedReferences.length > 0" href="#references-section" class="toc-item">
+              <span class="toc-bullet"></span>
+              References
+            </a>
+          </nav>
+
+        </div>
+      </aside>
 
       <!-- ── Main Journal Paper ── -->
       <div class="journal-paper-wrap">
@@ -426,10 +463,16 @@ const formatReferenceEntry = (raw: string): string => {
                 {{ hasCited ? 'Cited (Get Ref)' : citeLoading ? 'Citing…' : 'Cite this study' }}
               </button>
               <span v-else class="j-login-hint">Sign in to cite this study</span>
+
+              <button class="j-download-btn" :disabled="exportLoading" @click="handleDownloadPDF">
+                <Loader2 v-if="exportLoading" :size="13" class="spin" />
+                <FileDown v-else :size="13" />
+                {{ exportLoading ? 'Generating PDF…' : 'Download PDF' }}
+              </button>
             </div>
 
             <!-- Plain Abstract -->
-            <div class="journal-abstract-plain">
+            <div id="abstract-section" class="journal-abstract-plain">
               <span class="journal-abstract-label">Abstract</span>
               <p class="journal-abstract-text">{{ paper.abstract }}</p>
               <div v-if="paper.keywords" class="journal-keywords">
@@ -444,7 +487,7 @@ const formatReferenceEntry = (raw: string): string => {
           <!-- ── 2-Column IMRAD Body ── -->
           <div class="journal-body">
             <template v-for="cfg in IMRAD_SECTION_CONFIGS" :key="cfg.key">
-              <div class="journal-section-heading">
+              <div :id="cfg.key + '-section'" class="journal-section-heading">
                 <span>{{ cfg.label }}</span>
               </div>
 
@@ -489,7 +532,7 @@ const formatReferenceEntry = (raw: string): string => {
           </div>
 
           <!-- ── References — full-width below the 2-column body ── -->
-          <section v-if="parsedReferences.length > 0" class="journal-references-section">
+          <section v-if="parsedReferences.length > 0" id="references-section" class="journal-references-section">
             <div class="journal-references-heading">
               <span>References</span>
             </div>
@@ -779,7 +822,7 @@ const formatReferenceEntry = (raw: string): string => {
   color: var(--ink-3);
   margin: 0 0 1.25rem;
 }
- 
+
 /* ── Confidence badges ──────────────────────────────────────────── */
 .confidence-badge {
   display: inline-flex;
@@ -792,22 +835,22 @@ const formatReferenceEntry = (raw: string): string => {
   border-radius: 99px;
   white-space: nowrap;
 }
- 
+
 .badge-strong {
   background: #d4f0e2;
   color: #0a6639;
 }
- 
+
 .badge-good {
   background: #dceeff;
   color: #1a5fa8;
 }
- 
+
 .badge-related {
   background: #efefed;
   color: #6b7068;
 }
- 
+
 .badge-pct {
   font-weight: 500;
   opacity: 0.75;
@@ -1324,6 +1367,33 @@ const formatReferenceEntry = (raw: string): string => {
 }
 
 .j-cite-btn.loading {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.j-download-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  color: var(--ink-2);
+  padding: 0.38rem 1rem;
+  border-radius: 5px;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.14s;
+}
+
+.j-download-btn:hover:not(:disabled) {
+  border-color: var(--green);
+  color: var(--green-dk);
+  background: var(--green-dim);
+}
+
+.j-download-btn:disabled {
   opacity: 0.6;
   cursor: wait;
 }
@@ -2345,7 +2415,8 @@ const formatReferenceEntry = (raw: string): string => {
 }
 
 .journal-section-heading {
-  break-inside: avoid; /* Prevents heading from being orphaned at column bottom */
+  break-inside: avoid;
+  /* Prevents heading from being orphaned at column bottom */
   break-after: avoid;
   margin: 0 0 1rem;
 }
@@ -2532,14 +2603,128 @@ const formatReferenceEntry = (raw: string): string => {
 }
 
 /* ── Responsive ────────────────────────────────────────────── */
+@media (max-width: 1200px) {
+  .journal-toc {
+    display: none;
+  }
+
+  .journal-page-layout {
+    grid-template-columns: 1fr 300px;
+  }
+}
+
 @media (max-width: 1100px) {
   .journal-sidebar {
     display: none;
   }
+
+  .journal-page-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ══ PAGE LAYOUT ════════════════════════════════════════════ */
+.journal-page-layout {
+  max-width: 1540px;
+  margin: 0 auto;
+  display: grid;
+  /* 3-Column: Navigation | Paper | Recommendations */
+  grid-template-columns: 200px 1fr 300px;
+  gap: 3rem;
+  padding: 2.5rem 2rem 5rem;
+  align-items: start;
+}
+
+/* ── Left Sidebar: Study Navigation ── */
+.journal-toc {
+  position: sticky;
+  top: 2rem;
+  align-self: flex-start;
+  padding-top: 1rem;
+}
+
+.toc-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.toc-label {
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--ink-3);
+  margin: 0;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.toc-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.toc-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  text-decoration: none;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--ink-2);
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.toc-bullet {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--ink-4);
+  transition: transform 0.2s, background 0.2s;
+}
+
+.toc-item:hover {
+  background: var(--surface);
+  color: var(--green-dk);
+  transform: translateX(4px);
+}
+
+.toc-item:hover .toc-bullet {
+  background: var(--green);
+  transform: scale(1.5);
+}
+
+.toc-footer {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px dashed var(--rule);
+}
+
+.toc-footer p {
+  font-size: 0.68rem;
+  color: var(--ink-4);
+  margin: 0.2rem 0;
+  font-weight: 600;
+}
+
+/* Anchor Offsets for Topbar */
+#abstract-section,
+#introduction-section,
+#methods-section,
+#rad-section,
+#references-section {
+  scroll-margin-top: 100px;
 }
 
 @media (max-width: 768px) {
   .journal-page-layout {
+    grid-template-columns: 1fr;
     padding: 1.25rem 1rem 3rem;
   }
 
