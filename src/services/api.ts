@@ -203,6 +203,15 @@ export interface ActivityLog {
   performed_by_role?: string
 }
 
+// ── Sample Documents (System Evaluation Feature) ────────────────────────────
+// Returned by GET /papers/sample-documents when ENABLE_SAMPLE_DOCS=true.
+// No file bytes are included — only metadata for display.
+export interface SampleDocument {
+  id: string        // slug used in the fetch URL (e.g. "sample-1")
+  name: string      // Human-readable display label
+  size_bytes: number
+}
+
 export const api = {
   // Auth
   async login(formData: FormData) {
@@ -554,5 +563,36 @@ export const api = {
       headers: getAuthHeaders(),
     })
     if (!response.ok) throw new Error('Failed to purge paper')
+  },
+
+  // ── Sample Documents (System Evaluation Feature) ──────────────────────────
+
+  /**
+   * Returns the list of pre-stored sample documents (metadata only, no bytes).
+   * Returns an empty array when ENABLE_SAMPLE_DOCS=false on the backend.
+   */
+  async getSampleDocuments(): Promise<SampleDocument[]> {
+    const response = await apiFetch(`${BASE_URL}/papers/sample-documents`, {
+      headers: getAuthHeaders(),
+    })
+    if (!response.ok) return [] // Gracefully degrade if feature is disabled
+    return response.json()
+  },
+
+  /**
+   * Fetches a pre-stored sample document from the backend and returns it as
+   * an in-memory File object — identical to a user-dropped PDF.
+   *
+   * Privacy: the bytes never touch the browser's storage, download folder,
+   * or any blob URL accessible to the user.
+   */
+  async fetchSampleDocumentAsFile(docId: string, filename: string): Promise<File> {
+    const response = await apiFetch(
+      `${BASE_URL}/papers/sample-documents/${docId}/fetch`,
+      { headers: getAuthHeaders() },
+    )
+    if (!response.ok) throw new Error('Failed to fetch sample document from server.')
+    const blob = await response.blob()
+    return new File([blob], filename, { type: 'application/pdf' })
   },
 }

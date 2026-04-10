@@ -15,7 +15,7 @@ interface UserDetails {
 }
 
 // ── State ─────────────────────────────────────────────────────────────────────
-type Section = 'dashboard' | 'credentials' | 'cited' | 'who-cited'
+type Section = 'dashboard' | 'credentials' | 'cited'
 const activeSection = ref<Section>('dashboard')
 
 const user = ref<UserDetails | null>(null)
@@ -141,8 +141,7 @@ onMounted(fetchData)
 
           <p class="sb-nav-label" style="margin-top: 1.25rem">Research Activity</p>
           <button v-for="item in [
-            { id: 'cited', icon: BookMarked, label: 'Studies I Cited', count: citations.length },
-            { id: 'who-cited', icon: Users, label: 'Who Cited My Study' },
+            { id: 'cited', icon: BookMarked, label: 'Studies I Cited', count: citations.length }
           ]" :key="item.id" class="sb-item" :class="{ active: activeSection === item.id }"
             @click="setSection(item.id as Section)">
             <component :is="item.icon" :size="15" class="sb-item-icon" />
@@ -178,15 +177,6 @@ onMounted(fetchData)
               <div>
                 <span class="stat-tile-val">{{ citations.length }}</span>
                 <span class="stat-tile-lbl">Studies Cited</span>
-              </div>
-            </div>
-            <div class="stat-tile">
-              <div class="stat-tile-ico blue">
-                <Award :size="16" />
-              </div>
-              <div>
-                <span class="stat-tile-val">—</span>
-                <span class="stat-tile-lbl">Times Cited</span>
               </div>
             </div>
             <div class="stat-tile">
@@ -331,26 +321,6 @@ onMounted(fetchData)
           </div>
         </template>
 
-        <!-- ══ Who Cited My Study ════════════════════════════════ -->
-        <template v-else-if="activeSection === 'who-cited'">
-          <div class="section-head">
-            <h2 class="section-title">Who Cited My Study?</h2>
-            <p class="section-sub">See which users have cited your research.</p>
-          </div>
-
-          <div class="coming-soon-card">
-            <div class="cs-icon">
-              <Clock :size="32" />
-            </div>
-            <h3 class="cs-title">Coming Soon</h3>
-            <p class="cs-body">
-              This feature is not available at the moment. We need to
-              discuss it with the technical for further details and
-              implementation plan before proceeding on implementing newer features.
-            </p>
-            <div class="cs-pill">In Discussion</div>
-          </div>
-        </template>
 
       </main>
     </div>

@@ -3,14 +3,14 @@ import { ref, onMounted, onUnmounted, computed, watch, reactive, nextTick, type 
 import { useRouter } from 'vue-router'
 import {
   Library, Trash2, Edit3,
-  Search, Plus, FolderOpen, Home, Loader2,
+  Search, Plus, FolderOpen, Loader2,
   FileText, Users, Calendar, ChevronRight,
   Settings, ArrowLeft, Save, BookOpen,
-  UserCheck, Menu, X, Clock, TrendingUp,
+  UserCheck, Menu, X, Clock,
   FileUp, Sparkles, Eye, Settings2, CheckCircle, AlertCircle, Check,
-  AlertTriangle, RefreshCw, SquareArrowRight, ShieldAlert, ShieldCheck, UserCog, UserPlus, ArchiveRestore
+  AlertTriangle, RefreshCw, SquareArrowRight, ShieldAlert, ShieldCheck, UserCog, UserPlus, ArchiveRestore, GripVertical
 } from 'lucide-vue-next'
-import { api, BASE_URL, type Paper, type UserResponse, type PartialPaperMetadata, type ActivityLog } from '../services/api'
+import { api, BASE_URL, type Paper, type UserResponse, type PartialPaperMetadata, type ActivityLog, type SampleDocument } from '../services/api'
 import { useAuth } from '../composables/useAuth'
 import BookLoader from '../components/BookLoader.vue'
 
@@ -76,11 +76,10 @@ const formattedTime = computed(() => {
 })
 
 // ── Sidebar ─────────────────────────────────────────────────────
-type Section = 'dashboard' | 'repository' | 'users' | 'upload' | 'logs' | 'trash'
-const activeSection = ref<Section>('dashboard')
+type Section = 'repository' | 'users' | 'upload' | 'logs' | 'trash'
+const activeSection = ref<Section>('repository')
 
 const baseNavItems: { id: Section; label: string; icon: Component; description: string }[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: Home, description: 'Overview of repository' },
   { id: 'upload', label: 'Upload Research', icon: FileUp, description: 'Index new PDF documents' },
   { id: 'repository', label: 'Thesis & Research', icon: Library, description: 'Browse & manage indexed works' },
 ]
@@ -100,7 +99,7 @@ const navItems = computed(() =>
 )
 
 const activeLabel = computed(() => {
-  return navItems.value.find(i => i.id === activeSection.value)?.label ?? 'Dashboard'
+  return navItems.value.find(i => i.id === activeSection.value)?.label ?? 'Repository'
 })
 
 const setSection = (s: Section) => {
@@ -411,6 +410,36 @@ const extractionProgress = ref(0)
 const extractionMessage = ref('')
 let currentEventSource: EventSource | null = null
 
+// ── Sample Documents (System Evaluation Feature) ──────────────────
+// Loaded once per upload-section visit. Hidden automatically when
+// the backend returns an empty list (ENABLE_SAMPLE_DOCS=false).
+const sampleDocs = ref<SampleDocument[]>([])
+const fetchingSampleDocId = ref<string | null>(null)
+
+const loadSampleDocs = async () => {
+  try {
+    sampleDocs.value = await api.getSampleDocuments()
+  } catch {
+    sampleDocs.value = [] // Silently degrade — feature may be disabled
+  }
+}
+
+/**
+ * Drag-start handler for sample document rows.
+ * Synchronously stamps the doc's ID as a custom MIME type into the
+ * DataTransfer bag. The actual file fetch happens in handleDrop when
+ * the user drops onto the upload zone.
+ */
+const handleSampleDocDragStart = (e: DragEvent, doc: SampleDocument) => {
+  if (processingDoc.value || fetchingSampleDocId.value) {
+    e.preventDefault()
+    return
+  }
+  e.dataTransfer!.effectAllowed = 'copy'
+  // stamp the doc id — picked up by handleDrop on the drop zone
+  e.dataTransfer!.setData('application/x-lumia-sample-doc', doc.id)
+}
+
 function stopProgressListening() {
   if (currentEventSource) {
     currentEventSource.close()
@@ -719,10 +748,31 @@ const handleFileChange = (e: Event) => {
 
 const isDragging = ref(false)
 
-const handleDrop = (e: DragEvent) => {
+const handleDrop = async (e: DragEvent) => {
   e.preventDefault()
   isDragging.value = false
   if (processingDoc.value || activeSection.value !== 'upload' || step.value !== 1) return
+
+  // ── Sample document drag (custom MIME type set by handleSampleDocDragStart) ──
+  const sampleDocId = e.dataTransfer?.getData('application/x-lumia-sample-doc')
+  if (sampleDocId) {
+    const doc = sampleDocs.value.find(d => d.id === sampleDocId)
+    if (!doc || fetchingSampleDocId.value) return
+    fetchingSampleDocId.value = doc.id
+    uploadError.value = ''
+    try {
+      const safeFilename = `${doc.name.replace(/[^a-zA-Z0-9 ]/g, '').trim().replace(/\s+/g, '_')}.pdf`
+      file.value = await api.fetchSampleDocumentAsFile(doc.id, safeFilename)
+      showStrategyModal.value = true
+    } catch (err) {
+      uploadError.value = (err as Error).message || 'Failed to load sample document.'
+    } finally {
+      fetchingSampleDocId.value = null
+    }
+    return
+  }
+
+  // ── Normal OS file drop ──
   const dropped = e.dataTransfer?.files?.[0]
   if (dropped && dropped.type === 'application/pdf') {
     file.value = dropped
@@ -866,15 +916,11 @@ const handleFinalConfirm = async () => {
 
 const goBackToStep1 = () => { step.value = 1; file.value = null; showStrategyModal.value = false }
 
-const recentPapers = computed(() => [...papers.value].sort((a, b) => {
-  // Assuming string IDs can be lexicographically sorted if they represent time
-  // or falling back to database order.
-  return String(b.id).localeCompare(String(a.id))
-}).slice(0, 6))
 
 watch(activeSection, (newSection) => {
   if (newSection === 'repository') fetchPapers()
   if (newSection === 'users' && users.value.length === 0) fetchUsers()
+  if (newSection === 'upload' && sampleDocs.value.length === 0) loadSampleDocs()
 }, { immediate: true })
 </script>
 
@@ -988,106 +1034,25 @@ watch(activeSection, (newSection) => {
       <!-- ── Content ─────────────────────────────────────────── -->
       <div class="content">
 
-        <!-- ══ DASHBOARD ════════════════════════════════════════ -->
-        <template v-if="activeSection === 'dashboard'">
-          <div class="page-head">
-            <h1 class="page-title">Management Dashboard</h1>
-            <p class="page-sub">Overview of the Lumia repository.</p>
-          </div>
-
-          <div class="dash-grid">
-            <div class="panel">
-              <div class="panel-head">
-                <div class="panel-label">
-                  <Clock :size="13" /> Recent Uploads
-                </div>
-                <button class="panel-link" @click="setSection('repository')">View all →</button>
-              </div>
-              <div class="panel-body">
-                <div v-if="loading" class="panel-loading">
-                  <Loader2 :size="15" class="spin" /> Loading…
-                </div>
-                <template v-else-if="recentPapers.length > 0">
-                  <div v-for="paper in recentPapers" :key="paper.id" class="dash-row">
-                    <div class="dash-av" :data-t="paper.project_type === 'Thesis' ? 'blue' : 'orange'">
-                      {{paper.title.trim().split(' ').slice(0, 2).map(w => w[0]?.toUpperCase() ?? '').join('')}}
-                    </div>
-                    <div class="dash-info">
-                      <span class="dash-title">{{ paper.title }}</span>
-                      <span class="dash-meta">{{ paper.author }} · {{ paper.year }}</span>
-                    </div>
-                    <span class="type-chip" :class="paper.project_type === 'Thesis' ? 'blue' : 'orange'">
-                      {{ paper.project_type === 'Thesis' ? 'TH' : 'CP' }}
-                    </span>
-                  </div>
-                </template>
-                <div v-else class="panel-empty">
-                  <FolderOpen :size="30" />
-                  <p>No papers uploaded yet.</p>
-                </div>
-              </div>
-            </div>
-
-            <div class="panel">
-              <div class="panel-head">
-                <div class="panel-label">
-                  <TrendingUp :size="13" /> Repository Overview
-                </div>
-              </div>
-              <div class="panel-body">
-                <div class="stat-grid">
-                  <div class="stat-tile">
-                    <div class="stat-ico green">
-                      <Library :size="15" />
-                    </div>
-                    <div class="stat-data"><span class="stat-val">{{ totalPapers }}</span><span class="stat-lbl">Total
-                        Works</span>
-                    </div>
-                  </div>
-                  <div class="stat-tile">
-                    <div class="stat-ico blue">
-                      <FileText :size="15" />
-                    </div>
-                    <div class="stat-data">
-                      <div class="stat-split">
-                        <div><span class="stat-val">{{ thesisCount }}</span><span class="stat-lbl">Thesis</span></div>
-                        <div class="stat-divider" />
-                        <div><span class="stat-val">{{ capstoneCount }}</span><span class="stat-lbl">Capstone</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div class="stat-tile">
-                    <div class="stat-ico purple">
-                      <UserCheck :size="15" />
-                    </div>
-                    <div class="stat-data">
-                      <div class="stat-split">
-                        <div><span class="stat-val">{{ adminCount + facultyCount }}</span><span
-                            class="stat-lbl">Staff</span></div>
-                        <div class="stat-divider" />
-                        <div><span class="stat-val">{{ studentCount }}</span><span class="stat-lbl">Students</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div class="stat-tile">
-                    <div class="stat-ico amber">
-                      <Calendar :size="15" />
-                    </div>
-                    <div class="stat-data"><span class="stat-val">{{ yearSpan }}</span><span class="stat-lbl">Year
-                        Span</span></div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </template>
 
         <!-- ══ UPLOAD ════════════════════════════════════════════ -->
-        <template v-else-if="activeSection === 'upload'">
+        <template v-if="activeSection === 'upload'">
           <div class="upload-wrap">
             <div v-if="step !== 2" class="upload-center">
+              <div v-if="sampleDocs.length > 0 && step === 1" class="notice-banner blue sample-ethics-notice-top">
+                <div class="notice-icon">
+                  <ShieldCheck :size="18" color="#3b82f6" />
+                </div>
+                <div class="notice-body">
+                  <p class="notice-title" style="color:#1e40af">Ethical & Privacy Notice</p>
+                  <p class="notice-desc" style="color:#3b82f6">
+                    To maintain document integrity and ensure privacy, sample research papers are pre-stored on the
+                    secure server. This eliminates the need for manual file dissemination to evaluators and prevents
+                    local
+                    downloads, keeping sensitive academic data protected.
+                  </p>
+                </div>
+              </div>
 
               <!-- Clean Processing View (Visible only during parsing) -->
               <div v-if="processingDoc" class="processing-container">
@@ -1096,6 +1061,7 @@ watch(activeSection, (newSection) => {
 
               <!-- Initial Upload State -->
               <div v-else-if="step === 1" class="upload-card">
+
                 <div class="upload-card-head">
                   <div class="upload-card-icon">
                     <FileUp :size="22" color="#00a651" />
@@ -1117,6 +1083,49 @@ watch(activeSection, (newSection) => {
                     <span>PDF files only</span>
                   </div>
                 </div>
+
+                <!-- ── Sample Documents Panel ─────────────────────────── -->
+                <!-- Visible only when backend returns docs (ENABLE_SAMPLE_DOCS=true) -->
+                <div v-if="sampleDocs.length > 0" class="sample-docs-panel">
+                  <div class="sample-docs-header">
+                    <div class="sample-docs-header-left">
+                      <div class="sample-docs-icon-wrap">
+                        <FileText :size="13" color="#00a651" />
+                      </div>
+                      <div>
+                        <p class="sample-docs-title">Sample Documents</p>
+                        <p class="sample-docs-subtitle">Drag any document below into the upload area above to process
+                          it.</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <ul class="sample-docs-list">
+                    <li v-for="doc in sampleDocs" :key="doc.id" class="sample-doc-row"
+                      :class="{ 'is-loading': fetchingSampleDocId === doc.id }" draggable="true"
+                      :aria-label="`Drag ${doc.name} to the upload area`"
+                      @dragstart="handleSampleDocDragStart($event, doc)">
+                      <div class="sample-doc-icon">
+                        <Loader2 v-if="fetchingSampleDocId === doc.id" :size="14" class="spin" />
+                        <FileText v-else :size="14" color="#00a651" />
+                      </div>
+                      <span class="sample-doc-name">{{ doc.name }}</span>
+                      <span class="sample-doc-size">
+                        {{ doc.size_bytes >= 1_048_576
+                          ? (doc.size_bytes / 1_048_576).toFixed(1) + ' MB'
+                          : Math.round(doc.size_bytes / 1024) + ' KB' }}
+                      </span>
+                      <GripVertical :size="13" class="sample-doc-grip" />
+                    </li>
+                  </ul>
+
+                  <div class="sample-docs-notice">
+                    <ShieldCheck :size="12" color="#6b7280" />
+                    <span>Private · Read-only · For testing only · Not downloadable</span>
+                  </div>
+                </div>
+                <!-- ──────────────────────────────────────────────────── -->
+
               </div>
 
               <!-- Success State -->
@@ -1185,7 +1194,7 @@ watch(activeSection, (newSection) => {
                   </p>
                   <div class="missing-list">
                     <span v-for="s in missingSections" :key="s" class="missing-badge"><span class="missing-dot" />{{ s
-                      }}</span>
+                    }}</span>
                   </div>
                 </div>
                 <div class="notice-actions">
@@ -1414,7 +1423,7 @@ watch(activeSection, (newSection) => {
               <div class="stat-ico blue">
                 <FileText :size="15" />
               </div>
-              <div><span class="stat-val">{{ thesisCount }}</span><span class="stat-lbl">Theses</span></div>
+              <div><span class="stat-val">{{ thesisCount }}</span><span class="stat-lbl">Thesis</span></div>
             </div>
             <div class="stat-card">
               <div class="stat-ico orange">
@@ -3213,7 +3222,8 @@ watch(activeSection, (newSection) => {
 
 .upload-center {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
   padding: 3rem 1rem;
 }
 
@@ -3338,6 +3348,151 @@ watch(activeSection, (newSection) => {
   color: var(--ink);
   font-weight: 700;
 }
+
+/* ── Sample Documents Panel (Evaluation Feature) ────────────────── */
+.sample-ethics-notice-top {
+  margin-bottom: 1.5rem;
+  width: 100%;
+  max-width: 520px;
+  /* Match standard card width */
+}
+
+.sample-docs-panel {
+  margin-top: 1rem;
+  border: 1.5px solid var(--rule);
+  border-radius: 10px;
+  background: var(--paper);
+  overflow: hidden;
+}
+
+.sample-docs-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid var(--rule);
+  background: var(--surface);
+}
+
+.sample-docs-header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.sample-docs-icon-wrap {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: var(--green-dim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.sample-docs-title {
+  margin: 0 0 0.1rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.sample-docs-subtitle {
+  margin: 0;
+  font-size: 0.72rem;
+  color: var(--ink-3);
+  line-height: 1.3;
+}
+
+.sample-docs-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.sample-doc-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.7rem 1rem;
+  cursor: grab;
+  border-bottom: 1px solid var(--rule);
+  transition: background 0.12s, border-left-color 0.12s;
+  border-left: 3px solid transparent;
+  user-select: none;
+}
+
+.sample-doc-row:last-child {
+  border-bottom: none;
+}
+
+.sample-doc-row:hover:not(.is-loading) {
+  background: var(--green-dim);
+  border-left-color: var(--green);
+}
+
+.sample-doc-row:active:not(.is-loading) {
+  cursor: grabbing;
+}
+
+.sample-doc-row.is-loading {
+  opacity: 0.65;
+  cursor: wait;
+}
+
+.sample-doc-icon {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.sample-doc-name {
+  flex: 1;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sample-doc-size {
+  font-size: 0.72rem;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.sample-doc-grip {
+  color: var(--ink-3);
+  opacity: 0.35;
+  flex-shrink: 0;
+  transition: opacity 0.12s;
+}
+
+.sample-doc-row:hover .sample-doc-grip {
+  opacity: 0.7;
+}
+
+.sample-docs-notice {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 1rem;
+  border-top: 1px solid var(--rule);
+  background: var(--surface);
+  font-size: 0.68rem;
+  color: var(--ink-3);
+  font-style: italic;
+}
+
+/* ─────────────────────────────────────────────────────────────── */
 
 .upload-success {
   display: flex;
