@@ -43,7 +43,7 @@
 - [x] **Body Text Bug with the Table**
       Fix the current bug during extraction, cleaning, and displaying of the body text in UI wherein the table's content such as `FUNCTIONALITY`, `MEAN`, `STANDARD DEVIATION`, `INTERPRETATION` are being displayed as a body text instead it should be filtered during uploading and extraction so it when the backend send it to UI, the UI won't need to display it either. (Give at least 1-2 screenshot of the sample table to see what is the content of the table being extracted also and flagged as body text).
 
-## Next Sprint
+## Next Agenda
 
 - [ ] **Downloadable PDF Bug** - The downloadable pdf imrad format of the study producing a bug where the text is being gray out (used gray font color) and some part is still bright black color. (Give at least 1-3 sample image of the bug). Also the page number in the downloadable pdf is like doubled or duplicated or something? (Give at least 1-3 image of the problem with the page number).
 

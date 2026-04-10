@@ -359,14 +359,12 @@ const createdPassword = ref('')
 const newUser = reactive({
   username: '',
   full_name: '',
-  email: '',
   role: 'Faculty'
 })
 
 const openCreateUserModal = () => {
   newUser.username = ''
   newUser.full_name = ''
-  newUser.email = ''
   newUser.role = 'Faculty'
   createdPassword.value = ''
   createError.value = ''
@@ -377,14 +375,13 @@ const closeCreateUserModal = () => {
   showCreateUserModal.value = false
   newUser.username = ''
   newUser.full_name = ''
-  newUser.email = ''
   newUser.role = 'Faculty'
   createdPassword.value = ''
   createError.value = ''
 }
 
 const handleCreateStaff = async () => {
-  if (!newUser.username || !newUser.full_name || !newUser.email) {
+  if (!newUser.username || !newUser.full_name) {
     createError.value = 'Please fill in all fields.'
     return
   }
@@ -1589,7 +1586,6 @@ watch(activeSection, (newSection) => {
                 <thead>
                   <tr>
                     <th>User</th>
-                    <th>Email</th>
                     <th>Role</th>
                     <th class="th-r">Change Role</th>
                   </tr>
@@ -1610,7 +1606,6 @@ watch(activeSection, (newSection) => {
                           <div class="paper-info"><span class="paper-name">{{ user.username }}</span></div>
                         </div>
                       </td>
-                      <td class="td-muted">{{ user.email }}</td>
                       <td>
                         <span class="type-badge"
                           :class="user.role === 'Admin' ? 'purple' : user.role === 'Faculty' ? 'green' : 'blue'">{{
@@ -2032,11 +2027,6 @@ watch(activeSection, (newSection) => {
                       <label class="form-lbl">Full Name</label>
                       <input v-model="newUser.full_name" type="text" class="form-input" placeholder="e.g. Yna Maruf" />
                     </div>
-                  </div>
-                  <div class="form-group">
-                    <label class="form-lbl">Email Address</label>
-                    <input v-model="newUser.email" type="email" class="form-input"
-                      placeholder="e.g. yna.maruf@email.com" />
                   </div>
                   <div class="form-group">
                     <label class="form-lbl">Create user with role</label>

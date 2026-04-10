@@ -11,7 +11,6 @@ import { api, type Paper } from '../services/api'
 interface UserDetails {
   id: number
   username: string
-  email: string
   role: string
 }
 
@@ -119,7 +118,6 @@ onMounted(fetchData)
           <div class="sb-avatar">{{ avatarInitials }}</div>
           <div class="sb-id-info">
             <span class="sb-username">{{ user.username }}</span>
-            <span class="sb-email">{{ user.email }}</span>
             <span class="sb-role-badge"
               :style="{ background: roleColor.bg, color: roleColor.color, borderColor: roleColor.border }">
               <ShieldCheck :size="10" />
@@ -213,10 +211,6 @@ onMounted(fetchData)
               <div class="info-row">
                 <span class="info-label">Username</span>
                 <span class="info-value">{{ user.username }}</span>
-              </div>
-              <div class="info-row">
-                <span class="info-label">Email Address</span>
-                <span class="info-value">{{ user.email }}</span>
               </div>
               <div class="info-row">
                 <span class="info-label">Role</span>

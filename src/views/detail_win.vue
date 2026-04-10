@@ -35,12 +35,8 @@ const formattedCitations = ref<{
   apa_6: string
   apa_7: string
   apa_intext: string
-  ieee: string
-  mla: string
-  bibtex: string
 } | null>(null)
 
-const activeCiteTab = ref<'apa' | 'ieee' | 'mla' | 'bibtex'>('apa')
 const apaVariation = ref<'6' | '7' | 'intext'>('6')
 const copyStatus = ref<Record<string, boolean>>({})
 
@@ -82,7 +78,9 @@ const retryCitations = () => {
 
 const copyToClipboard = async (text: string, key: string) => {
   try {
-    await navigator.clipboard.writeText(text)
+    // Strip HTML tags so the plain-text citation (no <em>) lands on the clipboard
+    const plain = text.replace(/<[^>]+>/g, '')
+    await navigator.clipboard.writeText(plain)
     copyStatus.value[key] = true
     setTimeout(() => { copyStatus.value[key] = false }, 2000)
 
@@ -623,16 +621,15 @@ const formatReferenceEntry = (raw: string): string => {
           <!-- Body -->
           <div v-else-if="formattedCitations" class="modal-body">
 
-            <!-- Format + Edition selectors -->
+            <!-- Edition selector -->
             <div class="modal-selectors">
               <div class="selector-field">
-                <label class="selector-label">Citation Format</label>
+                <label class="selector-label">APA Edition</label>
                 <div class="select-wrap">
-                  <select class="m-select" v-model="activeCiteTab">
-                    <option value="apa">APA</option>
-                    <option value="ieee">IEEE</option>
-                    <option value="mla">MLA</option>
-                    <option value="bibtex">BibTeX</option>
+                  <select class="m-select" v-model="apaVariation">
+                    <option value="6">6th Edition</option>
+                    <option value="7">7th Edition</option>
+                    <option value="intext">In-Text</option>
                   </select>
                   <span class="select-arrow">
                     <svg width="10" height="6" viewBox="0 0 10 6" fill="none">
@@ -642,36 +639,14 @@ const formatReferenceEntry = (raw: string): string => {
                   </span>
                 </div>
               </div>
-              <Transition name="slide-in">
-                <div v-if="activeCiteTab === 'apa'" class="selector-field">
-                  <label class="selector-label">Edition</label>
-                  <div class="select-wrap">
-                    <select class="m-select" v-model="apaVariation">
-                      <option value="6">6th Edition</option>
-                      <option value="7">7th Edition</option>
-                      <option value="intext">In-Text</option>
-                    </select>
-                    <span class="select-arrow">
-                      <svg width="10" height="6" viewBox="0 0 10 6" fill="none">
-                        <path d="M1 1L5 5L9 1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
-                          stroke-linejoin="round" />
-                      </svg>
-                    </span>
-                  </div>
-                </div>
-              </Transition>
             </div>
 
             <!-- Citation text area -->
             <div class="citation-area">
               <div class="citation-area-inner">
-                <p v-if="activeCiteTab === 'apa'" class="citation-text">
-                  {{ apaVariation === '6' ? formattedCitations.apa_6 : apaVariation === '7' ? formattedCitations.apa_7 :
-                    formattedCitations.apa_intext }}
-                </p>
-                <p v-else-if="activeCiteTab === 'ieee'" class="citation-text">{{ formattedCitations.ieee }}</p>
-                <p v-else-if="activeCiteTab === 'mla'" class="citation-text">{{ formattedCitations.mla }}</p>
-                <pre v-else class="citation-bibtex">{{ formattedCitations.bibtex }}</pre>
+                <p class="citation-text" v-html="
+                  apaVariation === '6' ? formattedCitations.apa_6 : apaVariation === '7' ? formattedCitations.apa_7 : formattedCitations.apa_intext
+                "></p>
               </div>
               <p class="selector-note">Note: If you are citating this study, please make sure that you are manually
                 adding
@@ -682,17 +657,13 @@ const formatReferenceEntry = (raw: string): string => {
 
             <!-- Footer -->
             <div class="modal-footer">
-              <button class="m-copy-btn" :class="{ copied: copyStatus[activeCiteTab + apaVariation] }" @click="copyToClipboard(
-                activeCiteTab === 'apa'
-                  ? (apaVariation === '6' ? formattedCitations.apa_6 : apaVariation === '7' ? formattedCitations.apa_7 : formattedCitations.apa_intext)
-                  : activeCiteTab === 'ieee' ? formattedCitations.ieee
-                    : activeCiteTab === 'mla' ? formattedCitations.mla
-                      : formattedCitations.bibtex,
-                activeCiteTab + apaVariation
+              <button class="m-copy-btn" :class="{ copied: copyStatus[apaVariation] }" @click="copyToClipboard(
+                apaVariation === '6' ? formattedCitations.apa_6 : apaVariation === '7' ? formattedCitations.apa_7 : formattedCitations.apa_intext,
+                apaVariation
               )">
-                <Check v-if="copyStatus[activeCiteTab + apaVariation]" :size="13" />
+                <Check v-if="copyStatus[apaVariation]" :size="13" />
                 <Copy v-else :size="13" />
-                {{ copyStatus[activeCiteTab + apaVariation] ? 'Copied!' : 'Copy Citation' }}
+                {{ copyStatus[apaVariation] ? 'Copied!' : 'Copy Citation' }}
               </button>
             </div>
 
@@ -1173,6 +1144,9 @@ const formatReferenceEntry = (raw: string): string => {
   line-height: 1.85;
   margin: 0;
   color: var(--ink);
+  /* APA hanging indent: first line flush, subsequent lines indented */
+  padding-left: 1.5em;
+  text-indent: -1.5em;
 }
 
 .citation-bibtex {

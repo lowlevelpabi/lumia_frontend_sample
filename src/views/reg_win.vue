@@ -8,7 +8,6 @@ import FormError from '../components/formError.vue'
 
 const router = useRouter()
 const username = ref('')
-const email = ref('')
 const password = ref('')
 const confirmPassword = ref('')
 const loading = ref(false)
@@ -21,14 +20,11 @@ const handleRegister = async () => {
   const ok = validate([
     rules.allRequired([
     { value: username.value, label: 'Username' },
-    { value: email.value, label: 'Email' },
     { value: password.value, label: 'Password' },
     { value: confirmPassword.value, label: 'Confirm Password' },
   ]),
   rules.required(username.value, 'Username'),
   rules.minLength(username.value, 3, 'Username'),
-  rules.required(email.value, 'Email Address'),
-  rules.email(email.value),
   rules.required(password.value, 'Password'),
   rules.minLength(password.value, 8, 'Password'),
   rules.required(confirmPassword.value, 'Please confirm your password'),
@@ -40,7 +36,6 @@ const handleRegister = async () => {
   try {
     await api.register({
       username: username.value,
-      email: email.value,
       password: password.value,
       role: 'User'
     })
@@ -76,11 +71,6 @@ const handleRegister = async () => {
         <div class="field">
           <label for="username">Username</label>
           <input v-model="username" id="username" type="text" autocomplete="username" placeholder="johndoe" />
-        </div>
-
-        <div class="field">
-          <label for="email">Email Address</label>
-          <input v-model="email" id="email" type="email" autocomplete="email" placeholder="john@example.com" />
         </div>
 
         <div class="field">

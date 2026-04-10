@@ -129,7 +129,6 @@ export interface PaperUpdate {
 export interface UserData {
   username: string
   full_name?: string
-  email: string
   password?: string
   role: string
 }
@@ -395,9 +394,6 @@ export const api = {
     apa_6: string
     apa_7: string
     apa_intext: string
-    ieee: string
-    mla: string
-    bibtex: string
   }> {
     const response = await fetch(`${BASE_URL}/papers/${id}/formatted-citations`)
     if (!response.ok) throw new Error('Failed to fetch citations')
@@ -425,7 +421,6 @@ export const api = {
   async createStaffUser(userData: {
     username: string
     full_name: string
-    email: string
     role: string
   }): Promise<{ user: UserResponse; password: string }> {
     const response = await apiFetch(`${BASE_URL}/users/staff`, {
