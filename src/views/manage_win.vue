@@ -433,7 +433,7 @@ const attachSampleDoc = async (doc: SampleDocument) => {
   if (processingDoc.value || fetchingSampleDocId.value || activeSection.value !== 'upload' || step.value !== 1) {
     return
   }
-  
+
   fetchingSampleDocId.value = doc.id
   uploadError.value = ''
   try {
@@ -1049,21 +1049,24 @@ watch(activeSection, (newSection) => {
         <!-- ══ UPLOAD ════════════════════════════════════════════ -->
         <template v-if="activeSection === 'upload'">
           <div class="upload-wrap">
-            <div v-if="step !== 2" class="upload-center">
-              <div v-if="sampleDocs.length > 0 && step === 1" class="notice-banner blue sample-ethics-notice-top">
-                <div class="notice-icon">
-                  <ShieldCheck :size="18" color="#3b82f6" />
-                </div>
-                <div class="notice-body">
-                  <p class="notice-title" style="color:#1e40af">Ethical & Privacy Notice</p>
-                  <p class="notice-desc" style="color:#3b82f6">
-                    To maintain document integrity and ensure privacy, sample research papers are pre-stored on the
-                    secure server. This eliminates the need for manual file dissemination to evaluators and prevents
-                    local
-                    downloads, keeping sensitive academic data protected.
-                  </p>
-                </div>
+            <div v-if="sampleDocs.length > 0 && step === 1"
+              class="notice-banner green flat-notice sample-ethics-notice-top">
+              <div class="notice-icon">
+                <ShieldCheck :size="20" color="#00a651" />
               </div>
+              <div class="notice-body">
+                <p class="notice-title">BASAHIN</p>
+                <p class="notice-desc">
+                  To maintain document integrity and ensure the researchers privacy such as (Biographical Data,
+                  Signatories, Biolerplate Texts, Contribution No., etc.), borrowed thesis/capstone papers are
+                  pre-stored in the server. This eliminates the need for manual file dissemination to
+                  evaluators and prevents
+                  local downloads, keeping sensitive academic data protected.
+                </p>
+              </div>
+            </div>
+
+            <div v-if="step !== 2" class="upload-center">
 
               <!-- Clean Processing View (Visible only during parsing) -->
               <div v-if="processingDoc" class="processing-container">
@@ -1135,11 +1138,6 @@ watch(activeSection, (newSection) => {
                       </div>
                     </li>
                   </ul>
-
-                  <div class="sample-docs-notice">
-                    <ShieldCheck :size="12" color="#6b7280" />
-                    <span>Private · Read-only · For testing only · Not downloadable</span>
-                  </div>
                 </div>
                 <!-- ──────────────────────────────────────────────────── -->
 
@@ -1211,7 +1209,7 @@ watch(activeSection, (newSection) => {
                   </p>
                   <div class="missing-list">
                     <span v-for="s in missingSections" :key="s" class="missing-badge"><span class="missing-dot" />{{ s
-                    }}</span>
+                      }}</span>
                   </div>
                 </div>
                 <div class="notice-actions">
@@ -3368,10 +3366,8 @@ watch(activeSection, (newSection) => {
 
 /* ── Sample Documents Panel (Evaluation Feature) ────────────────── */
 .sample-ethics-notice-top {
-  margin-bottom: 1.5rem;
+  margin-bottom: 2rem;
   width: 100%;
-  max-width: 520px;
-  /* Match standard card width */
 }
 
 .sample-docs-panel {
@@ -3697,6 +3693,41 @@ watch(activeSection, (newSection) => {
 .notice-banner.blue {
   background: #eff6ff;
   border-color: #bfdbfe;
+}
+
+.notice-banner.green {
+  background: var(--green-dim);
+  border-color: #d1fae5;
+}
+
+.notice-banner.flat-notice {
+  align-items: center;
+  padding: 1rem 1.25rem;
+  border-radius: 8px;
+  background: var(--green-dim);
+  gap: 1rem;
+  box-shadow: none;
+  border: 1px solid #d1fae5;
+}
+
+.notice-banner.flat-notice .notice-icon {
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.notice-banner.flat-notice .notice-title {
+  margin-bottom: 0px;
+  font-size: 0.9rem;
+  color: var(--green-dk);
+}
+
+.notice-banner.flat-notice .notice-desc {
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: var(--green-dk) !important;
+  opacity: 0.8;
 }
 
 .notice-icon {
