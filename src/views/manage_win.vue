@@ -1209,7 +1209,7 @@ watch(activeSection, (newSection) => {
                   </p>
                   <div class="missing-list">
                     <span v-for="s in missingSections" :key="s" class="missing-badge"><span class="missing-dot" />{{ s
-                      }}</span>
+                    }}</span>
                   </div>
                 </div>
                 <div class="notice-actions">
@@ -3749,6 +3749,7 @@ watch(activeSection, (newSection) => {
 .notice-desc {
   font-size: 0.80rem;
   margin: 0;
+  text-align: justify;
 }
 
 .notice-actions {
