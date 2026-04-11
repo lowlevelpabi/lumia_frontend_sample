@@ -2,9 +2,9 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRouter, RouterLink } from 'vue-router'
 import {
-  Loader2, ArrowUpRight, BookOpen, Award,
+  Loader2, ArrowUpRight, BookOpen,
   User, KeyRound, LogOut, ChevronRight,
-  ShieldCheck, Clock, BookMarked, Users
+  ShieldCheck, BookMarked
 } from 'lucide-vue-next'
 import { api, type Paper } from '../services/api'
 
@@ -302,7 +302,7 @@ onMounted(fetchData)
                 </span>
                 <div class="cite-card-tags">
                   <span v-if="paper.department && paper.department !== 'N/A'" class="cite-tag">{{ paper.department
-                  }}</span>
+                    }}</span>
                   <span v-if="paper.project_type" class="cite-tag cite-tag-type">{{ paper.project_type }}</span>
                 </div>
               </div>

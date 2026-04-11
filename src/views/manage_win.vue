@@ -425,10 +425,32 @@ const loadSampleDocs = async () => {
 }
 
 /**
+ * Attach a sample document to the upload flow.
+ * Fetches the file blob from the backend and opens the strategy modal.
+ * This is used by both drag-and-drop and direct click/tap.
+ */
+const attachSampleDoc = async (doc: SampleDocument) => {
+  if (processingDoc.value || fetchingSampleDocId.value || activeSection.value !== 'upload' || step.value !== 1) {
+    return
+  }
+  
+  fetchingSampleDocId.value = doc.id
+  uploadError.value = ''
+  try {
+    const safeFilename = `${doc.name.replace(/[^a-zA-Z0-9 ]/g, '').trim().replace(/\s+/g, '_')}.pdf`
+    file.value = await api.fetchSampleDocumentAsFile(doc.id, safeFilename)
+    showStrategyModal.value = true
+  } catch (err) {
+    uploadError.value = (err as Error).message || 'Failed to load sample document.'
+  } finally {
+    fetchingSampleDocId.value = null
+  }
+}
+
+/**
  * Drag-start handler for sample document rows.
  * Synchronously stamps the doc's ID as a custom MIME type into the
- * DataTransfer bag. The actual file fetch happens in handleDrop when
- * the user drops onto the upload zone.
+ * DataTransfer bag.
  */
 const handleSampleDocDragStart = (e: DragEvent, doc: SampleDocument) => {
   if (processingDoc.value || fetchingSampleDocId.value) {
@@ -757,18 +779,7 @@ const handleDrop = async (e: DragEvent) => {
   const sampleDocId = e.dataTransfer?.getData('application/x-lumia-sample-doc')
   if (sampleDocId) {
     const doc = sampleDocs.value.find(d => d.id === sampleDocId)
-    if (!doc || fetchingSampleDocId.value) return
-    fetchingSampleDocId.value = doc.id
-    uploadError.value = ''
-    try {
-      const safeFilename = `${doc.name.replace(/[^a-zA-Z0-9 ]/g, '').trim().replace(/\s+/g, '_')}.pdf`
-      file.value = await api.fetchSampleDocumentAsFile(doc.id, safeFilename)
-      showStrategyModal.value = true
-    } catch (err) {
-      uploadError.value = (err as Error).message || 'Failed to load sample document.'
-    } finally {
-      fetchingSampleDocId.value = null
-    }
+    if (doc) attachSampleDoc(doc)
     return
   }
 
@@ -1094,8 +1105,8 @@ watch(activeSection, (newSection) => {
                       </div>
                       <div>
                         <p class="sample-docs-title">Sample Documents</p>
-                        <p class="sample-docs-subtitle">Drag any document below into the upload area above to process
-                          it.</p>
+                        <p class="sample-docs-subtitle">Click/Tap or drag any document below into the upload area above
+                          to process it.</p>
                       </div>
                     </div>
                   </div>
@@ -1103,8 +1114,8 @@ watch(activeSection, (newSection) => {
                   <ul class="sample-docs-list">
                     <li v-for="doc in sampleDocs" :key="doc.id" class="sample-doc-row"
                       :class="{ 'is-loading': fetchingSampleDocId === doc.id }" draggable="true"
-                      :aria-label="`Drag ${doc.name} to the upload area`"
-                      @dragstart="handleSampleDocDragStart($event, doc)">
+                      :aria-label="`Drag or click ${doc.name} to upload`"
+                      @dragstart="handleSampleDocDragStart($event, doc)" @click="attachSampleDoc(doc)">
                       <div class="sample-doc-icon">
                         <Loader2 v-if="fetchingSampleDocId === doc.id" :size="14" class="spin" />
                         <FileText v-else :size="14" color="#00a651" />
@@ -1115,7 +1126,13 @@ watch(activeSection, (newSection) => {
                           ? (doc.size_bytes / 1_048_576).toFixed(1) + ' MB'
                           : Math.round(doc.size_bytes / 1024) + ' KB' }}
                       </span>
-                      <GripVertical :size="13" class="sample-doc-grip" />
+                      <div class="sample-doc-actions">
+                        <div class="attach-btn-mobile">
+                          <Plus :size="14" />
+                          <span>Attach</span>
+                        </div>
+                        <GripVertical :size="13" class="sample-doc-grip" />
+                      </div>
                     </li>
                   </ul>
 
@@ -3478,6 +3495,40 @@ watch(activeSection, (newSection) => {
 
 .sample-doc-row:hover .sample-doc-grip {
   opacity: 0.7;
+}
+
+.sample-doc-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.attach-btn-mobile {
+  display: none;
+  align-items: center;
+  gap: 0.35rem;
+  background: var(--green);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+@media (max-width: 768px) {
+  .sample-doc-row {
+    cursor: pointer;
+  }
+
+  .sample-doc-grip {
+    display: none;
+  }
+
+  .attach-btn-mobile {
+    display: flex;
+  }
 }
 
 .sample-docs-notice {
