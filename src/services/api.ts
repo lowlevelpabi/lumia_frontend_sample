@@ -134,7 +134,7 @@ export interface UserData {
 }
 
 export interface UserResponse extends UserData {
-  id: number
+  id: string
 }
 
 export interface HealthStatus {
@@ -169,7 +169,7 @@ export interface SearchParams {
 export interface BorrowRecord {
   id: number
   paper_id: string
-  user_id: number
+  user_id: string
   borrow_date: string
   due_date: string
   return_date?: string
@@ -178,7 +178,7 @@ export interface BorrowRecord {
 
 export interface Penalty {
   id: number
-  user_id: number
+  user_id: string
   borrow_record_id: number
   amount: number
   reason: string
@@ -417,7 +417,7 @@ export const api = {
     return response.json()
   },
 
-  async changeUserRole(userId: number, role: string): Promise<UserResponse> {
+  async changeUserRole(userId: string, role: string): Promise<UserResponse> {
     const response = await apiFetch(`${BASE_URL}/users/${userId}/role`, {
       method: 'PATCH',
       headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
@@ -489,7 +489,7 @@ export const api = {
     return response.json()
   },
 
-  async createBorrowRecord(data: { paper_id: string; user_id: number; due_date: string }) {
+  async createBorrowRecord(data: { paper_id: string; user_id: string; due_date: string }) {
     const response = await apiFetch(`${BASE_URL}/borrowing/`, {
       method: 'POST',
       headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },

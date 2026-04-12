@@ -1,5 +1,40 @@
 import { jsPDF } from "jspdf";
-import type { Paper } from "./api";
+import type { Paper, ImradBlock } from "./api";
+
+// ── Mirrors parseSummaryBlocks() in detail_win.vue exactly ───────────────────
+function parseSummaryBlocks(text: string): { heading: string; body: string }[] {
+  if (!text) return [];
+  const lines = text.split("\n");
+  const blocks: { heading: string; body: string }[] = [];
+  let current: { heading: string; body: string } | null = null;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const isHeading =
+      trimmed.length <= 80 &&
+      !trimmed.endsWith(".") &&
+      !trimmed.endsWith(",") &&
+      /^[A-Z]/.test(trimmed) &&
+      !/[a-z]{20,}/.test(trimmed);
+    if (isHeading && lines.indexOf(line) < lines.length - 1) {
+      if (current) blocks.push(current);
+      current = { heading: trimmed, body: "" };
+    } else {
+      if (!current) current = { heading: "", body: "" };
+      current.body += (current.body ? " " : "") + trimmed;
+    }
+  }
+  if (current) blocks.push(current);
+  return blocks.filter((b) => b.body.trim());
+}
+
+// ── Strip [[TABLE_IMAGE:X]] / [TABLE_IMAGE:X] markers from raw fallback text ──
+function stripMarkers(text: string): string {
+  return text
+    .replace(/\[{1,2}(?:TABLE|FIGURE)_IMAGE:.*?\]{1,2}/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
 
 /**
  * PDF Export Service
@@ -39,36 +74,7 @@ export const pdfExportService = {
     let currentColumn = 0; // 0 for left, 1 for right
     let columnTopY = MARGIN; // Where the 2-column section starts on the current page
 
-    // --- Helper: Clean Text of Boilerplate ---
-    const cleanText = (text: string) => {
-      if (!text) return "";
-      const bp = [
-        /Cavite State University/i,
-        /CvSU/i,
-        /Imus Campus/i,
-        /Bachelor of Science/i,
-        /in partial fulfillment/i,
-        /requirements for the degree/i,
-        /Undergraduate Thesis/i,
-        /Capstone Project/i,
-        /Adviser\s*:/i,
-        /Prepared under the supervision/i,
-        /Department\s+of\s+[A-Za-z\s]+/i,
-        /College\s+of\s+[A-Za-z\s]+/i,
-        /Contribution\s+No\.?/i,
-        /Imus\s+City/i,
-        /^\s*\d+\s*$/,
-        /^\s*[ivxIVX]+\s*$/,
-      ];
-
-      return text
-        .split("\n")
-        .filter((line) => !bp.some((regex) => regex.test(line.trim())))
-        .join("\n")
-        .trim();
-    };
-
-    // --- Helper: Add Text with Wraps, Pagination, and Column Support ---
+    // --- Helper: Add Text with Wraps, Pagination, Column Support, Indent & Justify ---
     const addText = (
       text: string,
       fontSize: number,
@@ -87,7 +93,32 @@ export const pdfExportService = {
       const targetWidth = useColumns ? COLUMN_WIDTH : CONTENT_WIDTH;
       y += marginTop;
 
-      const lines = doc.splitTextToSize(text, targetWidth);
+      // Determine whether to apply first-line indent (approx. 1.5rem ≈ 18pt)
+      const FIRST_LINE_INDENT = 18;
+      const shouldIndent = fontStyle === FONT_NORMAL && fontSize <= 11 && align === "justify";
+      const indent = shouldIndent ? FIRST_LINE_INDENT : 0;
+
+      // If indent is required, build first line separately then wrap remaining text
+      let lines: string[] = [];
+      if (indent > 0) {
+        const firstLineCandidatesRaw = doc.splitTextToSize(text, targetWidth - indent);
+        const firstLineCandidates = Array.isArray(firstLineCandidatesRaw)
+          ? firstLineCandidatesRaw
+          : [firstLineCandidatesRaw];
+        const firstLine = firstLineCandidates.length > 0 ? String(firstLineCandidates[0]) : "";
+        const restStart = text.indexOf(firstLine) + firstLine.length;
+        const restText = text.slice(restStart).trimStart();
+        const restLinesRaw = restText ? doc.splitTextToSize(restText, targetWidth) : [];
+        const restLines = Array.isArray(restLinesRaw)
+          ? restLinesRaw
+          : restLinesRaw
+            ? [restLinesRaw]
+            : [];
+        lines = [firstLine, ...restLines];
+      } else {
+        const wrappedRaw = doc.splitTextToSize(text, targetWidth);
+        lines = Array.isArray(wrappedRaw) ? wrappedRaw : wrappedRaw ? [wrappedRaw] : [];
+      }
 
       for (let i = 0; i < lines.length; i++) {
         // Check if we need to switch columns or pages
@@ -99,7 +130,7 @@ export const pdfExportService = {
           } else {
             // New page
             doc.addPage();
-            this.addFooter(doc, paper);
+            pdfExportService.addFooter(doc, paper);
             y = MARGIN;
             columnTopY = MARGIN;
             currentColumn = 0;
@@ -109,16 +140,19 @@ export const pdfExportService = {
           doc.setFontSize(fontSize);
         }
 
-        const line = lines[i];
+        const line = (lines[i] ?? "") as string;
         const currentX = useColumns ? MARGIN + currentColumn * (COLUMN_WIDTH + COLUMN_GAP) : MARGIN;
+
+        // Apply indent only to the very first rendered line
+        const xForLine = i === 0 && indent > 0 ? currentX + indent : currentX;
+        const maxWidthForLine = i === 0 && indent > 0 ? targetWidth - indent : targetWidth;
 
         if (align === "center") {
           doc.text(line, A4_WIDTH / 2, y, { align: "center" });
         } else if (align === "justify" && i < lines.length - 1) {
-          // Manual justification for better narrow-column rendering
-          doc.text(line, currentX, y, { maxWidth: targetWidth, align: "justify" });
+          doc.text(line, xForLine, y, { maxWidth: maxWidthForLine, align: "justify" });
         } else {
-          doc.text(line, currentX, y);
+          doc.text(line, xForLine, y);
         }
 
         y += fontSize * 1.2; // standard line spacing
@@ -143,7 +177,7 @@ export const pdfExportService = {
 
     // Abstract (cleaned)
     addText("Abstract", 12, FONT_BOLD, "left", 10, 5, false);
-    addText(cleanText(paper.abstract), 11, FONT_NORMAL, "justify", 0, 10, false);
+    addText(paper.abstract ?? "", 11, FONT_NORMAL, "justify", 0, 10, false);
 
     if (paper.keywords) {
       addText(`Keywords: ${paper.keywords}`, 10, FONT_BOLD, "left", 0, 15, false);
@@ -158,66 +192,123 @@ export const pdfExportService = {
     columnTopY = y;
 
     // 2. --- 2-Column IMRAD Content ---
+    // Mirrors IMRAD_SECTION_CONFIGS + rendering logic in detail_win.vue exactly:
+    //   Introduction → parseSummaryBlocks(introduction_summary) or stripMarkers(introduction)
+    //   Methods/RAD  → imrad_structured typed blocks or stripMarkers(raw)
+    // This is the same cleaned data the web view uses — no boilerplate can leak in.
+
+    const isRadCombined = !!(
+      paper.results &&
+      paper.discussion &&
+      paper.results.trim() === paper.discussion.trim()
+    );
+
     const sections = [
       { label: "INTRODUCTION", key: "introduction" },
       { label: "METHODOLOGY", key: "methods" },
-      { label: "RESULTS", key: "results" },
-      { label: "DISCUSSION", key: "discussion" },
+      { label: "RESULTS AND DISCUSSION", key: "rad" },
     ];
 
     for (const sec of sections) {
-      const blocks = paper.imrad_structured?.[sec.key as keyof typeof paper.imrad_structured] || [];
+      // Resolve 'rad' virtual key → 'results' for raw-text fallback
+      const resolvedKey = sec.key === "rad" ? "results" : sec.key;
 
-      if (blocks.length > 0 || paper[sec.key as keyof Paper]) {
-        addText(sec.label, 12, FONT_BOLD, "left", 12, 8, true);
-
-        if (blocks.length > 0) {
-          for (const block of blocks) {
-            if (block.type === "subheading") {
-              addText(block.text, 12, FONT_BOLD, "left", 6, 5, true);
-            } else if (block.type === "text") {
-              // Apply boilerplate cleaning to Introduction specifically as requested
-              const text = sec.key === "introduction" ? cleanText(block.text) : block.text;
-              if (text) addText(text, 12, FONT_NORMAL, "justify", 0, 7, true);
-            } else if (block.type === "table-image") {
-              try {
-                const imgData = await this.getImageData(block.text);
-                const imgProps = doc.getImageProperties(imgData);
-
-                // Reverted to Column Width as requested.
-                // The backend high DPI ensures this is sharp and readable.
-                const finalWidth = COLUMN_WIDTH;
-                const finalHeight = (imgProps.height * finalWidth) / imgProps.width;
-
-                if (y + finalHeight > A4_HEIGHT - MARGIN) {
-                  if (currentColumn === 0) {
-                    currentColumn = 1;
-                    y = columnTopY;
-                  } else {
-                    doc.addPage();
-                    this.addFooter(doc, paper);
-                    y = MARGIN;
-                    columnTopY = MARGIN;
-                    currentColumn = 0;
-                  }
-                }
-
-                const currentX = MARGIN + currentColumn * (COLUMN_WIDTH + COLUMN_GAP);
-                doc.addImage(imgData, "PNG", currentX, y, finalWidth, finalHeight);
-                y += finalHeight + 8;
-              } catch (e) {
-                console.warn("Failed to add image:", e);
-              }
-            } else if (block.type === "table-label") {
-              addText(block.text, 9, FONT_ITALIC, "center", 0, 8, true);
-            }
-          }
+      // Get structured blocks — mirrors getStructuredBlocks() in detail_win.vue
+      let blocks: ImradBlock[] = [];
+      const imrad = paper.imrad_structured;
+      if (imrad) {
+        if (sec.key === "rad") {
+          const r: ImradBlock[] = imrad.results ?? [];
+          const d: ImradBlock[] = imrad.discussion ?? [];
+          blocks = isRadCombined ? r : [...r, ...d];
+        } else if (sec.key === "methods") {
+          blocks = imrad.methods ?? [];
+        } else if (sec.key === "introduction") {
+          blocks = imrad.introduction ?? [];
         } else {
-          const flatText = (paper[sec.key as keyof Paper] as string) || "";
-          const cleanedFlat = sec.key === "introduction" ? cleanText(flatText) : flatText;
-          if (cleanedFlat) {
-            addText(cleanedFlat, 12, FONT_NORMAL, "justify", 0, 10, true);
+          blocks = (imrad as Record<string, ImradBlock[]>)[resolvedKey] ?? [];
+        }
+      }
+
+      // Check if there's any content at all before rendering the heading
+      const hasSummary =
+        sec.key === "introduction" && !!(paper.introduction_summary as string | undefined);
+      const hasStructured = blocks.length > 0;
+      const hasRaw = !!(paper[resolvedKey as keyof Paper] as string | undefined);
+
+      if (!hasSummary && !hasStructured && !hasRaw) continue;
+
+      addText(sec.label, 12, FONT_BOLD, "left", 12, 8, true);
+
+      // Reset alphabetic subheading counter for this section (A, B, ...)
+      let subheadingIndex = 0;
+
+      // ── Introduction: use AI summary (already boilerplate-free) ─────────
+      if (sec.key === "introduction") {
+        const summary = paper.introduction_summary as string | undefined;
+        if (summary) {
+          for (const block of parseSummaryBlocks(summary)) {
+            if (block.heading) {
+              subheadingIndex += 1;
+              const prefix = String.fromCharCode(64 + subheadingIndex) + ". ";
+              addText(prefix + block.heading, 11, FONT_BOLD, "left", 6, 3, true);
+            }
+            addText(block.body, 11, FONT_NORMAL, "justify", 0, 6, true);
           }
+        } else if (paper.introduction) {
+          // Fallback: strip markers from raw text (summary not yet generated)
+          addText(stripMarkers(paper.introduction), 11, FONT_NORMAL, "justify", 0, 7, true);
+        }
+        continue;
+      }
+
+      // ── Methods / RAD: use imrad_structured typed blocks ─────────────────
+      if (hasStructured) {
+        for (const block of blocks) {
+          if (block.type === "subheading") {
+            subheadingIndex += 1;
+            const prefix = String.fromCharCode(64 + subheadingIndex) + ". ";
+            addText(prefix + block.text, 11, FONT_BOLD, "left", 6, 3, true);
+          } else if (block.type === "text") {
+            addText(block.text, 11, FONT_NORMAL, "justify", 0, 6, true);
+          } else if (block.type === "table-image") {
+            try {
+              const imgData = await this.getImageData(block.text);
+              const imgProps = doc.getImageProperties(imgData);
+
+              const finalWidth = COLUMN_WIDTH;
+              const finalHeight = (imgProps.height * finalWidth) / imgProps.width;
+
+              if (y + finalHeight > A4_HEIGHT - MARGIN) {
+                if (currentColumn === 0) {
+                  currentColumn = 1;
+                  y = columnTopY;
+                } else {
+                  doc.addPage();
+                  pdfExportService.addFooter(doc, paper);
+                  y = MARGIN;
+                  columnTopY = MARGIN;
+                  currentColumn = 0;
+                }
+              }
+
+              const currentX = MARGIN + currentColumn * (COLUMN_WIDTH + COLUMN_GAP);
+              doc.addImage(imgData, "PNG", currentX, y, finalWidth, finalHeight);
+              y += finalHeight + 8;
+            } catch (e) {
+              console.warn("Failed to add image:", e);
+            }
+          } else if (block.type === "table-label") {
+            addText(block.text, 9, FONT_ITALIC, "center", 0, 8, true);
+          }
+        }
+      } else if (hasRaw) {
+        // Fallback: raw text with markers stripped
+        const rawText = paper[resolvedKey as keyof Paper] as string;
+        addText(stripMarkers(rawText), 11, FONT_NORMAL, "justify", 0, 7, true);
+        // For non-combined RAD, append discussion if separate
+        if (sec.key === "rad" && paper.discussion && !isRadCombined) {
+          addText(stripMarkers(paper.discussion), 11, FONT_NORMAL, "justify", 0, 7, true);
         }
       }
     }
@@ -232,7 +323,7 @@ export const pdfExportService = {
     }
 
     // Final Footer pass
-    this.addFooter(doc, paper);
+    pdfExportService.addFooter(doc, paper);
 
     // Save
     const filename = `${paper.title
@@ -277,5 +368,10 @@ export const pdfExportService = {
       doc.text(`Page ${i} of ${pageCount}`, A4_WIDTH - MARGIN, footerY, { align: "right" });
       doc.text(`LUMIA Smart Archival System · ${paper.year}`, MARGIN, footerY);
     }
+    // ── CRITICAL: reset text color to solid black after writing gray footer ──
+    // jsPDF carries text color as state — any page added after addFooter()
+    // would inherit gray (150,150,150) for all subsequent addText() calls,
+    // causing the "gray text" bug visible in the PDF output.
+    doc.setTextColor(0, 0, 0);
   },
 };

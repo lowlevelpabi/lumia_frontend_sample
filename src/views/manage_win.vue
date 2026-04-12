@@ -6,8 +6,8 @@ import {
   Search, Plus, FolderOpen, Loader2,
   FileText, Users, Calendar, ChevronRight,
   Settings, ArrowLeft, Save, BookOpen,
-  UserCheck, Menu, X, Clock,
-  FileUp, Sparkles, Eye, Settings2, CheckCircle, AlertCircle, Check,
+  UserCheck, Menu, X, Clock, Eye,
+  FileUp, CheckCircle, AlertCircle, Check,
   AlertTriangle, RefreshCw, SquareArrowRight, ShieldAlert, ShieldCheck, UserCog, UserPlus, ArchiveRestore, GripVertical
 } from 'lucide-vue-next'
 import { api, BASE_URL, type Paper, type UserResponse, type PartialPaperMetadata, type ActivityLog, type SampleDocument } from '../services/api'
@@ -398,10 +398,9 @@ const handleCreateStaff = async () => {
 }
 
 // ── Upload ────────────────────────────────────────────────────────
-const step = ref(1)
-const uploadingPaper = ref(false)
+const step = ref(1) // 1: Upload, 2: Review, 3: Done
 const processingDoc = ref(false)
-const showStrategyModal = ref(false)
+const uploadingPaper = ref(false)
 const uploadError = ref('')
 const file = ref<File | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -439,7 +438,7 @@ const attachSampleDoc = async (doc: SampleDocument) => {
   try {
     const safeFilename = `${doc.name.replace(/[^a-zA-Z0-9 ]/g, '').trim().replace(/\s+/g, '_')}.pdf`
     file.value = await api.fetchSampleDocumentAsFile(doc.id, safeFilename)
-    showStrategyModal.value = true
+    startInitialExtraction(true)
   } catch (err) {
     uploadError.value = (err as Error).message || 'Failed to load sample document.'
   } finally {
@@ -765,7 +764,10 @@ const thumbSrc = (thumbnail: string) => {
 const handleFileChange = (e: Event) => {
   if (processingDoc.value) return
   const target = e.target as HTMLInputElement
-  if (target.files && target.files[0]) { file.value = target.files[0]; showStrategyModal.value = true }
+  if (target.files && target.files[0]) {
+    file.value = target.files[0]
+    startInitialExtraction(true)
+  }
 }
 
 const isDragging = ref(false)
@@ -787,7 +789,7 @@ const handleDrop = async (e: DragEvent) => {
   const dropped = e.dataTransfer?.files?.[0]
   if (dropped && dropped.type === 'application/pdf') {
     file.value = dropped
-    showStrategyModal.value = true
+    startInitialExtraction(true)
   } else if (dropped) {
     uploadError.value = 'Only PDF files are accepted. Please retry.'
   }
@@ -805,10 +807,6 @@ const handleDragLeave = (e: DragEvent) => {
   if (e.relatedTarget === null) isDragging.value = false
 }
 
-const selectStrategy = async (auto: boolean) => {
-  showStrategyModal.value = false
-  setTimeout(() => { startInitialExtraction(auto) }, 100)
-}
 
 const startInitialExtraction = async (autoExtract: boolean = true) => {
   if (!file.value) return
@@ -924,8 +922,6 @@ const handleFinalConfirm = async () => {
     uploadError.value = (err as Error).message || 'Failed to finalize upload.'
   } finally { uploadingPaper.value = false }
 }
-
-const goBackToStep1 = () => { step.value = 1; file.value = null; showStrategyModal.value = false }
 
 
 watch(activeSection, (newSection) => {
@@ -1049,6 +1045,7 @@ watch(activeSection, (newSection) => {
         <!-- ══ UPLOAD ════════════════════════════════════════════ -->
         <template v-if="activeSection === 'upload'">
           <div class="upload-wrap">
+            <!--
             <div v-if="sampleDocs.length > 0 && step === 1"
               class="notice-banner green flat-notice sample-ethics-notice-top">
               <div class="notice-icon">
@@ -1065,6 +1062,7 @@ watch(activeSection, (newSection) => {
                 </p>
               </div>
             </div>
+            -->
 
             <div v-if="step !== 2" class="upload-center">
 
@@ -1913,44 +1911,6 @@ watch(activeSection, (newSection) => {
         <!-- ══ TELEPORTED MODALS ══════════════════════════════════ -->
         <Teleport to="body">
 
-          <!-- Strategy modal -->
-          <div v-if="showStrategyModal" class="modal-overlay">
-            <div class="modal-card strategy-modal">
-              <div class="modal-head">
-                <div class="modal-head-icon">
-                  <Settings2 :size="20" color="#00a651" />
-                </div>
-                <div>
-                  <h3>Upload Options</h3>
-                  <p>{{ file?.name }}</p>
-                </div>
-                <button @click="goBackToStep1" class="modal-close">
-                  <X :size="18" />
-                </button>
-              </div>
-              <div class="strategy-opts">
-                <button @click="selectStrategy(true)" class="strategy-card smart">
-                  <div class="strategy-ico">
-                    <Sparkles :size="26" />
-                  </div>
-                  <div class="strategy-info">
-                    <h4>Automatic Scan</h4>
-                    <p>Extract metadata with OCR + IMRAD detection.</p>
-                  </div>
-                  <span class="strategy-badge">Recommended</span>
-                </button>
-                <button @click="selectStrategy(false)" class="strategy-card manual">
-                  <div class="strategy-ico">
-                    <Eye :size="26" />
-                  </div>
-                  <div class="strategy-info">
-                    <h4>Manual Review</h4>
-                    <p>Browse pages and enter metadata yourself.</p>
-                  </div>
-                </button>
-              </div>
-            </div>
-          </div>
 
           <!-- Zoom modal -->
           <div v-if="showZoomModal" class="modal-overlay" @click="closeZoom">
@@ -4688,75 +4648,6 @@ watch(activeSection, (newSection) => {
   letter-spacing: 0.05em;
 }
 
-.strategy-modal {
-  max-width: 420px;
-}
-
-.strategy-opts {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  padding: 1.25rem;
-}
-
-.strategy-card {
-  display: flex;
-  align-items: flex-start;
-  gap: 1rem;
-  background: var(--surface);
-  border: 2px solid var(--rule);
-  border-radius: 8px;
-  padding: 1rem 1.1rem;
-  cursor: pointer;
-  text-align: left;
-  transition: border-color 0.14s, background 0.14s;
-  position: relative;
-}
-
-.strategy-card.smart:hover {
-  border-color: var(--green);
-  background: var(--green-dim);
-}
-
-.strategy-card.manual:hover {
-  border-color: var(--ink-3);
-}
-
-.strategy-ico {
-  color: var(--green);
-  flex-shrink: 0;
-}
-
-.strategy-card.manual .strategy-ico {
-  color: var(--ink-3);
-}
-
-.strategy-info h4 {
-  margin: 0 0 0.25rem;
-  font-size: 0.9rem;
-  font-weight: 700;
-  color: var(--ink);
-}
-
-.strategy-info p {
-  margin: 0;
-  font-size: 0.78rem;
-  color: var(--ink-3);
-}
-
-.strategy-badge {
-  position: absolute;
-  top: 0.6rem;
-  right: 0.7rem;
-  font-size: 0.6rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  background: var(--green);
-  color: #fff;
-  padding: 0.12rem 0.45rem;
-  border-radius: 3px;
-}
 
 .zoom-modal {
   position: relative;
