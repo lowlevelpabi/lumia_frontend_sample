@@ -8,6 +8,7 @@ import FormError from '../components/formError.vue'
 
 const router = useRouter()
 const username = ref('')
+const fullName = ref('')
 const password = ref('')
 const confirmPassword = ref('')
 const loading = ref(false)
@@ -19,23 +20,26 @@ const { error, validate, rules } = useFormValidation()
 const handleRegister = async () => {
   const ok = validate([
     rules.allRequired([
-    { value: username.value, label: 'Username' },
-    { value: password.value, label: 'Password' },
-    { value: confirmPassword.value, label: 'Confirm Password' },
-  ]),
-  rules.required(username.value, 'Username'),
-  rules.minLength(username.value, 3, 'Username'),
-  rules.required(password.value, 'Password'),
-  rules.minLength(password.value, 8, 'Password'),
-  rules.required(confirmPassword.value, 'Please confirm your password'),
-  rules.match(password.value, confirmPassword.value, 'Passwords'),
-])
+      { value: fullName.value, label: 'Full Name' },
+      { value: username.value, label: 'Username' },
+      { value: password.value, label: 'Password' },
+      { value: confirmPassword.value, label: 'Confirm Password' },
+    ]),
+    rules.required(fullName.value, 'Full Name'),
+    rules.required(username.value, 'Username'),
+    rules.minLength(username.value, 3, 'Username'),
+    rules.required(password.value, 'Password'),
+    rules.minLength(password.value, 8, 'Password'),
+    rules.required(confirmPassword.value, 'Please confirm your password'),
+    rules.match(password.value, confirmPassword.value, 'Passwords'),
+  ])
   if (!ok) return
 
   loading.value = true
   try {
     await api.register({
       username: username.value,
+      full_name: fullName.value,
       password: password.value,
       role: 'User'
     })
@@ -67,6 +71,11 @@ const handleRegister = async () => {
       <form @submit.prevent="handleRegister" class="auth-form">
 
         <FormError :message="error" />
+
+        <div class="field">
+          <label for="fullName">Full Name</label>
+          <input v-model="fullName" id="fullName" type="text" placeholder="John Doe" />
+        </div>
 
         <div class="field">
           <label for="username">Username</label>
