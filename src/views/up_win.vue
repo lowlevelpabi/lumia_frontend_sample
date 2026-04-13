@@ -280,8 +280,13 @@ const goBack = () => {
             <p>Start by uploading your PDF document. Our system will analyze the content for indexing.</p>
           </div>
 
-          <div v-if="errorMsg" class="error-banner">
-            <AlertCircle :size="18" /> {{ errorMsg }}
+          <div v-if="errorMsg" class="error-banner" :class="{ 'terminal-error': errorMsg.includes('Upload Terminated') }">
+            <ShieldAlert v-if="errorMsg.includes('Upload Terminated')" :size="24" />
+            <AlertCircle v-else :size="18" />
+            <div class="error-content">
+              <strong>{{ errorMsg.includes('Upload Terminated') ? 'Upload Rejected' : 'Error Detected' }}</strong>
+              <p>{{ errorMsg }}</p>
+            </div>
           </div>
 
           <div class="drop-zone" @click="fileInput?.click()" :class="{ 'is-processing': processing }">
@@ -1843,5 +1848,38 @@ textarea.abstract-area {
     flex-direction: column;
     gap: 0.75rem;
   }
+
+  .terminal-error {
+    background: #fff1f2 !important;
+    border-color: #e11d48 !important;
+    color: #9f1239 !important;
+    padding: 1.5rem !important;
+  }
+
+  .error-content {
+    flex: 1;
+    text-align: left;
+  }
+
+  .error-content strong {
+    display: block;
+    font-size: 0.95rem;
+    margin-bottom: 0.25rem;
+    font-weight: 800;
+  }
+
+  .error-content p {
+    font-size: 0.88rem;
+    margin: 0;
+    opacity: 0.9;
+    line-height: 1.4;
+  }
+}
+
+@keyframes shake {
+  10%, 90% { transform: translate3d(-1px, 0, 0); }
+  20%, 80% { transform: translate3d(2px, 0, 0); }
+  30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+  40%, 60% { transform: translate3d(4px, 0, 0); }
 }
 </style>

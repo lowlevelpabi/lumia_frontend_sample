@@ -10,6 +10,7 @@ import ManagementView from '../views/manage_win.vue'
 import UploadView from '../views/up_win.vue'
 import AboutView from '../views/about_win.vue'
 import ProfileView from '../views/profile_win.vue'
+import NotFound from '../views/not_found.vue'
 
 const STAFF_ROLES = ['Admin', 'Faculty'] // matches backend UserRole enum
 
@@ -80,6 +81,12 @@ const router = createRouter({
         title: 'My Profile - Lumia',
         requiresAuth: true,
       },
+    },
+    {
+      path: '/:pathMatch(.*)*',
+      name: 'not-found',
+      component: NotFound,
+      meta: { title: 'Not Found - Lumia' },
     },
   ],
 })

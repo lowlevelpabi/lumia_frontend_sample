@@ -70,6 +70,13 @@ export interface SearchResult {
   }
 }
 
+export interface PaginatedSearchResults {
+  results: SearchResult[]
+  total: number
+  page: number
+  page_size: number
+}
+
 // ── Token helpers ────────────────────────────────────────────────
 
 /** Returns token only if it exists and is not expired. Auto-clears stale tokens. */
@@ -164,6 +171,8 @@ export interface SearchParams {
   degreeProgram?: string
   section?: string
   sort?: string
+  page?: number
+  pageSize?: number
 }
 
 export interface BorrowRecord {
@@ -243,7 +252,7 @@ export const api = {
   },
 
   // Papers Search & Details
-  async searchPapers(params: SearchParams): Promise<SearchResult[]> {
+  async searchPapers(params: SearchParams): Promise<PaginatedSearchResults> {
     const url = new URL(`${BASE_URL}/papers/search`)
     if (params.query) url.searchParams.append('query', params.query)
     if (params.threshold) url.searchParams.append('threshold', params.threshold.toString())
@@ -256,9 +265,14 @@ export const api = {
     if (params.degreeProgram) url.searchParams.append('degree_program', params.degreeProgram)
     if (params.section) url.searchParams.append('section', params.section)
     if (params.sort) url.searchParams.append('sort', params.sort)
+    if (params.page) url.searchParams.append('page', params.page.toString())
+    if (params.pageSize) url.searchParams.append('page_size', params.pageSize.toString())
 
     const response = await fetch(url.toString())
-    if (!response.ok) throw new Error('Search failed')
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.detail || 'Search failed')
+    }
     return response.json()
   },
 

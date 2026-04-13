@@ -104,6 +104,14 @@ const activeLabel = computed(() => {
 
 const setSection = (s: Section) => {
   if (s === 'users' && !isAdmin.value) return
+  
+  // Reset navigation-blocking states
+  showEditModal.value = false
+  showCreateUserModal.value = false
+  showPurgeModal.value = false
+  roleTarget.value = null
+  if (s !== 'upload') step.value = 1
+  
   activeSection.value = s
   router.push({ query: { ...router.currentRoute.value.query, tab: s } })
   mobileSidebarOpen.value = false
@@ -1081,8 +1089,13 @@ watch(activeSection, (newSection) => {
                   <h1 class="upload-card-title">Upload Document</h1>
                   <p>Upload a PDF to index into the research repository.</p>
                 </div>
-                <div v-if="uploadError" class="error-banner">
-                  <AlertCircle :size="16" /> {{ uploadError }}
+                <div v-if="uploadError" class="error-banner" :class="{ 'terminal-error': uploadError.includes('Upload Terminated') }">
+                  <ShieldAlert v-if="uploadError.includes('Upload Terminated')" :size="24" />
+                  <AlertCircle v-else :size="16" />
+                  <div class="error-content">
+                    <strong>{{ uploadError.includes('Upload Terminated') ? 'Upload Rejected' : 'Error Detected' }}</strong>
+                    <p>{{ uploadError }}</p>
+                  </div>
                 </div>
                 <div class="drop-zone" @click="!processingDoc && fileInput?.click()" @drop="handleDrop"
                   @dragover="handleDragOver" @dragleave="handleDragLeave"
@@ -4765,14 +4778,28 @@ watch(activeSection, (newSection) => {
   flex-shrink: 0;
 }
 
-.role-error {
-  font-size: 0.8rem;
+.role-error,
+.error-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.88rem;
+  font-weight: 600;
   color: #991b1b;
   background: #fef2f2;
-  border: 1px solid #fee2e2;
-  border-radius: 5px;
-  padding: 0.6rem 0.75rem;
-  margin: 0.25rem 1.25rem 0.75rem;
+  border: 1.5px solid #f87171;
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  margin: 1rem 0;
+  box-shadow: 0 2px 8px rgba(153, 27, 27, 0.08);
+  animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
+}
+
+@keyframes shake {
+  10%, 90% { transform: translate3d(-1px, 0, 0); }
+  20%, 80% { transform: translate3d(2px, 0, 0); }
+  30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
+  40%, 60% { transform: translate3d(4px, 0, 0); }
 }
 
 /* ══ SPINNER ═══════════════════════════════════════════════════ */
@@ -5247,6 +5274,32 @@ watch(activeSection, (newSection) => {
   .ref-textarea {
     min-height: 300px;
     max-height: 400px;
+  }
+
+  .terminal-error {
+    background: #fff1f2 !important;
+    border-color: #e11d48 !important;
+    color: #9f1239 !important;
+    padding: 1.5rem !important;
+  }
+
+  .error-content {
+    flex: 1;
+    text-align: left;
+  }
+
+  .error-content strong {
+    display: block;
+    font-size: 0.95rem;
+    margin-bottom: 0.25rem;
+    font-weight: 800;
+  }
+
+  .error-content p {
+    font-size: 0.88rem;
+    margin: 0;
+    opacity: 0.9;
+    line-height: 1.4;
   }
 }
 </style>

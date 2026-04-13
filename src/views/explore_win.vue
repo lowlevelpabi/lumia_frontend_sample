@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { ref, onMounted, watch, computed } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Filter, SlidersHorizontal, ArrowRight, User, Search, X, Award, Calendar } from 'lucide-vue-next'
 import { api, type SearchResult, type SearchParams } from '../services/api'
+import { historyService } from '../services/history'
 
 // ── Confidence badge helper ────────────────────────────────────────────────────────
 // Section weights in vector_db.py can push cosine scores above 1.0
@@ -28,7 +28,13 @@ const showFilters = ref(false)
 const showMobileSearch = ref(false)
 const mobileSearchInput = ref('')
 const windowWidth = ref(typeof window !== 'undefined' ? window.innerWidth : 1024)
-const isDesktop = computed(() => windowWidth.value > 1100)
+const isDesktop = computed(() => windowWidth.value > 1024)
+
+// Pagination
+const currentPage = ref(1)
+const totalResults = ref(0)
+const pageSize = ref(10)
+const totalPages = computed(() => Math.ceil(totalResults.value / pageSize.value))
 
 // Filters
 const threshold = ref(0.2)
@@ -39,13 +45,19 @@ const selectedDegree = ref('')
 const selectedSection = ref('')
 const sortBy = ref<'newest' | 'oldest' | 'cited'>('newest')
 
+// Search History
+const searchHistory = ref<string[]>([])
+const showHistory = ref(false)
+const historyRef = ref<HTMLElement | null>(null)
+
 // True when no search query — used for UI labels and conditional rendering
 const browseMode = computed(() => !query.value.trim())
 
 // What the template actually renders
 const displayResults = computed(() => results.value)
 
-const performSearch = async () => {
+const performSearch = async (resetPage: boolean = true) => {
+  if (resetPage) currentPage.value = 1
   loading.value = true
   try {
     const params: SearchParams = {
@@ -57,15 +69,34 @@ const performSearch = async () => {
       degreeProgram: selectedDegree.value || undefined,
       section: selectedSection.value || undefined,
       sort: sortBy.value,
+      page: currentPage.value,
+      pageSize: pageSize.value
     }
+    
     console.log('[Search] Sending params:', params)
-    results.value = await api.searchPapers(params)
-    console.log('[Search] Results received:', results.value.length)
+    const data = await api.searchPapers(params)
+    results.value = data.results
+    totalResults.value = data.total
+    
+    // Save to history if query is significant
+    if (query.value.trim().length > 2) {
+      historyService.saveQuery(query.value)
+      searchHistory.value = historyService.getHistory()
+    }
+    
+    console.log('[Search] Results received:', results.value.length, 'Total:', totalResults.value)
   } catch (err) {
     console.error('Search error occurred:', err)
   } finally {
     loading.value = false
   }
+}
+
+const changePage = (p: number) => {
+  if (p < 1 || p > totalPages.value) return
+  currentPage.value = p
+  performSearch(false)
+  window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
 const load = () => {
@@ -76,11 +107,19 @@ const load = () => {
 
 onMounted(async () => {
   query.value = (route.query.q as string) || ''
+  searchHistory.value = historyService.getHistory()
 
   await performSearch()
 
   const onResize = () => { windowWidth.value = window.innerWidth }
   window.addEventListener('resize', onResize)
+  
+  // Close history when clicking outside
+  document.addEventListener('click', (e) => {
+    if (historyRef.value && !historyRef.value.contains(e.target as Node)) {
+      showHistory.value = false
+    }
+  })
 })
 
 watch(
@@ -104,7 +143,7 @@ const feedTitle = computed(() => {
   const filterParts = []
 
   // 1. Sort context
-  const sortLabels = { newest: 'Newest', oldest: 'Oldest', cited: 'Most Cited' }
+  const sortLabels: Record<string, string> = { newest: 'Newest', oldest: 'Oldest', cited: 'Most Cited' }
   filterParts.push(sortLabels[sortBy.value])
 
   // 2. Department / Degree filter context
@@ -171,7 +210,25 @@ const openMobileSearch = () => {
           <div class="mobile-search-field">
             <Search :size="15" class="ms-icon" />
             <input v-model="mobileSearchInput" type="text" placeholder="Search the archive…"
-              @keyup.enter="submitMobileSearch" autocomplete="off" spellcheck="false" />
+              @keyup.enter="submitMobileSearch" @focus="showHistory = true" autocomplete="off" spellcheck="false" />
+            
+            <!-- Search History Popup -->
+            <div v-if="showHistory && searchHistory.length > 0" class="history-popup" ref="historyRef">
+              <div class="history-head">
+                <span>Recent Searches</span>
+                <button @click="historyService.clearHistory(); searchHistory = []">Clear All</button>
+              </div>
+              <div class="history-list">
+                <div v-for="h in searchHistory" :key="h" class="history-item" @click="mobileSearchInput = h; submitMobileSearch()">
+                  <Search :size="12" />
+                  <span>{{ h }}</span>
+                  <button class="h-remove" @click.stop="historyService.removeQuery(h); searchHistory = historyService.getHistory()">
+                    <X :size="10" />
+                  </button>
+                </div>
+              </div>
+            </div>
+
             <button v-if="mobileSearchInput" class="ms-clear" @click="mobileSearchInput = ''">
               <X :size="13" />
             </button>
@@ -370,6 +427,32 @@ const openMobileSearch = () => {
               </div>
             </li>
           </ol>
+
+          <!-- Pagination -->
+          <footer v-if="totalResults > 0" class="pagination-wrap">
+            <div class="pg-info">
+              Page <strong>{{ currentPage }} - {{ totalPages }}</strong> of {{ totalResults }} results
+            </div>
+            <div class="pg-controls">
+              <button class="pg-btn" :disabled="currentPage === 1" @click="changePage(currentPage - 1)">
+                <X :size="14" style="transform: rotate(90deg)" /> Prev
+              </button>
+              
+              <div class="pg-pages">
+                <button v-for="p in totalPages" :key="p" 
+                  class="pg-num" :class="{ active: p === currentPage }"
+                  v-show="p === 1 || p === totalPages || (p >= currentPage - 1 && p <= currentPage + 1)"
+                  @click="changePage(p)">
+                  {{ p }}
+                </button>
+                <span v-if="totalPages > 5" class="pg-sep">...</span>
+              </div>
+
+              <button class="pg-btn" :disabled="currentPage === totalPages" @click="changePage(currentPage + 1)">
+                Next <ArrowRight :size="14" />
+              </button>
+            </div>
+          </footer>
         </section>
 
       </div>
@@ -561,11 +644,140 @@ const openMobileSearch = () => {
   flex: 1;
   background: transparent;
   border: none;
-  outline: none;
-  font-family: 'Source Sans 3', sans-serif;
-  font-size: 0.9rem;
+  height: 36px;
+  font-size: 0.85rem;
   color: var(--ink);
-  padding: 0.6rem 0;
+  outline: none;
+}
+
+.history-popup {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  margin-top: 0.5rem;
+  box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1);
+  z-index: 100;
+  overflow: hidden;
+}
+
+.history-head {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.6rem 0.8rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--rule);
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.history-head button {
+  background: none;
+  border: none;
+  color: var(--green);
+  cursor: pointer;
+  font-size: 0.65rem;
+}
+
+.history-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.8rem;
+  cursor: pointer;
+  transition: background 0.1s;
+  font-size: 0.85rem;
+  color: var(--ink-2);
+}
+
+.history-item:hover {
+  background: var(--surface);
+}
+
+.history-item .h-remove {
+  margin-left: auto;
+  opacity: 0.5;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.history-item .h-remove:hover {
+  opacity: 1;
+}
+
+.pagination-wrap {
+  margin-top: 3rem;
+  padding-top: 2rem;
+  border-top: 1px solid var(--rule);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.pg-info {
+  font-size: 0.85rem;
+  color: var(--ink-3);
+}
+
+.pg-controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.pg-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  padding: 0.4rem 0.8rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pg-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.pg-pages {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.pg-num {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  border: 1.5px solid transparent;
+  background: transparent;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pg-num.active {
+  border-color: var(--green);
+  color: var(--green);
+  background: var(--green-dim);
+}
+
+.pg-sep {
+  color: var(--ink-3);
 }
 
 .mobile-search-field input::placeholder {
@@ -1081,9 +1293,10 @@ const openMobileSearch = () => {
 }
 
 /* ── Responsive ─────────────────────────────────────────── */
-@media (max-width: 860px) {
+@media (max-width: 1024px) {
   .layout-inner {
     grid-template-columns: 1fr;
+    gap: 2.5rem;
   }
 
   .filters-sidebar {
@@ -1091,6 +1304,8 @@ const openMobileSearch = () => {
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 1.5rem;
+    padding-bottom: 2rem;
+    border-bottom: 1px solid var(--rule);
   }
 }
 

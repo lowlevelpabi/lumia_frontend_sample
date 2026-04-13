@@ -3,6 +3,11 @@ import { ref, onMounted } from 'vue'
 import { useRouter, RouterLink } from 'vue-router'
 import { Search, User, ArrowRight, Clock } from 'lucide-vue-next'
 import { api, type Paper } from '../services/api'
+import { historyService } from '../services/history'
+
+const searchHistory = ref<string[]>([])
+const showHistory = ref(false)
+const historyRef = ref<HTMLElement | null>(null)
 
 const router = useRouter()
 const searchQuery = ref('')
@@ -10,6 +15,7 @@ const recentPapers = ref<Paper[]>([])
 const loading = ref(true)
 
 onMounted(async () => {
+  searchHistory.value = historyService.getHistory()
   try {
     const allPapers = await api.listAllPapers()
     recentPapers.value = allPapers
@@ -20,10 +26,18 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
+
+  // Close history when clicking outside
+  document.addEventListener('click', (e) => {
+    if (historyRef.value && !historyRef.value.contains(e.target as Node)) {
+      showHistory.value = false
+    }
+  })
 })
 
 const handleSearch = () => {
   if (searchQuery.value.trim()) {
+    historyService.saveQuery(searchQuery.value)
     router.push({ name: 'explore', query: { q: searchQuery.value } })
   }
 }
@@ -47,10 +61,27 @@ const handleSearch = () => {
         </h1>
 
         <div class="search-row">
-          <div class="search-field">
+          <div class="search-field" ref="historyRef">
             <Search :size="17" class="s-icon" />
             <input v-model="searchQuery" type="text" placeholder="Title, keywords, context-based search, and more…"
-              @keyup.enter="handleSearch" spellcheck="false" autocomplete="off" />
+              @keyup.enter="handleSearch" @focus="showHistory = true" spellcheck="false" autocomplete="off" />
+
+            <!-- Search History Popup -->
+            <div v-if="showHistory && searchHistory.length > 0" class="history-popup">
+              <div class="history-head">
+                <span>Recent Searches</span>
+                <button @click="historyService.clearHistory(); searchHistory = []">Clear All</button>
+              </div>
+              <div class="history-list">
+                <div v-for="h in searchHistory" :key="h" class="history-item" @click="searchQuery = h; handleSearch()">
+                  <Search :size="12" />
+                  <span>{{ h }}</span>
+                  <button class="h-remove" @click.stop="historyService.removeQuery(h); searchHistory = historyService.getHistory()">
+                    <X :size="10" />
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
           <button class="search-btn" @click="handleSearch">Search</button>
         </div>
@@ -187,6 +218,82 @@ const handleSearch = () => {
   background-image: radial-gradient(circle, rgba(255, 255, 255, 0.055) 1px, transparent 1px);
   background-size: 28px 28px;
   pointer-events: none;
+}
+
+/* Search History Popup */
+.history-popup {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  margin-top: 0.5rem;
+  box-shadow: 0 10px 25px -5px rgba(0,0,0,0.3);
+  z-index: 100;
+  overflow: hidden;
+  text-align: left;
+}
+
+.history-head {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.6rem 0.8rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--rule);
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.history-head button {
+  background: none;
+  border: none;
+  color: var(--green);
+  cursor: pointer;
+  font-size: 0.65rem;
+}
+
+.history-list {
+  max-height: 250px;
+  overflow-y: auto;
+}
+
+.history-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.8rem;
+  cursor: pointer;
+  transition: background 0.1s;
+  font-size: 0.85rem;
+  color: var(--ink-2);
+}
+
+.history-item:hover {
+  background: var(--surface);
+}
+
+.history-item .h-remove {
+  margin-left: auto;
+  opacity: 0.5;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.history-item .h-remove:hover {
+  opacity: 1;
+}
+
+.search-row {
+  max-width: 700px;
+  margin: 0 auto 3.5rem;
+  display: flex;
+  gap: 0.5rem;
+  position: relative;
 }
 
 .hero-inner {
