@@ -339,7 +339,10 @@ export const api = {
       headers: getAuthHeaders(),
       body: formData,
     })
-    if (!response.ok) throw new Error('Preview failed')
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      throw new Error(errorData.detail || 'Preview failed')
+    }
     return response.json()
   },
 
