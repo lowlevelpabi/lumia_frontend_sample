@@ -773,19 +773,7 @@ const formatReferenceEntry = (raw: string): string => {
 }
 
 /* ══ PAGE LAYOUT ══════════════════════════════════════════ */
-.journal-page-layout {
-  display: flex;
-  align-items: flex-start;
-  gap: 1.5rem;
-  max-width: 1400px;
-  margin: 0 auto;
-  padding: 2rem 1.5rem 4rem;
-}
 
-.journal-paper-wrap {
-  flex: 1;
-  min-width: 0;
-}
 
 /* ══ RELATED STUDIES SIDEBAR ══════════════════════════════ */
 .journal-sidebar {
@@ -2015,55 +2003,11 @@ const formatReferenceEntry = (raw: string): string => {
   background: var(--green-dim, #e6f4ed);
 }
 
-@media (max-width: 1024px) {
-  .rec-aside {
-    display: none;
-  }
-}
 
-@media (max-width: 768px) {
-  .detail-layout {
-    flex-direction: column;
-    padding: 1.5rem 1.25rem;
-  }
 
-  .doc-nav-aside {
-    display: none;
-  }
 
-  .paper-header-wrap {
-    padding: 1.5rem 1.25rem 2rem;
-  }
 
-  .paper-title {
-    font-size: 1.4rem;
-  }
-}
 
-@media (max-width: 480px) {
-  .detail-layout {
-    padding: 1rem;
-  }
-
-  .paper-title {
-    font-size: 1.2rem;
-  }
-
-  .doc-tab {
-    font-size: 0.78rem;
-    padding: 0.5rem 0.7rem;
-  }
-
-  .meta-dot {
-    display: none;
-  }
-
-  .meta-row {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.35rem;
-  }
-}
 
 /* ── IMRAD "NEW" tag on sidebar button ───────────────── */
 .imrad-new-tag {
@@ -2681,25 +2625,7 @@ const formatReferenceEntry = (raw: string): string => {
 }
 
 /* ── Responsive ────────────────────────────────────────────── */
-@media (max-width: 1200px) {
-  .journal-toc {
-    display: none;
-  }
 
-  .journal-page-layout {
-    grid-template-columns: 1fr 300px;
-  }
-}
-
-@media (max-width: 1100px) {
-  .journal-sidebar {
-    display: none;
-  }
-
-  .journal-page-layout {
-    grid-template-columns: 1fr;
-  }
-}
 
 /* ══ PAGE LAYOUT ════════════════════════════════════════════ */
 .journal-page-layout {
@@ -2800,35 +2726,7 @@ const formatReferenceEntry = (raw: string): string => {
   scroll-margin-top: 100px;
 }
 
-@media (max-width: 768px) {
-  .journal-page-layout {
-    grid-template-columns: 1fr;
-    padding: 1.25rem 1rem 3rem;
-  }
 
-  .journal-body {
-    column-count: 1;
-    column-rule: none;
-    column-gap: 0;
-    padding: 1.5rem 1.25rem;
-  }
-
-  .journal-header {
-    padding: 1.75rem 1.25rem 1.5rem;
-  }
-
-  .journal-abstract-box {
-    max-width: 100%;
-  }
-
-  .journal-references-section {
-    padding: 2rem 1.25rem 2.5rem;
-  }
-
-  .journal-references-list {
-    column-count: 1;
-  }
-}
 
 /* ── Rec Cards (used in sidebar) ───────────────────────────── */
 .rec-list {
@@ -2913,5 +2811,110 @@ const formatReferenceEntry = (raw: string): string => {
   font-size: 0.73rem;
   color: #999;
   font-style: italic;
+}
+
+/* ── Responsive ────────────────────────────────────────────── */
+
+@media (max-width: 1200px) {
+  .journal-toc {
+    display: none;
+  }
+
+  .journal-page-layout {
+    grid-template-columns: 1fr 300px;
+    gap: 2rem;
+  }
+}
+
+@media (max-width: 1100px) {
+  .journal-sidebar {
+    display: none;
+  }
+
+  .journal-page-layout {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+}
+
+@media (max-width: 1024px) {
+  .rec-aside {
+    display: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .journal-page-layout {
+    grid-template-columns: 1fr;
+    padding: 1.25rem 1rem 3rem;
+  }
+
+  .journal-body {
+    column-count: 1;
+    column-rule: none;
+    column-gap: 0;
+    padding: 1.5rem 1.25rem;
+  }
+
+  .journal-header {
+    padding: 1.75rem 1.25rem 1.5rem;
+  }
+
+  .journal-references-section {
+    padding: 2rem 1.25rem 2.5rem;
+  }
+
+  .journal-references-list {
+    column-count: 1;
+  }
+
+  /* Old detail-layout classes fallback */
+  .detail-layout {
+    flex-direction: column;
+    padding: 1.5rem 1.25rem;
+  }
+
+  .doc-nav-aside {
+    display: none;
+  }
+
+  .paper-header-wrap {
+    padding: 1.5rem 1.25rem 2rem;
+  }
+
+  .paper-title {
+    font-size: 1.4rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .imrad-two-col {
+    columns: 1;
+  }
+}
+
+@media (max-width: 480px) {
+  .journal-page-layout {
+    padding: 1rem;
+  }
+
+  .paper-title {
+    font-size: 1.2rem;
+  }
+
+  .doc-tab {
+    font-size: 0.78rem;
+    padding: 0.5rem 0.7rem;
+  }
+
+  .meta-dot {
+    display: none;
+  }
+
+  .meta-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.35rem;
+  }
 }
 </style>
