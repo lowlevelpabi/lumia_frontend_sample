@@ -104,14 +104,14 @@ const activeLabel = computed(() => {
 
 const setSection = (s: Section) => {
   if (s === 'users' && !isAdmin.value) return
-  
+
   // Reset navigation-blocking states
   showEditModal.value = false
   showCreateUserModal.value = false
   showPurgeModal.value = false
   roleTarget.value = null
   if (s !== 'upload') step.value = 1
-  
+
   activeSection.value = s
   router.push({ query: { ...router.currentRoute.value.query, tab: s } })
   mobileSidebarOpen.value = false
@@ -864,10 +864,16 @@ const startInitialExtraction = async (autoExtract: boolean = true) => {
     const firstAvailable = ALL_IMRAD_TABS.find(t => imradSections[t])
     if (firstAvailable) activeImradTab.value = firstAvailable === 'discussion' ? 'results' : firstAvailable
     setTimeout(() => { step.value = 2; processingDoc.value = false }, 400)
-  } catch (err) {
+  } catch (err: unknown) {
     stopProgressListening()
-    uploadError.value = (err as Error).message || 'Failed to parse PDF.'
     processingDoc.value = false
+    // Check for structured Termination Report
+    const errorData = err as { error_type?: string; report?: string }
+    if (errorData && errorData.error_type === 'TERMINATION_REPORT') {
+      uploadError.value = `Upload Terminated: ${errorData.report}`
+    } else {
+      uploadError.value = (err as Error).message || 'Failed to parse PDF.'
+    }
   }
 }
 
@@ -1089,11 +1095,13 @@ watch(activeSection, (newSection) => {
                   <h1 class="upload-card-title">Upload Document</h1>
                   <p>Upload a PDF to index into the research repository.</p>
                 </div>
-                <div v-if="uploadError" class="error-banner" :class="{ 'terminal-error': uploadError.includes('Upload Terminated') }">
+                <div v-if="uploadError" class="error-banner"
+                  :class="{ 'terminal-error': uploadError.includes('Upload Terminated') }">
                   <ShieldAlert v-if="uploadError.includes('Upload Terminated')" :size="24" />
                   <AlertCircle v-else :size="16" />
                   <div class="error-content">
-                    <strong>{{ uploadError.includes('Upload Terminated') ? 'Upload Rejected' : 'Error Detected' }}</strong>
+                    <strong>{{ uploadError.includes('Upload Terminated') ? 'Upload Rejected' : 'Error Detected'
+                    }}</strong>
                     <p>{{ uploadError }}</p>
                   </div>
                 </div>
@@ -4792,14 +4800,31 @@ watch(activeSection, (newSection) => {
   padding: 1rem 1.25rem;
   margin: 1rem 0;
   box-shadow: 0 2px 8px rgba(153, 27, 27, 0.08);
-  animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
+  animation: shake 0.4s cubic-bezier(.36, .07, .19, .97) both;
 }
 
 @keyframes shake {
-  10%, 90% { transform: translate3d(-1px, 0, 0); }
-  20%, 80% { transform: translate3d(2px, 0, 0); }
-  30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
-  40%, 60% { transform: translate3d(4px, 0, 0); }
+
+  10%,
+  90% {
+    transform: translate3d(-1px, 0, 0);
+  }
+
+  20%,
+  80% {
+    transform: translate3d(2px, 0, 0);
+  }
+
+  30%,
+  50%,
+  70% {
+    transform: translate3d(-4px, 0, 0);
+  }
+
+  40%,
+  60% {
+    transform: translate3d(4px, 0, 0);
+  }
 }
 
 /* ══ SPINNER ═══════════════════════════════════════════════════ */
@@ -5301,5 +5326,126 @@ watch(activeSection, (newSection) => {
     opacity: 0.9;
     line-height: 1.4;
   }
+}
+
+/* ── TERMINATION REPORT ───────────────────────────────────────── */
+.termination-modal {
+  max-width: 700px;
+}
+
+.termination-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.termination-reason {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.termination-grid {
+  display: grid;
+  grid-template-columns: 1fr 220px;
+  gap: 1.5rem;
+}
+
+@media (max-width: 600px) {
+  .termination-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.report-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 0.5rem;
+  display: block;
+}
+
+.report-text {
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--ink-2);
+  margin-bottom: 1.5rem;
+}
+
+.tips-box {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.tips-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  margin: 0 0 0.5rem;
+  color: var(--ink);
+}
+
+.tips-box ul {
+  margin: 0;
+  padding-left: 1.2rem;
+  font-size: 0.78rem;
+  color: var(--ink-3);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.termination-proof {
+  flex-shrink: 0;
+}
+
+.proof-card {
+  position: relative;
+  background: #000;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--rule);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  aspect-ratio: 3/4;
+}
+
+.proof-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.9;
+}
+
+.proof-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.2);
+  pointer-events: none;
+}
+
+.proof-overlay span {
+  background: rgba(220, 38, 38, 0.9);
+  color: #fff;
+  font-size: 0.6rem;
+  font-weight: 800;
+  padding: 0.2rem 0.6rem;
+  border-radius: 3px;
+  letter-spacing: 0.1em;
+  transform: rotate(-15deg);
 }
 </style>

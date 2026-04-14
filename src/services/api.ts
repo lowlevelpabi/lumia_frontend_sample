@@ -341,6 +341,9 @@ export const api = {
     })
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}))
+      if (errorData.detail && typeof errorData.detail === 'object') {
+        throw errorData.detail
+      }
       throw new Error(errorData.detail || 'Preview failed')
     }
     return response.json()
