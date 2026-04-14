@@ -208,6 +208,12 @@ const handleUpdate = async () => {
 const terminalLogs = ref<string[]>([])
 const terminalEventSource = ref<EventSource | null>(null)
 const consoleScrollRef = ref<HTMLElement | null>(null)
+const terminalReadyState = ref(0) // 0: connecting, 1: open, 2: closed
+const escapeHtml = (text: string) => {
+  const div = document.createElement('div')
+  div.textContent = text
+  return div.innerHTML
+}
 
 const connectTerminal = () => {
   if (terminalEventSource.value) return
@@ -215,9 +221,15 @@ const connectTerminal = () => {
   const url = api.getTerminalStreamUrl()
   const es = new EventSource(url)
   terminalEventSource.value = es
+  terminalReadyState.value = 0
+
+  es.onopen = () => {
+    terminalReadyState.value = 1
+  }
 
   es.onmessage = (e) => {
-    terminalLogs.value.push(e.data)
+    // Standard data frames
+    terminalLogs.value.push(escapeHtml(e.data))
     if (terminalLogs.value.length > 1000) terminalLogs.value.shift()
     
     nextTick(() => {
@@ -231,6 +243,7 @@ const connectTerminal = () => {
     console.warn('Terminal stream error:', err)
     es.close()
     terminalEventSource.value = null
+    terminalReadyState.value = 2
     // Fallback error message in console
     if (terminalLogs.value[terminalLogs.value.length-1] !== ">> [SYSTEM] Reconnecting to stream...") {
         terminalLogs.value.push(">> [SYSTEM] Reconnecting to stream...")
@@ -1644,11 +1657,14 @@ watch(activeSection, (newSection) => {
             <div class="console-card">
               <div class="console-header">
                 <div class="console-header-left">
-                  <div class="console-dot-pulsate" v-if="terminalEventSource" />
+                  <div class="console-dot-pulsate" v-if="terminalReadyState === 1" />
+                  <div class="console-dot-idle" v-else-if="terminalReadyState === 0" />
+                  <div class="console-dot-error" v-else />
                   <Terminal :size="16" />
                   <strong>Lumia Server Terminal</strong>
-                  <span class="console-status" v-if="terminalEventSource">Live Connection</span>
-                  <span class="console-status disconnected" v-else>Connecting...</span>
+                  <span class="console-status" v-if="terminalReadyState === 1">Live Connection</span>
+                  <span class="console-status status-connecting" v-else-if="terminalReadyState === 0">Connecting...</span>
+                  <span class="console-status status-error" v-else>Connection Lost</span>
                 </div>
                 <div class="console-header-right">
                   <button class="console-clear" @click="terminalLogs = []">Clear View</button>
@@ -5583,6 +5599,20 @@ watch(activeSection, (newSection) => {
   to { box-shadow: 0 0 0 10px rgba(35, 134, 54, 0); }
 }
 
+.console-dot-idle {
+  width: 8px;
+  height: 8px;
+  background: #d29922;
+  border-radius: 50%;
+}
+
+.console-dot-error {
+  width: 8px;
+  height: 8px;
+  background: #f85149;
+  border-radius: 50%;
+}
+
 .console-status {
   font-size: 0.7rem;
   text-transform: uppercase;
@@ -5593,9 +5623,14 @@ watch(activeSection, (newSection) => {
   border-radius: 4px;
 }
 
-.console-status.disconnected {
-  color: #d1242f;
-  background: rgba(209, 36, 47, 0.1);
+.console-status.status-connecting {
+  color: #d29922;
+  background: rgba(210, 153, 34, 0.1);
+}
+
+.console-status.status-error {
+  color: #f85149;
+  background: rgba(248, 81, 73, 0.1);
 }
 
 .console-clear {
