@@ -74,12 +74,12 @@ const handleRegister = async () => {
 
         <div class="field">
           <label for="fullName">Full Name</label>
-          <input v-model="fullName" id="fullName" type="text" placeholder="John Doe" />
+          <input v-model="fullName" id="fullName" type="text" placeholder="Lusty" />
         </div>
 
         <div class="field">
           <label for="username">Username</label>
-          <input v-model="username" id="username" type="text" autocomplete="username" placeholder="johndoe" />
+          <input v-model="username" id="username" type="text" autocomplete="username" placeholder="lusty" />
         </div>
 
         <div class="field">
