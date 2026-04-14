@@ -94,7 +94,6 @@ const navItems = computed(() => {
   const items = [...baseNavItems]
   if (isAdmin.value) {
     items.push(...adminNavItems)
-    items.push({ id: 'console', label: 'System Console', icon: Terminal, description: 'Live terminal & server logs' })
     items.push(...canEditNavItems)
   } else if (canEdit.value) {
     items.push({ id: 'logs' as Section, label: 'Activity Log', icon: Clock, description: 'Track uploads, edits & deletes' })
@@ -201,48 +200,6 @@ const handleUpdate = async () => {
     alert('Failed to update paper details.')
   } finally {
     updating.value = false
-  }
-}
-
-// ── Live Terminal Console ─────────────────────────────────────────
-const terminalLogs = ref<string[]>([])
-const terminalEventSource = ref<EventSource | null>(null)
-const consoleScrollRef = ref<HTMLElement | null>(null)
-
-const connectTerminal = () => {
-  if (terminalEventSource.value) return
-  
-  const url = api.getTerminalStreamUrl()
-  const es = new EventSource(url)
-  terminalEventSource.value = es
-
-  es.onmessage = (e) => {
-    terminalLogs.value.push(e.data)
-    if (terminalLogs.value.length > 1000) terminalLogs.value.shift()
-    
-    nextTick(() => {
-      if (consoleScrollRef.value) {
-        consoleScrollRef.value.scrollTop = consoleScrollRef.value.scrollHeight
-      }
-    })
-  }
-
-  es.onerror = (err) => {
-    console.warn('Terminal stream error:', err)
-    es.close()
-    terminalEventSource.value = null
-    // Fallback error message in console
-    if (terminalLogs.value[terminalLogs.value.length-1] !== ">> [SYSTEM] Reconnecting to stream...") {
-        terminalLogs.value.push(">> [SYSTEM] Reconnecting to stream...")
-    }
-    setTimeout(connectTerminal, 3000)
-  }
-}
-
-const disconnectTerminal = () => {
-  if (terminalEventSource.value) {
-    terminalEventSource.value.close()
-    terminalEventSource.value = null
   }
 }
 
@@ -985,12 +942,7 @@ const handleFinalConfirm = async () => {
 }
 
 
-watch(activeSection, (newSection) => {
-  if (newSection === 'repository') fetchPapers()
-  if (newSection === 'users' && users.value.length === 0) fetchUsers()
   if (newSection === 'upload' && sampleDocs.value.length === 0) loadSampleDocs()
-  if (newSection === 'console') connectTerminal()
-  else disconnectTerminal()
 }, { immediate: true })
 </script>
 
@@ -1638,42 +1590,6 @@ watch(activeSection, (newSection) => {
           </div>
         </template>
 
-        <!-- ══ SYSTEM CONSOLE ════════════════════════════════════ -->
-        <template v-else-if="activeSection === 'console'">
-          <div class="console-wrap">
-            <div class="console-card">
-              <div class="console-header">
-                <div class="console-header-left">
-                  <div class="console-dot-pulsate" v-if="terminalEventSource" />
-                  <Terminal :size="16" />
-                  <strong>Lumia Server Terminal</strong>
-                  <span class="console-status" v-if="terminalEventSource">Live Connection</span>
-                  <span class="console-status disconnected" v-else>Connecting...</span>
-                </div>
-                <div class="console-header-right">
-                  <button class="console-clear" @click="terminalLogs = []">Clear View</button>
-                </div>
-              </div>
-              
-              <div class="console-body" ref="consoleScrollRef">
-                <div class="console-lines">
-                  <div v-for="(line, idx) in terminalLogs" :key="idx" class="console-line">
-                    <span class="line-idx">{{ idx + 1 }}</span>
-                    <span class="line-text">{{ line }}</span>
-                  </div>
-                  <div v-if="terminalLogs.length === 0" class="console-empty">
-                    Initializing terminal stream...
-                  </div>
-                </div>
-              </div>
-              
-              <div class="console-footer">
-                <Activity :size="14" />
-                <span>Monitoring: system_logs.txt</span>
-              </div>
-            </div>
-          </div>
-        </template>
 
         <!-- ══ USER MANAGER ══════════════════════════════════════ -->
         <template v-else-if="activeSection === 'users'">
@@ -5535,149 +5451,4 @@ watch(activeSection, (newSection) => {
   transform: rotate(-15deg);
 }
 
-/* ── SYSTEM CONSOLE ──────────────────────────────────────────── */
-.console-wrap {
-  height: calc(100vh - 120px);
-  padding: 1.5rem;
-  display: flex;
-}
-
-.console-card {
-  flex: 1;
-  background: #0d1117; /* GitHub Dark style */
-  border-radius: 12px;
-  border: 1px solid #30363d;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-}
-
-.console-header {
-  background: #161b22;
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid #30363d;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.console-header-left {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  color: #c9d1d9;
-  font-size: 0.85rem;
-}
-
-.console-dot-pulsate {
-  width: 8px;
-  height: 8px;
-  background: #238636;
-  border-radius: 50%;
-  box-shadow: 0 0 0 0 rgba(35, 134, 54, 0.7);
-  animation: pulsate 1.5s infinite cubic-bezier(0.66, 0, 0, 1);
-}
-
-@keyframes pulsate {
-  to { box-shadow: 0 0 0 10px rgba(35, 134, 54, 0); }
-}
-
-.console-status {
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  font-weight: 700;
-  color: #238636;
-  background: rgba(35, 134, 54, 0.1);
-  padding: 0.2rem 0.5rem;
-  border-radius: 4px;
-}
-
-.console-status.disconnected {
-  color: #d1242f;
-  background: rgba(209, 36, 47, 0.1);
-}
-
-.console-clear {
-  background: rgba(255,255,255,0.05);
-  border: 1px solid #30363d;
-  color: #8b949e;
-  font-size: 0.75rem;
-  padding: 0.35rem 0.75rem;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.console-clear:hover {
-  background: rgba(255,255,255,0.1);
-  color: #fff;
-}
-
-.console-body {
-  flex: 1;
-  overflow-y: auto;
-  padding: 1rem;
-  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
-  font-size: 0.85rem;
-  line-height: 1.6;
-  scrollbar-width: thin;
-  scrollbar-color: #30363d transparent;
-}
-
-.console-body::-webkit-scrollbar { width: 8px; }
-.console-body::-webkit-scrollbar-thumb { background: #30363d; border-radius: 10px; }
-
-.console-lines {
-  display: flex;
-  flex-direction: column;
-}
-
-.console-line {
-  display: flex;
-  gap: 1rem;
-  border-bottom: 1px solid rgba(255,255,255,0.02);
-  padding: 0.1rem 0;
-}
-
-.line-idx {
-  min-width: 2rem;
-  text-align: right;
-  color: #484f58;
-  font-size: 0.75rem;
-  user-select: none;
-}
-
-.line-text {
-  color: #e6edf3;
-  word-break: break-all;
-  white-space: pre-wrap;
-}
-
-.console-empty {
-  color: #8b949e;
-  font-style: italic;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 100%;
-}
-
-.console-footer {
-  background: #161b22;
-  padding: 0.5rem 1rem;
-  border-top: 1px solid #30363d;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: #8b949e;
-  font-size: 0.75rem;
-}
-
-@media (max-width: 768px) {
-  .console-wrap {
-    height: calc(100vh - 80px);
-    padding: 0.75rem;
-  }
-}
 </style>
