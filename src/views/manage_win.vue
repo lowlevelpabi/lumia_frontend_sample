@@ -8,7 +8,7 @@ import {
   Settings, ArrowLeft, Save, BookOpen,
   UserCheck, Menu, X, Clock, Eye,
   FileUp, CheckCircle, AlertCircle, Check,
-  AlertTriangle, RefreshCw, SquareArrowRight, ShieldAlert, ShieldCheck, UserCog, UserPlus, ArchiveRestore, GripVertical, Terminal, Activity
+  AlertTriangle, RefreshCw, SquareArrowRight, ShieldAlert, ShieldCheck, UserCog, UserPlus, ArchiveRestore, GripVertical
 } from 'lucide-vue-next'
 import { api, BASE_URL, type Paper, type UserResponse, type PartialPaperMetadata, type ActivityLog, type SampleDocument } from '../services/api'
 import { useAuth } from '../composables/useAuth'
@@ -76,7 +76,7 @@ const formattedTime = computed(() => {
 })
 
 // ── Sidebar ─────────────────────────────────────────────────────
-type Section = 'repository' | 'users' | 'upload' | 'logs' | 'trash' | 'console'
+type Section = 'repository' | 'users' | 'upload' | 'logs' | 'trash'
 const activeSection = ref<Section>('repository')
 
 const baseNavItems: { id: Section; label: string; icon: Component; description: string }[] = [
@@ -942,6 +942,9 @@ const handleFinalConfirm = async () => {
 }
 
 
+watch(activeSection, (newSection) => {
+  if (newSection === 'repository') fetchPapers()
+  if (newSection === 'users' && users.value.length === 0) fetchUsers()
   if (newSection === 'upload' && sampleDocs.value.length === 0) loadSampleDocs()
 }, { immediate: true })
 </script>
@@ -1102,7 +1105,7 @@ const handleFinalConfirm = async () => {
                   <AlertCircle v-else :size="16" />
                   <div class="error-content">
                     <strong>{{ uploadError.includes('Upload Terminated') ? 'Upload Rejected' : 'Error Detected'
-                    }}</strong>
+                      }}</strong>
                     <p>{{ uploadError }}</p>
                   </div>
                 </div>
@@ -1229,7 +1232,7 @@ const handleFinalConfirm = async () => {
                   </p>
                   <div class="missing-list">
                     <span v-for="s in missingSections" :key="s" class="missing-badge"><span class="missing-dot" />{{ s
-                    }}</span>
+                      }}</span>
                   </div>
                 </div>
                 <div class="notice-actions">
@@ -5450,5 +5453,4 @@ const handleFinalConfirm = async () => {
   letter-spacing: 0.1em;
   transform: rotate(-15deg);
 }
-
 </style>

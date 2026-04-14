@@ -585,16 +585,6 @@ export const api = {
     if (!response.ok) throw new Error('Failed to purge paper')
   },
 
-  // ── System Console (Live Terminal) ────────────────────────────────────────
-  
-  /** Returns the SSE URL for live terminal streaming, including auth token. */
-  getTerminalStreamUrl(): string {
-    const token = getValidToken()
-    const url = new URL(`${BASE_URL}/logs/terminal/stream`)
-    if (token) url.searchParams.append('token', token)
-    return url.toString()
-  },
-
   // ── Sample Documents (System Evaluation Feature) ──────────────────────────
 
   /**
