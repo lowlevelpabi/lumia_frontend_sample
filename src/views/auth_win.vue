@@ -64,7 +64,7 @@ const handleLogin = async () => {
 
         <div class="field">
           <label for="username">Username</label>
-          <input v-model="username" id="username" type="text" autocomplete="username" placeholder="johndoe" />
+          <input v-model="username" id="username" type="text" autocomplete="username" placeholder="lusty" />
         </div>
 
         <div class="field">

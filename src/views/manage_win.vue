@@ -90,13 +90,17 @@ const adminNavItems: { id: Section; label: string; icon: Component; description:
 const canEditNavItems: { id: Section; label: string; icon: Component; description: string }[] = [
   { id: 'trash', label: 'Trash', icon: Trash2, description: 'Deleted docs · 15-day window' },
 ]
-const navItems = computed(() =>
-  isAdmin.value
-    ? [...baseNavItems, ...adminNavItems, ...canEditNavItems]
-    : canEdit.value
-      ? [...baseNavItems, { id: 'logs' as Section, label: 'Activity Log', icon: Clock, description: 'Track uploads, edits & deletes' }, ...canEditNavItems]
-      : baseNavItems
-)
+const navItems = computed(() => {
+  const items = [...baseNavItems]
+  if (isAdmin.value) {
+    items.push(...adminNavItems)
+    items.push(...canEditNavItems)
+  } else if (canEdit.value) {
+    items.push({ id: 'logs' as Section, label: 'Activity Log', icon: Clock, description: 'Track uploads, edits & deletes' })
+    items.push(...canEditNavItems)
+  }
+  return items
+})
 
 const activeLabel = computed(() => {
   return navItems.value.find(i => i.id === activeSection.value)?.label ?? 'Repository'
@@ -890,10 +894,16 @@ const startInitialExtraction = async (autoExtract: boolean = true) => {
     const firstAvailable = ALL_IMRAD_TABS.find(t => imradSections[t])
     if (firstAvailable) activeImradTab.value = firstAvailable === 'discussion' ? 'results' : firstAvailable
     setTimeout(() => { step.value = 2; processingDoc.value = false }, 400)
-  } catch (err) {
+  } catch (err: unknown) {
     stopProgressListening()
-    uploadError.value = (err as Error).message || 'Failed to parse PDF.'
     processingDoc.value = false
+    // Check for structured Termination Report
+    const errorData = err as { error_type?: string; report?: string }
+    if (errorData && errorData.error_type === 'TERMINATION_REPORT') {
+      uploadError.value = `Upload Terminated: ${errorData.report}`
+    } else {
+      uploadError.value = (err as Error).message || 'Failed to parse PDF.'
+    }
   }
 }
 
@@ -1248,7 +1258,7 @@ watch(activeSection, (newSection) => {
                   </p>
                   <div class="missing-list">
                     <span v-for="s in missingSections" :key="s" class="missing-badge"><span class="missing-dot" />{{ s
-                    }}</span>
+                      }}</span>
                   </div>
                 </div>
                 <div class="notice-actions">
@@ -1657,6 +1667,7 @@ watch(activeSection, (newSection) => {
             </div>
           </div>
         </template>
+
 
         <!-- ══ USER MANAGER ══════════════════════════════════════ -->
         <template v-else-if="activeSection === 'users'">
@@ -5574,5 +5585,126 @@ watch(activeSection, (newSection) => {
   .analytics-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* ── TERMINATION REPORT ───────────────────────────────────────── */
+.termination-modal {
+  max-width: 700px;
+}
+
+.termination-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.termination-reason {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.termination-grid {
+  display: grid;
+  grid-template-columns: 1fr 220px;
+  gap: 1.5rem;
+}
+
+@media (max-width: 600px) {
+  .termination-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.report-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 0.5rem;
+  display: block;
+}
+
+.report-text {
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--ink-2);
+  margin-bottom: 1.5rem;
+}
+
+.tips-box {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.tips-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  margin: 0 0 0.5rem;
+  color: var(--ink);
+}
+
+.tips-box ul {
+  margin: 0;
+  padding-left: 1.2rem;
+  font-size: 0.78rem;
+  color: var(--ink-3);
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.termination-proof {
+  flex-shrink: 0;
+}
+
+.proof-card {
+  position: relative;
+  background: #000;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid var(--rule);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  aspect-ratio: 3/4;
+}
+
+.proof-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.9;
+}
+
+.proof-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.2);
+  pointer-events: none;
+}
+
+.proof-overlay span {
+  background: rgba(220, 38, 38, 0.9);
+  color: #fff;
+  font-size: 0.6rem;
+  font-weight: 800;
+  padding: 0.2rem 0.6rem;
+  border-radius: 3px;
+  letter-spacing: 0.1em;
+  transform: rotate(-15deg);
 }
 </style>
