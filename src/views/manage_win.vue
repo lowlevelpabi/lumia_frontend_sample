@@ -2049,7 +2049,7 @@ watch(activeSection, (newSection) => {
                   <div class="role-opt-info"><span class="role-opt-name">Student</span><span class="role-opt-desc">Can
                       search
                       and view papers only.</span></div>
-                  <Check v-if="roleNew === 'User'" :size="13" class="role-check" />
+                  <Check v-if="roleNew === 'Student'" :size="13" class="role-check" />
                 </label>
                 <label class="role-opt" :class="{ selected: roleNew === 'Faculty' }">
                   <input type="radio" v-model="roleNew" value="Faculty" />

@@ -41,7 +41,7 @@ const handleRegister = async () => {
       username: username.value,
       full_name: fullName.value,
       password: password.value,
-      role: 'User'
+      role: 'Student'
     })
     router.push({ name: 'login' })
   } catch (err) {

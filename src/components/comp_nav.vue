@@ -105,7 +105,7 @@ const logout = () => {
         <RouterLink :to="{ name: 'home' }" class="nav-item">Home</RouterLink>
         <!-- <RouterLink :to="{ name: 'about' }" class="nav-item">About</RouterLink> -->
         <RouterLink :to="{ name: 'explore' }" class="nav-item">Explore</RouterLink>
-        <RouterLink :to="{ name: 'guide' }" class="nav-item">Guide</RouterLink>
+        <RouterLink :to="{ name: 'guide' }" class="nav-item">User Guide</RouterLink>
         <RouterLink v-if="isLoggedIn && isStaff" :to="{ name: 'management' }" class="nav-item nav-item--active">
           Management
         </RouterLink>
@@ -205,12 +205,13 @@ const logout = () => {
               <Compass :size="18" /> Explore
             </RouterLink>
             <RouterLink :to="{ name: 'guide' }" class="drawer-item">
-              <HelpCircle :size="18" /> Guide
+              <HelpCircle :size="18" /> User Guide
             </RouterLink>
 
             <template v-if="isLoggedIn">
               <div class="drawer-section">Account & Actions</div>
-              <RouterLink v-if="isStudent" :to="{ name: 'upload' }" class="drawer-item" style="color: #00a651; font-weight: 600;">
+              <RouterLink v-if="isStudent" :to="{ name: 'upload' }" class="drawer-item"
+                style="color: #00a651; font-weight: 600;">
                 <BookOpen :size="18" /> New Upload
               </RouterLink>
               <RouterLink :to="{ name: 'profile' }" class="drawer-item">
