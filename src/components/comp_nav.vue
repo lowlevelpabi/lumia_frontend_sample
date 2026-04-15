@@ -3,7 +3,7 @@ import { ref, onMounted, watch, onUnmounted } from 'vue'
 import { useRouter, useRoute, RouterLink } from 'vue-router'
 import {
   Search, BookOpen, ArrowRight, LogOut, Settings,
-  ChevronDown, Home, Info, Compass, UserCircle, X, Menu
+  ChevronDown, Home, Compass, UserCircle, X, Menu, HelpCircle
 } from 'lucide-vue-next'
 import { api } from '../services/api'
 import { useAuth } from '../composables/useAuth'
@@ -16,7 +16,7 @@ const showMobileMenu = ref(false)
 const showMobileSearch = ref(false)
 const showProfileMenu = ref(false)
 
-const { isStaff, username, fullName, userRole } = useAuth()
+const { isStaff, isStudent, username, fullName, userRole } = useAuth()
 
 const checkAuth = () => {
   isLoggedIn.value = !!localStorage.getItem('token')
@@ -105,11 +105,16 @@ const logout = () => {
         <RouterLink :to="{ name: 'home' }" class="nav-item">Home</RouterLink>
         <!-- <RouterLink :to="{ name: 'about' }" class="nav-item">About</RouterLink> -->
         <RouterLink :to="{ name: 'explore' }" class="nav-item">Explore</RouterLink>
+        <RouterLink :to="{ name: 'guide' }" class="nav-item">Guide</RouterLink>
         <RouterLink v-if="isLoggedIn && isStaff" :to="{ name: 'management' }" class="nav-item nav-item--active">
           Management
         </RouterLink>
 
         <template v-if="isLoggedIn">
+          <RouterLink v-if="isStudent" :to="{ name: 'upload' }" class="nav-upload-btn shadow-sm">
+            Upload Document
+          </RouterLink>
+
           <div class="nav-divider"></div>
           <div class="nav-profile-container">
             <button class="nav-profile-trigger" @click.stop="showProfileMenu = !showProfileMenu">
@@ -196,15 +201,18 @@ const logout = () => {
             <RouterLink :to="{ name: 'home' }" class="drawer-item">
               <Home :size="18" /> Home
             </RouterLink>
-            <RouterLink :to="{ name: 'about' }" class="drawer-item">
-              <Info :size="18" /> About
-            </RouterLink>
             <RouterLink :to="{ name: 'explore' }" class="drawer-item">
               <Compass :size="18" /> Explore
             </RouterLink>
+            <RouterLink :to="{ name: 'guide' }" class="drawer-item">
+              <HelpCircle :size="18" /> Guide
+            </RouterLink>
 
             <template v-if="isLoggedIn">
-              <div class="drawer-section">Account</div>
+              <div class="drawer-section">Account & Actions</div>
+              <RouterLink v-if="isStudent" :to="{ name: 'upload' }" class="drawer-item" style="color: #00a651; font-weight: 600;">
+                <BookOpen :size="18" /> New Upload
+              </RouterLink>
               <RouterLink :to="{ name: 'profile' }" class="drawer-item">
                 <UserCircle :size="18" /> My Profile
               </RouterLink>
@@ -434,6 +442,26 @@ const logout = () => {
 
 .nav-item.nav-item--active {
   color: #000000;
+}
+
+/* Upload Button */
+.nav-upload-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: #00a651;
+  color: white;
+  padding: 0.5rem 0.9rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+
+.nav-upload-btn:hover {
+  background: #007d3d;
+  transform: translateY(-1px);
 }
 
 /* ── Profile Trigger ───────────────────────────────────────────── */

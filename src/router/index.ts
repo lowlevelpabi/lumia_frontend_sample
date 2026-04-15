@@ -10,6 +10,7 @@ import ManagementView from '../views/manage_win.vue'
 import UploadView from '../views/up_win.vue'
 import AboutView from '../views/about_win.vue'
 import ProfileView from '../views/profile_win.vue'
+import GuideView from '../views/guide_win.vue'
 import NotFound from '../views/not_found.vue'
 
 const STAFF_ROLES = ['Admin', 'Faculty'] // matches backend UserRole enum
@@ -64,7 +65,6 @@ const router = createRouter({
       meta: {
         title: 'Upload Research - Lumia',
         requiresAuth: true,
-        requiredRoles: STAFF_ROLES,
       },
     },
     {
@@ -81,6 +81,12 @@ const router = createRouter({
         title: 'My Profile - Lumia',
         requiresAuth: true,
       },
+    },
+    {
+      path: '/guide',
+      name: 'guide',
+      component: GuideView,
+      meta: { title: 'User Guide - Lumia' },
     },
     {
       path: '/:pathMatch(.*)*',

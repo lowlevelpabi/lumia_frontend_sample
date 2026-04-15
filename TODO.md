@@ -43,9 +43,17 @@
 - [x] **Body Text Bug with the Table**
       Fix the current bug during extraction, cleaning, and displaying of the body text in UI wherein the table's content such as `FUNCTIONALITY`, `MEAN`, `STANDARD DEVIATION`, `INTERPRETATION` are being displayed as a body text instead it should be filtered during uploading and extraction so it when the backend send it to UI, the UI won't need to display it either. (Give at least 1-2 screenshot of the sample table to see what is the content of the table being extracted also and flagged as body text).
 
+- [x] **Downloadable PDF Bug** - The downloadable pdf imrad format of the study producing a bug where the text is being gray out (used gray font color) and some part is still bright black color. (Give at least 1-3 sample image of the bug). Also the page number in the downloadable pdf is like doubled or duplicated or something? (Give at least 1-3 image of the problem with the page number).
+
 ## Next Agenda
 
-- [ ] **Downloadable PDF Bug** - The downloadable pdf imrad format of the study producing a bug where the text is being gray out (used gray font color) and some part is still bright black color. (Give at least 1-3 sample image of the bug). Also the page number in the downloadable pdf is like doubled or duplicated or something? (Give at least 1-3 image of the problem with the page number).
+- [x] **User Guide in UI** - At least have a structural guide or manual how to use the system or how to conduct the evaluation for online evaluation and not meetup setup.
+
+- [x] **Bookmark** - Should have at least a bookmark for user aside from citate.
+
+- [x] **Graph in UI** - Add a graph to track how many thesis and capstone does the repo has, and who's program has the most upload.
+
+- [x] **Credibility/Access** - Give credibility to student to upload their own study. If the student name from the uploaded thesis or capstone is the same as the user's name, then in that user's profile, there should be a tab for "My Uploads" and in that tab, the user can see the list of thesis and capstone that they uploaded. For example: If author 1 uploaded their study, when author 2 and 3 create its account or already created an account, they can see the list of thesis and capstone that author 1 uploaded in their profile.
 
 ---
 
@@ -74,3 +82,16 @@
   This is essentially what Semantic Scholar does, just scoped to your repository. It reuses your entire existing IMRAD extraction pipeline.
 
 ---
+
+## Testing & Reproduction Checklist
+
+- [ ] **1. Create student account**
+- [ ] **2. Upload document**
+- [ ] **3. Review extracted metadata** by the NLP model then index
+- [ ] **4. Go to Explore or Home page**
+- [ ] **5. Select the uploaded article**
+- [ ] **6. Review the comprehensive IMRaD format** the system provides in the UI
+- [ ] **7. Citate** (test citation functionality)
+- [ ] **8. Test PDF Download** and review the IMRaD structure of the manuscript
+- [ ] **9. Others (Management)** (test trash, edit, user roles)
+- [ ] **10. Answer the evaluation form**

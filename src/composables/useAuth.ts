@@ -7,7 +7,7 @@
  * Roles (match backend UserRole enum exactly):
  *   "Admin"   — UserRole.ADMIN   — full access
  *   "Faculty" — UserRole.FACULTY — upload + repository, NO user manager
- *   "User"    — UserRole.USER    — student, public access only
+ *   "Student" — UserRole.STUDENT — student, public access only
  */
 
 import { computed } from 'vue'
@@ -53,7 +53,7 @@ export function useAuth() {
   // Exact match against backend UserRole enum values
   const isAdmin   = computed(() => userRole.value === 'Admin')
   const isFaculty = computed(() => userRole.value === 'Faculty')
-  const isStudent = computed(() => userRole.value === 'User')
+  const isStudent = computed(() => userRole.value === 'Student')
 
   // Staff = anyone allowed into the management dashboard
   const isStaff = computed(() => isAdmin.value || isFaculty.value)
@@ -71,7 +71,7 @@ export function useAuth() {
 
   const fullName = computed<string>(() => {
     const payload = getTokenPayload()
-    return(payload?.full_name as string) ?? ''
+    return (payload?.full_name as string) ?? ''
   })
 
   return {

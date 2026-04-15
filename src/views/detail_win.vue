@@ -2,7 +2,7 @@
 import { ref, onMounted, watch, computed } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { useAuth } from '../composables/useAuth'
-import { Eye, Award, CheckCircle, Loader2, ChevronRight, Copy, Check, X, FileDown } from 'lucide-vue-next'
+import { Eye, Award, CheckCircle, Loader2, ChevronRight, Copy, Check, X, FileDown, Bookmark } from 'lucide-vue-next'
 import { api, type Paper, type SearchResult } from '../services/api'
 import { pdfExportService } from '../services/pdf_export_service'
 
@@ -24,6 +24,8 @@ const viewCount = ref(0)
 const citationCount = ref(0)
 const hasCited = ref(false)
 const citeLoading = ref(false)
+const isBookmarked = ref(false)
+const bookmarkLoading = ref(false)
 const exportLoading = ref(false)
 const { isLoggedIn } = useAuth()
 
@@ -165,6 +167,12 @@ const loadPaperData = async (id: string) => {
             citationCount.value = res.citation_count
           })
           .catch(() => { })
+
+        api.getBookmarkStatus(id)
+          .then(res => {
+            isBookmarked.value = res.is_bookmarked
+          })
+          .catch(() => { })
       }
     }
   } catch (error) {
@@ -207,6 +215,21 @@ const handleCite = async () => {
   }
 }
 
+const handleBookmark = async () => {
+  if (!isLoggedIn.value || bookmarkLoading.value || !paper.value) return
+  bookmarkLoading.value = true
+  try {
+    const res = await api.bookmarkPaper(paper.value.id)
+    isBookmarked.value = res.is_bookmarked
+  } catch (err) {
+    console.error('Bookmark failed:', err)
+  } finally {
+    bookmarkLoading.value = true
+    // Mini delay for better feel
+    setTimeout(() => { bookmarkLoading.value = false }, 400)
+  }
+}
+
 const handleDownloadPDF = async () => {
   if (!paper.value || exportLoading.value) return
   exportLoading.value = true
@@ -235,6 +258,7 @@ const authorList = computed(() => {
   }
   return [raw]
 })
+
 
 // ── IMRAD structured rendering ────────────────────────────────────────────────
 // The backend pre-parses flat text into typed blocks via imrad_structure_service.
@@ -401,7 +425,7 @@ const formatReferenceEntry = (raw: string): string => {
           <button @click="goBack" class="bc-link">Results</button>
           <ChevronRight :size="12" class="bc-sep" />
           <span class="bc-active">{{ paper.title.length > 55 ? paper.title.substring(0, 55) + '…' : paper.title
-          }}</span>
+            }}</span>
         </nav>
       </div>
     </div>
@@ -462,7 +486,6 @@ const formatReferenceEntry = (raw: string): string => {
                 <Award :size="12" /> {{ citationCount.toLocaleString() }} citations
               </span>
 
-              <!-- One button for both Vouching and Getting Reference -->
               <button v-if="isLoggedIn" class="j-cite-btn" :class="{ cited: hasCited }" :disabled="citeLoading"
                 @click="handleCite">
                 <CheckCircle v-if="hasCited" :size="13" />
@@ -470,6 +493,13 @@ const formatReferenceEntry = (raw: string): string => {
                 {{ hasCited ? 'Cited (Get Ref)' : citeLoading ? 'Citing…' : 'Cite this study' }}
               </button>
               <span v-else class="j-login-hint">Sign in to cite this study</span>
+
+              <button v-if="isLoggedIn" class="j-bookmark-btn" :class="{ bookmarked: isBookmarked }" :disabled="bookmarkLoading"
+                @click="handleBookmark">
+                <Loader2 v-if="bookmarkLoading" :size="13" class="spin" />
+                <Bookmark v-else :size="13" :fill="isBookmarked ? 'currentColor' : 'none'" />
+                {{ isBookmarked ? 'Bookmarked' : 'Bookmark' }}
+              </button>
 
               <button class="j-download-btn" :disabled="exportLoading" @click="handleDownloadPDF">
                 <Loader2 v-if="exportLoading" :size="13" class="spin" />
@@ -520,7 +550,8 @@ const formatReferenceEntry = (raw: string): string => {
                     <template v-for="(block, i) in getStructuredBlocks(cfg.key)" :key="i">
                       <div v-if="block.type === 'subheading'" class="journal-subheading">{{ block.text }}</div>
                       <div v-else-if="block.type === 'table-image'" class="journal-figure">
-                        <img :src="block.text" :alt="block.id" class="journal-figure-img" @click="openZoomModal(block.text)" />
+                        <img :src="block.text" :alt="block.id" class="journal-figure-img"
+                          @click="openZoomModal(block.text)" />
                       </div>
                       <p v-else-if="block.type === 'table-label'" class="journal-figure-caption">{{ block.text }}</p>
                       <p v-else class="journal-para">{{ block.text }}</p>
@@ -644,9 +675,8 @@ const formatReferenceEntry = (raw: string): string => {
             <!-- Citation text area -->
             <div class="citation-area">
               <div class="citation-area-inner">
-                <p class="citation-text" v-html="
-                  apaVariation === '6' ? formattedCitations.apa_6 : apaVariation === '7' ? formattedCitations.apa_7 : formattedCitations.apa_intext
-                "></p>
+                <p class="citation-text" v-html="apaVariation === '6' ? formattedCitations.apa_6 : apaVariation === '7' ? formattedCitations.apa_7 : formattedCitations.apa_intext
+                  "></p>
               </div>
               <p class="selector-note">Note: If you are citating this study, please make sure that you are manually
                 adding
@@ -710,6 +740,9 @@ const formatReferenceEntry = (raw: string): string => {
   min-height: 100vh;
   font-family: 'Source Sans 3', sans-serif;
   color: var(--ink);
+  /* Prevent any child (grid/columns) from creating horizontal scroll */
+  overflow-x: hidden;
+  width: 100%;
 }
 
 /* ══ TOP NAV BAR ══════════════════════════════════════════ */
@@ -774,6 +807,11 @@ const formatReferenceEntry = (raw: string): string => {
 
 /* ══ PAGE LAYOUT ══════════════════════════════════════════ */
 
+/* Paper wrapper — must have min-width:0 so 1fr column doesn't overflow grid */
+.journal-paper-wrap {
+  min-width: 0;
+  width: 100%;
+}
 
 /* ══ RELATED STUDIES SIDEBAR ══════════════════════════════ */
 .journal-sidebar {
@@ -1261,7 +1299,8 @@ const formatReferenceEntry = (raw: string): string => {
   object-fit: contain;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  background: #fff; /* White background for transparent table PNGs */
+  background: #fff;
+  /* White background for transparent table PNGs */
 }
 
 .zoom-close {
@@ -2361,18 +2400,43 @@ const formatReferenceEntry = (raw: string): string => {
   background: var(--green-dk);
 }
 
-.j-cite-btn.cited {
-  background: transparent;
-  border: 1px solid var(--green);
-  color: var(--green-dk);
-  cursor: pointer;
-}
-
 .j-cite-btn.cited:hover {
   background: var(--green-dim);
   border-color: var(--green-dk);
   color: var(--green-dk);
 }
+
+.j-bookmark-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background: transparent;
+  color: var(--ink-2);
+  border: 1px solid var(--rule);
+  padding: 0.32rem 0.85rem;
+  border-radius: 4px;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.74rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.14s;
+}
+
+.j-bookmark-btn:hover:not(:disabled) {
+  border-color: var(--ink-3);
+  background: var(--surface);
+}
+
+.j-bookmark-btn.bookmarked {
+  background: var(--hero-bg);
+  color: #fff;
+  border-color: var(--hero-bg);
+}
+
+.j-bookmark-btn.bookmarked:hover {
+  opacity: 0.9;
+}
+
 
 /* Plain Abstract layout */
 .journal-abstract-plain {
@@ -2631,12 +2695,14 @@ const formatReferenceEntry = (raw: string): string => {
 .journal-page-layout {
   max-width: 1540px;
   margin: 0 auto;
+  width: 100%;
   display: grid;
   /* 3-Column: Navigation | Paper | Recommendations */
   grid-template-columns: 200px 1fr 300px;
   gap: 3rem;
   padding: 2.5rem 2rem 5rem;
   align-items: start;
+  box-sizing: border-box;
 }
 
 /* ── Left Sidebar: Study Navigation ── */
@@ -2821,19 +2887,24 @@ const formatReferenceEntry = (raw: string): string => {
   }
 
   .journal-page-layout {
-    grid-template-columns: 1fr 300px;
+    /* TOC hidden → 2-column: Paper | Sidebar */
+    grid-template-columns: 1fr 280px;
     gap: 2rem;
   }
 }
 
 @media (max-width: 1100px) {
+
+  .journal-toc,
   .journal-sidebar {
     display: none;
   }
 
   .journal-page-layout {
+    /* Both sidebars hidden → single column, centered */
     grid-template-columns: 1fr;
     gap: 0;
+    padding: 1.5rem 1.5rem 4rem;
   }
 }
 

@@ -44,6 +44,8 @@ export interface Paper {
   uploaded_by?: string
   uploader_role?: string
   media?: Record<string, string> // Table images/visuals indexed by ID
+  is_manuscript?: boolean
+  is_scanned?: boolean
   // Soft-delete / Recycle Bin
   deleted_at?: string | null
   deleted_by?: string | null
@@ -201,6 +203,12 @@ export interface DashboardStats {
   total_capstone: number
   active_borrows: number
   total_penalties: number
+}
+
+export interface RepositoryStats {
+  total_papers: number
+  by_project_type: Record<string, number>
+  by_program: Record<string, number>
 }
 
 export interface ActivityLog {
@@ -416,6 +424,23 @@ export const api = {
     return response.json()
   },
 
+  async getBookmarkStatus(id: string): Promise<{ is_bookmarked: boolean }> {
+    const response = await apiFetch(`${BASE_URL}/papers/${id}/bookmark`, {
+      headers: getAuthHeaders(),
+    })
+    if (!response.ok) throw new Error('Bookmark status failed')
+    return response.json()
+  },
+
+  async bookmarkPaper(id: string): Promise<{ is_bookmarked: boolean }> {
+    const response = await apiFetch(`${BASE_URL}/papers/${id}/bookmark`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+    })
+    if (!response.ok) throw new Error('Bookmark toggle failed')
+    return response.json()
+  },
+
   async getFormattedCitations(id: string): Promise<{
     apa_6: string
     apa_7: string
@@ -474,6 +499,22 @@ export const api = {
       headers: getAuthHeaders(),
     })
     if (!response.ok) throw new Error('Failed to fetch citations')
+    return response.json()
+  },
+
+  async getUserBookmarks(): Promise<Paper[]> {
+    const response = await apiFetch(`${BASE_URL}/users/me/bookmarks`, {
+      headers: getAuthHeaders(),
+    })
+    if (!response.ok) throw new Error('Failed to fetch bookmarks')
+    return response.json()
+  },
+
+  async getUserUploads(): Promise<Paper[]> {
+    const response = await apiFetch(`${BASE_URL}/users/me/uploads`, {
+      headers: getAuthHeaders(),
+    })
+    if (!response.ok) throw new Error('Failed to fetch user uploads')
     return response.json()
   },
 
@@ -580,6 +621,14 @@ export const api = {
       headers: getAuthHeaders(),
     })
     if (!response.ok) throw new Error('Failed to purge paper')
+  },
+
+  async getRepositoryStats(): Promise<RepositoryStats> {
+    const response = await apiFetch(`${BASE_URL}/papers/stats`, {
+      headers: getAuthHeaders(),
+    })
+    if (!response.ok) throw new Error('Failed to fetch repository stats')
+    return response.json()
   },
 
   // ── Sample Documents (System Evaluation Feature) ──────────────────────────

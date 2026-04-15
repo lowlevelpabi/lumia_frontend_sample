@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter, RouterLink } from 'vue-router'
-import { Search, User, ArrowRight, Clock } from 'lucide-vue-next'
+import { Search, User, ArrowRight, Clock, X } from 'lucide-vue-next'
 import { api, type Paper } from '../services/api'
 import { historyService } from '../services/history'
 
@@ -18,6 +18,7 @@ onMounted(async () => {
   searchHistory.value = historyService.getHistory()
   try {
     const allPapers = await api.listAllPapers()
+    
     recentPapers.value = allPapers
       .sort((a, b) => String(b.id).localeCompare(String(a.id)))
       .slice(0, 6)
@@ -85,18 +86,6 @@ const handleSearch = () => {
           </div>
           <button class="search-btn" @click="handleSearch">Search</button>
         </div>
-
-        <!--
-        <div class="browse-chips">
-          <span class="chips-label">Browse for:</span>
-          <RouterLink :to="{ name: 'explore', query: { q: 'thesis article' } }" class="chip">thesis article</RouterLink>
-          <RouterLink :to="{ name: 'explore', query: { q: 'capstone project' } }" class="chip">capstone project
-          </RouterLink>
-          <RouterLink :to="{ name: 'explore', query: { q: 'computer science topic' } }" class="chip">computer science
-            topic
-          </RouterLink>
-        </div>
-        -->
 
       </div>
     </section>
@@ -302,7 +291,6 @@ const handleSearch = () => {
   position: relative;
   z-index: 1;
   text-align: center;
-  /* Center text content */
 }
 
 /* Masthead bar — journal-header feel */
@@ -336,21 +324,7 @@ const handleSearch = () => {
   line-height: 1.1;
   color: #fff;
   margin: 0 auto 1.25rem;
-  /* Centered margin */
   letter-spacing: -0.01em;
-}
-
-.hero-heading em {
-  font-style: italic;
-  color: var(--green);
-}
-
-.hero-sub {
-  font-size: 1rem;
-  line-height: 1.7;
-  color: rgba(255, 255, 255, 0.46);
-  margin: 0 0 2.5rem;
-  max-width: 540px;
 }
 
 /* Search */
@@ -359,7 +333,6 @@ const handleSearch = () => {
   gap: 0.5rem;
   max-width: 620px;
   margin: 0 auto 1.5rem;
-  /* Centered search row */
 }
 
 .search-field {
@@ -418,36 +391,6 @@ const handleSearch = () => {
   background: var(--green-dk);
 }
 
-/* Browse chips */
-.browse-chips {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  flex-wrap: wrap;
-}
-
-.chips-label {
-  font-size: 0.7rem;
-  color: rgba(255, 255, 255, 0.26);
-  margin-right: 0.1rem;
-}
-
-.chip {
-  font-size: 0.7rem;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.42);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 3px;
-  padding: 0.25rem 0.58rem;
-  text-decoration: none;
-  transition: color 0.14s, border-color 0.14s;
-}
-
-.chip:hover {
-  color: #fff;
-  border-color: rgba(255, 255, 255, 0.36);
-}
-
 /* ══ CONTENT ════════════════════════════════════════════ */
 .content-wrap {
   padding: 2.75rem 2rem 5rem;
@@ -455,7 +398,6 @@ const handleSearch = () => {
 
 .content-grid {
   max-width: 1100px;
-  /* Centered narrow feed for better readability */
   margin: 0 auto;
   display: block;
   align-items: start;
@@ -480,20 +422,6 @@ const handleSearch = () => {
   text-transform: uppercase;
   letter-spacing: 0.09em;
   color: var(--ink-2);
-}
-
-.head-link {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-size: 0.7rem;
-  font-weight: 600;
-  color: var(--green);
-  text-decoration: none;
-}
-
-.head-link:hover {
-  text-decoration: underline;
 }
 
 /* Paper list */
@@ -687,98 +615,6 @@ const handleSearch = () => {
   margin-bottom: 0;
 }
 
-/* ── Sidebar ───────────────────────────────────────────── */
-.sidebar {
-  display: flex;
-  flex-direction: column;
-  gap: 2rem;
-  position: sticky;
-  top: calc(64px + 1.5rem);
-}
-
-.sb-panel {
-  border-top: 2px solid var(--ink);
-  padding-top: 0.85rem;
-}
-
-.sb-title {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  font-size: 0.67rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--ink);
-  margin-bottom: 1.1rem;
-}
-
-.sb-group {
-  margin-bottom: 1rem;
-}
-
-.sb-group:last-child {
-  margin-bottom: 0;
-}
-
-.sb-group-label {
-  font-size: 0.61rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: var(--ink-3);
-  margin: 0 0 0.38rem;
-}
-
-.sb-link {
-  display: block;
-  font-size: 0.83rem;
-  color: var(--ink-2);
-  text-decoration: none;
-  padding: 0.27rem 0;
-  transition: color 0.13s, padding-left 0.13s;
-}
-
-.sb-link:hover {
-  color: var(--green-dk);
-  padding-left: 5px;
-}
-
-/* Tips */
-.tips {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.65rem;
-}
-
-.tips li {
-  font-size: 0.79rem;
-  color: var(--ink-2);
-  line-height: 1.55;
-  padding-left: 1rem;
-  position: relative;
-}
-
-.tips li::before {
-  content: '—';
-  position: absolute;
-  left: 0;
-  color: var(--ink-3);
-  font-size: 0.68rem;
-}
-
-.tips code {
-  font-family: ui-monospace, 'SF Mono', Menlo, monospace;
-  font-size: 0.72rem;
-  background: #ededea;
-  padding: 0.1rem 0.3rem;
-  border-radius: 3px;
-  color: var(--ink);
-}
-
 /* ── Empty Feed ────────────────────────────────────────── */
 .empty-feed {
   padding: 4rem 2rem;
@@ -800,6 +636,17 @@ const handleSearch = () => {
   color: var(--ink-3);
   max-width: 320px;
   margin: 0 auto;
+}
+
+.bar-fill.secondary {
+  background: var(--hero-bg);
+}
+
+@media (max-width: 768px) {
+  .analytics-inner {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
 }
 
 /* ── Responsive ────────────────────────────────────────── */

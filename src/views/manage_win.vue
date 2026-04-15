@@ -10,7 +10,7 @@ import {
   FileUp, CheckCircle, AlertCircle, Check,
   AlertTriangle, RefreshCw, SquareArrowRight, ShieldAlert, ShieldCheck, UserCog, UserPlus, ArchiveRestore, GripVertical
 } from 'lucide-vue-next'
-import { api, BASE_URL, type Paper, type UserResponse, type PartialPaperMetadata, type ActivityLog, type SampleDocument } from '../services/api'
+import { api, BASE_URL, type Paper, type UserResponse, type PartialPaperMetadata, type ActivityLog, type SampleDocument, type RepositoryStats } from '../services/api'
 import { useAuth } from '../composables/useAuth'
 import BookLoader from '../components/BookLoader.vue'
 
@@ -84,7 +84,7 @@ const baseNavItems: { id: Section; label: string; icon: Component; description: 
   { id: 'repository', label: 'Thesis & Research', icon: Library, description: 'Browse & manage indexed works' },
 ]
 const adminNavItems: { id: Section; label: string; icon: Component; description: string }[] = [
-  { id: 'users', label: 'User Manager', icon: Users, description: 'Manage students & faculty' },
+  { id: 'users', label: 'Membership', icon: Users, description: 'Manage students & faculty' },
   { id: 'logs', label: 'Activity Log', icon: Clock, description: 'Track uploads, edits & deletes' },
 ]
 const canEditNavItems: { id: Section; label: string; icon: Component; description: string }[] = [
@@ -104,14 +104,14 @@ const activeLabel = computed(() => {
 
 const setSection = (s: Section) => {
   if (s === 'users' && !isAdmin.value) return
-  
+
   // Reset navigation-blocking states
   showEditModal.value = false
   showCreateUserModal.value = false
   showPurgeModal.value = false
   roleTarget.value = null
   if (s !== 'upload') step.value = 1
-  
+
   activeSection.value = s
   router.push({ query: { ...router.currentRoute.value.query, tab: s } })
   mobileSidebarOpen.value = false
@@ -135,10 +135,33 @@ const papers = ref<Paper[]>([])
 const loading = ref(true)
 const searchQuery = ref('')
 const activeFilter = ref<'all' | 'Thesis' | 'Capstone Project'>('all')
+const repoStats = ref<RepositoryStats | null>(null)
+const statsLoading = ref(false)
+
+const statsPercentages = computed(() => {
+  if (!repoStats.value || repoStats.value.total_papers === 0) return { thesis: 50, capstone: 50 }
+  const total = repoStats.value.total_papers
+  const t = (repoStats.value.by_project_type['Thesis'] || 0) / total * 100
+  return { thesis: t, capstone: 100 - t }
+})
+
+const fetchStats = async () => {
+  statsLoading.value = true
+  try {
+    repoStats.value = await api.getRepositoryStats()
+  } catch (e) {
+    console.error('Failed to fetch stats:', e)
+  } finally {
+    statsLoading.value = false
+  }
+}
 
 const fetchPapers = async () => {
   loading.value = true
-  try { papers.value = await api.listAllPapers() }
+  try {
+    papers.value = await api.listAllPapers()
+    await fetchStats()
+  }
   catch (e) { console.error(e) }
   finally { loading.value = false }
 }
@@ -223,7 +246,7 @@ const fetchUsers = async () => {
 
 const adminCount = computed(() => users.value.filter(u => u.role === 'Admin').length)
 const facultyCount = computed(() => users.value.filter(u => u.role === 'Faculty').length)
-const studentCount = computed(() => users.value.filter(u => u.role === 'User').length) // Based on models/user.py UserRole.USER = "User"
+const studentCount = computed(() => users.value.filter(u => u.role === 'Student').length)
 
 // ── Activity Logs ─────────────────────────────────────────────────
 const logs = ref<ActivityLog[]>([])
@@ -321,7 +344,10 @@ const handlePurgeConfirm = async () => {
   }
 }
 
-watch(activeSection, (s) => { if (s === 'trash') fetchTrashedPapers() })
+watch(activeSection, (s) => {
+  if (s === 'trash') fetchTrashedPapers()
+  if (s === 'repository') fetchStats()
+})
 
 // ── Role Change ───────────────────────────────────────────────────
 const roleTarget = ref<UserResponse | null>(null)
@@ -1089,11 +1115,13 @@ watch(activeSection, (newSection) => {
                   <h1 class="upload-card-title">Upload Document</h1>
                   <p>Upload a PDF to index into the research repository.</p>
                 </div>
-                <div v-if="uploadError" class="error-banner" :class="{ 'terminal-error': uploadError.includes('Upload Terminated') }">
+                <div v-if="uploadError" class="error-banner"
+                  :class="{ 'terminal-error': uploadError.includes('Upload Terminated') }">
                   <ShieldAlert v-if="uploadError.includes('Upload Terminated')" :size="24" />
                   <AlertCircle v-else :size="16" />
                   <div class="error-content">
-                    <strong>{{ uploadError.includes('Upload Terminated') ? 'Upload Rejected' : 'Error Detected' }}</strong>
+                    <strong>{{ uploadError.includes('Upload Terminated') ? 'Upload Rejected' : 'Error Detected'
+                    }}</strong>
                     <p>{{ uploadError }}</p>
                   </div>
                 </div>
@@ -1465,6 +1493,55 @@ watch(activeSection, (newSection) => {
             </div>
           </div>
 
+          <!-- Creative Analytics Section -->
+          <div v-if="repoStats" class="analytics-grid">
+            <div class="chart-card">
+              <div class="chart-header">
+                <span class="chart-title">Document Composition</span>
+                <span class="chart-desc">Thesis vs. Capstone Projects</span>
+              </div>
+              <div class="pie-container">
+                <div class="pie-chart"
+                  :style="{ background: `conic-gradient(var(--blue) 0% ${statsPercentages.thesis}%, var(--orange) ${statsPercentages.thesis}% 100%)` }">
+                  <div class="pie-center">
+                    <span class="pie-total">{{ repoStats.total_papers }}</span>
+                    <span class="pie-label">Indexed</span>
+                  </div>
+                </div>
+                <div class="pie-legend">
+                  <div class="legend-item">
+                    <span class="dot blue"></span>
+                    <span class="label">Thesis</span>
+                    <span class="value">{{ Math.round(statsPercentages.thesis) }}%</span>
+                  </div>
+                  <div class="legend-item">
+                    <span class="dot orange"></span>
+                    <span class="label">Capstone</span>
+                    <span class="value">{{ Math.round(statsPercentages.capstone) }}%</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="chart-card">
+              <div class="chart-header">
+                <span class="chart-title">Program Distribution</span>
+                <span class="chart-desc">Uploads per Degree Program</span>
+              </div>
+              <div class="prog-list">
+                <div v-for="(count, prog) in repoStats.by_program" :key="prog" class="prog-row">
+                  <div class="prog-meta">
+                    <span class="prog-name">{{ prog }}</span>
+                    <span class="prog-count">{{ count }}</span>
+                  </div>
+                  <div class="prog-track">
+                    <div class="prog-fill" :style="{ width: (count / repoStats.total_papers * 100) + '%' }"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div class="toolbar">
             <div class="search-box">
               <Search :size="13" class="search-ico" />
@@ -1585,7 +1662,7 @@ watch(activeSection, (newSection) => {
         <template v-else-if="activeSection === 'users'">
           <div class="page-head">
             <div>
-              <h1 class="page-title">User Management</h1>
+              <h1 class="page-title">Membership Management</h1>
               <p class="page-sub">Monitor accounts and manage role-based access control.</p>
             </div>
             <button v-if="isAdmin" @click="openCreateUserModal" class="add-btn">
@@ -1620,7 +1697,7 @@ watch(activeSection, (newSection) => {
               <table class="tbl">
                 <thead>
                   <tr>
-                    <th>User</th>
+                    <th>Academic Member</th>
                     <th>Role</th>
                     <th class="th-r">Change Role</th>
                   </tr>
@@ -1953,14 +2030,14 @@ watch(activeSection, (newSection) => {
                 </button>
               </div>
               <div class="role-opts">
-                <label class="role-opt" :class="{ selected: roleNew === 'User' }">
-                  <input type="radio" v-model="roleNew" value="User" />
+                <label class="role-opt" :class="{ selected: roleNew === 'Student' }">
+                  <input type="radio" v-model="roleNew" value="Student" />
                   <div class="role-opt-ico blue">
                     <Users :size="15" />
                   </div>
-                  <div class="role-opt-info"><span class="role-opt-name">Student / User</span><span
-                      class="role-opt-desc">Can
-                      search and view papers only.</span></div>
+                  <div class="role-opt-info"><span class="role-opt-name">Student</span><span class="role-opt-desc">Can
+                      search
+                      and view papers only.</span></div>
                   <Check v-if="roleNew === 'User'" :size="13" class="role-check" />
                 </label>
                 <label class="role-opt" :class="{ selected: roleNew === 'Faculty' }">
@@ -2142,6 +2219,9 @@ watch(activeSection, (newSection) => {
   --green-dim: #e6f4ed;
   --hero: #0d1f12;
   --sb-w: 210px;
+  --blue: #2563eb;
+  --orange: #c2410c;
+  --purple: #7c3aed;
 
   display: flex;
   min-height: calc(100vh - 64px);
@@ -4792,14 +4872,31 @@ watch(activeSection, (newSection) => {
   padding: 1rem 1.25rem;
   margin: 1rem 0;
   box-shadow: 0 2px 8px rgba(153, 27, 27, 0.08);
-  animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
+  animation: shake 0.4s cubic-bezier(.36, .07, .19, .97) both;
 }
 
 @keyframes shake {
-  10%, 90% { transform: translate3d(-1px, 0, 0); }
-  20%, 80% { transform: translate3d(2px, 0, 0); }
-  30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
-  40%, 60% { transform: translate3d(4px, 0, 0); }
+
+  10%,
+  90% {
+    transform: translate3d(-1px, 0, 0);
+  }
+
+  20%,
+  80% {
+    transform: translate3d(2px, 0, 0);
+  }
+
+  30%,
+  50%,
+  70% {
+    transform: translate3d(-4px, 0, 0);
+  }
+
+  40%,
+  60% {
+    transform: translate3d(4px, 0, 0);
+  }
 }
 
 /* ══ SPINNER ═══════════════════════════════════════════════════ */
@@ -5300,6 +5397,182 @@ watch(activeSection, (newSection) => {
     margin: 0;
     opacity: 0.9;
     line-height: 1.4;
+  }
+}
+
+/* ══ ANALYTICS ══════════════════════════════════════════════════ */
+.analytics-grid {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 1.25rem;
+  margin: 1.5rem 0 2rem;
+}
+
+.chart-card {
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.chart-header {
+  margin-bottom: 1.5rem;
+}
+
+.chart-title {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink);
+}
+
+.chart-desc {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--ink-3);
+  margin-top: 2px;
+}
+
+.pie-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5rem;
+}
+
+.pie-chart {
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: inset 0 0 0 10px rgba(255, 255, 255, 0.1);
+}
+
+.pie-center {
+  width: 90px;
+  height: 90px;
+  background: var(--paper);
+  border-radius: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.pie-total {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--ink);
+  line-height: 1;
+}
+
+.pie-label {
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  letter-spacing: 0.05em;
+}
+
+.pie-legend {
+  display: flex;
+  width: 100%;
+  justify-content: center;
+  gap: 1.5rem;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.legend-item .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.legend-item .dot.blue {
+  background: var(--blue);
+}
+
+.legend-item .dot.orange {
+  background: var(--orange);
+}
+
+.legend-item .label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.legend-item .value {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--ink-3);
+  margin-left: 2px;
+}
+
+/* Program List */
+.prog-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.prog-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.prog-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.prog-name {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.prog-count {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.prog-track {
+  height: 6px;
+  background: var(--surface);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.prog-fill {
+  height: 100%;
+  background: var(--green);
+  border-radius: 3px;
+  transition: width 0.8s cubic-bezier(0.165, 0.84, 0.44, 1);
+}
+
+@media (max-width: 1100px) {
+  .analytics-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>
