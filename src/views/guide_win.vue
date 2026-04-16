@@ -59,13 +59,14 @@ import { BookOpen, Search, ClipboardList } from 'lucide-vue-next'
             <ol>
               <li><strong>Create an account:</strong> Register a new student account to simulate public access.</li>
               <li><strong>Upload document:</strong> Use the provided thesis and capstone document from the upload UI.
-                (We
-                provided an empty document and non-imrad pages for guard rails)
+                (We provided an empty document and non-imrad pages for guard rails)
               </li>
               <li><strong>Review extraction:</strong> Verify the initial OCR/NLP extraction, adjust metadata or
                 boundaries if necessary, and index the document.</li>
               <li><strong>Go to Explore:</strong> Navigate to the Home or Explore page to see your newly indexed
                 document.</li>
+              <li><strong>Test search queries:</strong> Use the search bar to test keyword and semantic search with
+                various queries (e.g., document title, topic keywords). Verify results relevance and ranking.</li>
               <li><strong>Select the article:</strong> Click on your uploaded article to open the detailed reading view.
               </li>
               <li><strong>Review IMRAD format:</strong> Ensure the comprehensive IMRAD format correctly renders the
@@ -74,9 +75,11 @@ import { BookOpen, Search, ClipboardList } from 'lucide-vue-next'
                 usage accurately.</li>
               <li><strong>Test Download as PDF:</strong> Export the study and verify the A4-formatted, justified,
                 standard IMRaD PDF.</li>
-              <li><strong>Others (Management):</strong> Navigate to the Management tab to review the document in the
-                repository list, make edits, or test deletion (Trash).</li>
-              <li><strong>Answer Evaluation:</strong> Test out any linked evaluation metrics or forms.</li>
+              <li><strong>Others:</strong> Test the rest of the remaining UI features such as filter and sorting.</li>
+              <li><strong>Answer Evaluation:</strong> Evaluate the system using this <a
+                  href="https://forms.gle/D2Ys5qyd7eKJU8Hq6" target="_blank" rel="noopener noreferrer">Google Form
+                  Evaluation Link</a>
+              </li>
             </ol>
           </section>
 
