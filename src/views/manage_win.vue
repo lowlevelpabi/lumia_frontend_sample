@@ -1049,9 +1049,8 @@ watch(activeSection, (newSection) => {
           <ChevronRight :size="12" class="bc-sep" />
           <span class="bc-active">{{ activeLabel }}</span>
         </div>
-
-        <!-- Upload step rail -->
-        <div v-if="activeSection === 'upload'" class="steps-rail">
+        <!-- Upload step rail (Desktop only) -->
+        <div v-if="activeSection === 'upload' && !isMobile" class="steps-rail inside-navbar">
           <div class="step-item" :class="{ active: step >= 1, done: step > 1 }">
             <div class="step-num">
               <Check v-if="step > 1" :size="12" /><span v-else>1</span>
@@ -1074,7 +1073,7 @@ watch(activeSection, (newSection) => {
           </div>
         </div>
 
-        <div class="topbar-right">
+        <div v-if="!isMobile" class="topbar-right">
           <div class="live-clock">
             <Clock :size="13" stroke-width="2.5" />
             <span>{{ formattedTime }}</span>
@@ -1089,6 +1088,29 @@ watch(activeSection, (newSection) => {
         <!-- ══ UPLOAD ════════════════════════════════════════════ -->
         <template v-if="activeSection === 'upload'">
           <div class="upload-wrap">
+            <!-- Detached steps rail (Mobile only) -->
+            <div v-if="isMobile" class="steps-rail detached">
+              <div class="step-item" :class="{ active: step >= 1, done: step > 1 }">
+                <div class="step-num">
+                  <Check v-if="step > 1" :size="12" /><span v-else>1</span>
+                </div>
+                <span class="step-label">Upload</span>
+              </div>
+              <div class="step-line" :class="{ loading: step === 1 }" />
+              <div class="step-item" :class="{ active: step >= 2, done: step > 2 }">
+                <div class="step-num">
+                  <Check v-if="step > 2" :size="12" /><span v-else>2</span>
+                </div>
+                <span class="step-label">Review</span>
+              </div>
+              <div class="step-line" :class="{ loading: step === 2 }" />
+              <div class="step-item" :class="{ active: step >= 3 }">
+                <div class="step-num">
+                  <Check v-if="step > 3" :size="12" /><span v-else>3</span>
+                </div>
+                <span class="step-label">Done</span>
+              </div>
+            </div>
             <!--
             <div v-if="sampleDocs.length > 0 && step === 1"
               class="notice-banner green flat-notice sample-ethics-notice-top">
@@ -2527,11 +2549,27 @@ watch(activeSection, (newSection) => {
   gap: 1rem;
 }
 
+@media (max-width: 768px) {
+  .topbar {
+    padding: 0 0.75rem;
+    gap: 0.5rem;
+  }
+  .bc-root, .bc-sep {
+    display: none;
+  }
+}
+
 .topbar-right {
   display: flex;
   align-items: center;
   justify-content: flex-end;
   min-width: 180px;
+}
+
+@media (max-width: 420px) {
+  .topbar-right {
+    min-width: 0;
+  }
 }
 
 .live-clock {
@@ -2550,6 +2588,21 @@ watch(activeSection, (newSection) => {
 
 .live-clock span {
   font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 600px) {
+  .live-clock svg {
+    display: none;
+  }
+  .live-clock {
+    padding: 0.4rem 0.5rem;
+  }
+}
+
+@media (max-width: 420px) {
+  .live-clock {
+    display: none;
+  }
 }
 
 .topbar-left {
@@ -2626,6 +2679,28 @@ watch(activeSection, (newSection) => {
 .steps-rail {
   display: flex;
   align-items: center;
+}
+
+/* Detached version (Mobile content area) */
+.steps-rail.detached {
+  justify-content: center;
+  gap: 1.5rem;
+  padding: 1.5rem 1rem;
+  background: var(--paper);
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 1rem;
+}
+
+/* Navbar version (Desktop topbar) */
+.steps-rail.inside-navbar {
+  margin: 0;
+}
+
+@media (max-width: 600px) {
+  .steps-rail.detached {
+    padding: 1rem 0.5rem;
+    gap: 0.75rem;
+  }
 }
 
 .step-item {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, computed, watch, nextTick, onMounted } from 'vue'
+import { ref, reactive, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   FileUp, Loader2, CheckCircle, AlertCircle,
@@ -18,6 +18,16 @@ const step = ref(1) // 1: Upload, 2: Review, 3: Done
 const processingDoc = ref(false)
 const uploadingPaper = ref(false)
 const uploadError = ref('')
+
+// Reactive mobile breakpoint check
+const isMobile = ref(window.innerWidth <= 768)
+const onResize = () => { isMobile.value = window.innerWidth <= 768 }
+onMounted(() => {
+  window.addEventListener('resize', onResize)
+})
+onUnmounted(() => {
+  window.removeEventListener('resize', onResize)
+})
 
 const file = ref<File | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
@@ -450,32 +460,30 @@ onMounted(loadSampleDocs)
         <span class="up-brand">Upload Research</span>
       </div>
 
-      <!-- Step rail -->
-      <div class="steps-rail">
+      <!-- Step rail (Desktop only) -->
+      <div v-if="!isMobile" class="steps-rail inside-navbar">
         <div class="step-item" :class="{ active: step >= 1, done: step > 1 }">
           <div class="step-num">
             <Check v-if="step > 1" :size="12" /><span v-else>1</span>
-            <div v-if="step === 1" class="step-spinner" />
           </div>
           <span class="step-label">Upload</span>
         </div>
-        <div class="step-line" />
+        <div class="step-line" :class="{ loading: step === 1 }" />
         <div class="step-item" :class="{ active: step >= 2, done: step > 2 }">
           <div class="step-num">
             <Check v-if="step > 2" :size="12" /><span v-else>2</span>
-            <div v-if="step === 2" class="step-spinner" />
           </div>
           <span class="step-label">Review</span>
         </div>
-        <div class="step-line" />
+        <div class="step-line" :class="{ loading: step === 2 }" />
         <div class="step-item" :class="{ active: step >= 3 }">
           <div class="step-num">
             <span>3</span>
-            <div v-if="step === 3" class="step-spinner" />
           </div>
           <span class="step-label">Done</span>
         </div>
       </div>
+
 
       <div class="up-topbar-right">
         <button v-if="step === 2" class="cancel-btn" @click="cancelUpload">
@@ -486,6 +494,29 @@ onMounted(loadSampleDocs)
 
     <!-- ── Content ─────────────────────────────────────────── -->
     <main class="up-content">
+      <!-- Detached steps rail (Mobile only) -->
+      <div v-if="isMobile" class="steps-rail detached">
+        <div class="step-item" :class="{ active: step >= 1, done: step > 1 }">
+          <div class="step-num">
+            <Check v-if="step > 1" :size="12" /><span v-else>1</span>
+          </div>
+          <span class="step-label">Upload</span>
+        </div>
+        <div class="step-line" :class="{ loading: step === 1 }" />
+        <div class="step-item" :class="{ active: step >= 2, done: step > 2 }">
+          <div class="step-num">
+            <Check v-if="step > 2" :size="12" /><span v-else>2</span>
+          </div>
+          <span class="step-label">Review</span>
+        </div>
+        <div class="step-line" :class="{ loading: step === 2 }" />
+        <div class="step-item" :class="{ active: step >= 3 }">
+          <div class="step-num">
+            <span>3</span>
+          </div>
+          <span class="step-label">Done</span>
+        </div>
+      </div>
 
       <!-- Step 1 & 3: Centered card -->
       <div v-if="step !== 2" class="upload-center">
@@ -915,6 +946,12 @@ onMounted(loadSampleDocs)
   color: var(--ink);
 }
 
+@media (max-width: 480px) {
+  .up-brand {
+    display: none;
+  }
+}
+
 .up-topbar-right {
   min-width: 120px;
   display: flex;
@@ -946,6 +983,28 @@ onMounted(loadSampleDocs)
 .steps-rail {
   display: flex;
   align-items: center;
+}
+
+/* Detached version (Mobile content area) */
+.steps-rail.detached {
+  justify-content: center;
+  gap: 1.5rem;
+  padding: 1.5rem 0;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 1rem;
+  background: var(--paper);
+}
+
+/* Navbar version (Desktop topbar) */
+.steps-rail.inside-navbar {
+  margin: 0;
+}
+
+@media (max-width: 600px) {
+  .steps-rail.detached {
+    padding: 1rem 0.5rem;
+    gap: 0.75rem;
+  }
 }
 
 .step-item {
@@ -998,17 +1057,23 @@ onMounted(loadSampleDocs)
   height: 2px;
   background: var(--rule);
   margin: 0 0.4rem;
+  position: relative;
+  overflow: hidden;
 }
 
-.step-spinner {
-  position: absolute;
-  inset: -4px;
-  border-radius: 50%;
-  border: 2px solid transparent;
-  border-top-color: var(--green);
-  border-right-color: var(--green);
-  animation: spin 1.5s linear infinite;
-  pointer-events: none;
+.step-line.loading {
+  background: linear-gradient(90deg, 
+    var(--rule) 0%, 
+    var(--green) 50%, 
+    var(--rule) 100%
+  );
+  background-size: 200% 100%;
+  animation: step-line-sweep 1.2s infinite linear;
+}
+
+@keyframes step-line-sweep {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 
 @keyframes spin {
