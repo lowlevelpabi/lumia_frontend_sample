@@ -76,7 +76,7 @@ import { BookOpen, Search, ClipboardList } from 'lucide-vue-next'
               <li><strong>Test Download as PDF:</strong> Export the study and verify the A4-formatted, justified,
                 standard IMRaD PDF.</li>
               <li><strong>Others:</strong> Test the rest of the remaining UI features such as filter and sorting.</li>
-              <li><strong>Answer Evaluation:</strong> Evaluate the system using this <a
+              <li><strong>Answer Evaluation:</strong> If you are ready to evaluate the system, use this <a
                   href="https://forms.gle/D2Ys5qyd7eKJU8Hq6" target="_blank" rel="noopener noreferrer">Google Form
                   Evaluation Link</a>
               </li>
