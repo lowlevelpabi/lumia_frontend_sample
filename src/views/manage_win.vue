@@ -5,10 +5,10 @@ import {
   Library, Trash2, Edit3,
   Search, Plus, FolderOpen, Loader2,
   FileText, Users, Calendar, ChevronRight,
-  Settings, ArrowLeft, Save, BookOpen,
+  Settings, ArrowLeft, Save,
   UserCheck, Menu, X, Clock, Eye,
   FileUp, CheckCircle, AlertCircle, Check,
-  AlertTriangle, RefreshCw, SquareArrowRight, ShieldAlert, ShieldCheck, UserCog, UserPlus, ArchiveRestore, GripVertical
+  AlertTriangle, RefreshCw, PanelLeftOpen, PanelLeftClose, ShieldAlert, ShieldCheck, UserCog, UserPlus, ArchiveRestore, GripVertical
 } from 'lucide-vue-next'
 import { api, BASE_URL, type Paper, type UserResponse, type PartialPaperMetadata, type ActivityLog, type SampleDocument, type RepositoryStats } from '../services/api'
 import { useAuth } from '../composables/useAuth'
@@ -997,7 +997,7 @@ watch(activeSection, (newSection) => {
     <aside class="sidebar" :class="{ collapsed: sidebarCollapsed, 'mob-open': mobileSidebarOpen }">
       <div class="sb-brand">
         <div class="sb-brand-icon">
-          <BookOpen :size="16" color="#fff" stroke-width="2.5" />
+          <img src="/lumia_logo.ico" style="width: 18px; height: 18px; object-fit: contain;" />
         </div>
         <div class="sb-brand-text">
           <span class="sb-name">Lumia</span>
@@ -1022,7 +1022,10 @@ watch(activeSection, (newSection) => {
       </nav>
 
       <div class="sb-footer">
-        <ShieldAlert :size="12" /><span>Staff access only</span>
+        <div class="sb-footer-badge">
+          <ShieldAlert :size="12" />
+          <span>Staff access only</span>
+        </div>
       </div>
     </aside>
 
@@ -1038,8 +1041,8 @@ watch(activeSection, (newSection) => {
               <Menu v-else :size="19" stroke-width="2.2" />
             </template>
             <template v-else>
-              <Menu v-if="!sidebarCollapsed" :size="19" stroke-width="2.2" />
-              <SquareArrowRight v-else :size="19" stroke-width="2.2" />
+              <PanelLeftClose v-if="!sidebarCollapsed" :size="19" stroke-width="2.2" />
+              <PanelLeftOpen v-else :size="19" stroke-width="2.2" />
             </template>
           </button>
           <span class="bc-root">Management</span>
@@ -1052,23 +1055,20 @@ watch(activeSection, (newSection) => {
           <div class="step-item" :class="{ active: step >= 1, done: step > 1 }">
             <div class="step-num">
               <Check v-if="step > 1" :size="12" /><span v-else>1</span>
-              <div v-if="step === 1" class="step-spinner" />
             </div>
             <span class="step-label">Upload</span>
           </div>
-          <div class="step-line" />
+          <div class="step-line" :class="{ loading: step === 1 }" />
           <div class="step-item" :class="{ active: step >= 2, done: step > 2 }">
             <div class="step-num">
               <Check v-if="step > 2" :size="12" /><span v-else>2</span>
-              <div v-if="step === 2" class="step-spinner" />
             </div>
             <span class="step-label">Review</span>
           </div>
-          <div class="step-line" />
+          <div class="step-line" :class="{ loading: step === 2 }" />
           <div class="step-item" :class="{ active: step >= 3 }">
             <div class="step-num">
               <Check v-if="step > 3" :size="12" /><span v-else>3</span>
-              <div v-if="step === 3" class="step-spinner" />
             </div>
             <span class="step-label">Done</span>
           </div>
@@ -2227,12 +2227,14 @@ watch(activeSection, (newSection) => {
   --paper: #ffffff;
   --green: #00a651;
   --green-dk: #007d3d;
+  --green-deep: #06402b;
   --green-dim: #e6f4ed;
   --hero: #0d1f12;
-  --sb-w: 210px;
+  --sb-w: 220px;
   --blue: #2563eb;
   --orange: #c2410c;
   --purple: #7c3aed;
+  --sb-bg: #008a44; /* Clean solid forest green */
 
   display: flex;
   min-height: calc(100vh - 64px);
@@ -2245,7 +2247,7 @@ watch(activeSection, (newSection) => {
 .sidebar {
   width: var(--sb-w);
   flex-shrink: 0;
-  background: #00a651;
+  background: var(--sb-bg);
   display: flex;
   flex-direction: column;
   position: sticky;
@@ -2253,50 +2255,61 @@ watch(activeSection, (newSection) => {
   height: calc(100vh - 64px);
   overflow-y: auto;
   overflow-x: hidden;
-  transition: width 0.2s ease;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   z-index: 999;
+  border-right: 1px solid rgba(0, 0, 0, 0.05);
+  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.04);
 }
 
 .sidebar.collapsed {
-  width: 56px;
+  width: 68px;
 }
 
 .sb-brand {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
-  padding: 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  gap: 0.75rem;
+  padding: 1.5rem 1.25rem;
+  margin-bottom: 0.5rem;
   overflow: hidden;
   white-space: nowrap;
+  transition: padding 0.2s;
+}
+
+.sidebar.collapsed .sb-brand {
+  padding: 1.5rem 0;
+  justify-content: center;
 }
 
 .sb-brand-icon {
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
-  background: var(--green);
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.15);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .sb-name {
   font-family: 'Lora', serif;
-  font-size: 1rem;
-  font-weight: 600;
+  font-size: 1.12rem;
+  font-weight: 700;
   color: #fff;
   display: block;
+  letter-spacing: -0.02em;
 }
 
 .sb-sub {
-  font-size: 0.62rem;
-  font-weight: 600;
+  font-size: 0.65rem;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: rgba(255, 255, 255, 0.35);
+  letter-spacing: 0.1em;
+  color: rgba(255, 255, 255, 0.5);
   display: block;
+  margin-top: -2px;
 }
 
 .sb-group-label {
@@ -2314,56 +2327,124 @@ watch(activeSection, (newSection) => {
 .sb-nav {
   display: flex;
   flex-direction: column;
-  gap: 0.1rem;
-  padding: 0 0.5rem;
+  gap: 0.4rem;
+  padding: 0 0.75rem;
+  transition: padding 0.2s;
+}
+
+.sidebar.collapsed .sb-nav {
+  padding: 0;
+}
+
+.sidebar.collapsed .sb-group-label {
+  display: none;
 }
 
 .sb-item {
   display: flex;
   align-items: center;
-  gap: 0.65rem;
+  gap: 0.8rem;
   width: 100%;
-  background: none;
+  background: transparent;
   border: none;
-  padding: 0.55rem 0.6rem;
-  border-radius: 6px;
+  padding: 0.72rem 0.85rem;
+  border-radius: 12px;
   cursor: pointer;
   text-align: left;
-  transition: background 0.14s;
+  transition: all 0.2s ease;
   overflow: hidden;
   white-space: nowrap;
+  position: relative;
+  outline: none;
 }
 
-.sb-item:hover {
-  background: rgba(255, 255, 255, 0.07);
+.sidebar.collapsed .sb-item {
+  justify-content: center;
+  padding: 0.75rem 0;
+  border-radius: 0;
+}
+
+.sb-item:hover:not(.active) {
+  background: rgba(0, 0, 0, 0.08);
+  transform: translateX(4px);
+}
+
+.sidebar.collapsed .sb-item:hover:not(.active) {
+  transform: none;
+  background: rgba(0, 0, 0, 0.1);
 }
 
 .sb-item.active {
-  background: rgba(255, 255, 255, 0.12);
+  background: #fff;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+}
+
+.sb-item.active .sb-icon {
+  background: var(--green-dim);
+  color: var(--sb-bg);
+}
+
+.sb-item.active .sb-item-label {
+  color: var(--sb-bg);
+}
+
+.sb-item.active .sb-item-desc {
+  color: rgba(0, 138, 68, 0.5); /* 50% opacity of --sb-bg */
+}
+
+.sb-item.active .sb-arrow {
+  color: var(--sb-bg);
+  opacity: 0.6;
+}
+
+.sidebar.collapsed .sb-item.active {
+  background: transparent;
+  box-shadow: none;
+}
+
+/* Perfect centered pill for collapsed mode */
+.sidebar.collapsed .sb-item.active::before {
+  content: '';
+  position: absolute;
+  width: 44px; /* Slightly smaller for better proportions */
+  height: 44px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  z-index: 0;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
 }
 
 .sb-icon {
-  width: 30px;
-  height: 30px;
-  border-radius: 5px;
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.5);
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.75);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  transition: background 0.14s, color 0.14s;
+  transition: all 0.2s;
+  position: relative;
+  z-index: 1;
 }
 
-.sb-icon.active {
-  background: var(--green);
-  color: #fff;
+.sidebar.collapsed .sb-icon {
+  background: transparent;
+}
+
+.sidebar.collapsed .sb-item.active .sb-icon {
+  color: var(--sb-bg);
 }
 
 .sb-item-body {
   flex: 1;
   min-width: 0;
   overflow: hidden;
+  transition: opacity 0.2s;
 }
 
 .sb-item-label {
@@ -2400,30 +2481,11 @@ watch(activeSection, (newSection) => {
   white-space: nowrap;
 }
 
-.sidebar.collapsed .sb-group-label,
+.sidebar.collapsed .sb-brand-text,
 .sidebar.collapsed .sb-item-body,
 .sidebar.collapsed .sb-arrow,
-.sidebar.collapsed .sb-brand-text,
 .sidebar.collapsed .sb-footer span {
-  opacity: 0;
-  pointer-events: none;
-}
-
-/* Center icons perfectly when sidebar is collapsed to 56px */
-.sidebar.collapsed .sb-item {
-  justify-content: center;
-  padding: 0.55rem 0;
-}
-
-/* Also center the brand icon and footer icon */
-.sidebar.collapsed .sb-brand {
-  justify-content: center;
-  padding: 1rem 0;
-}
-
-.sidebar.collapsed .sb-footer {
-  justify-content: center;
-  padding: 1rem 0;
+  display: none;
 }
 
 .sb-backdrop {
@@ -2523,16 +2585,23 @@ watch(activeSection, (newSection) => {
   border: none;
   color: var(--ink-3);
   cursor: pointer;
-  padding: 0.3rem;
+  padding: 0.4rem;
   display: flex;
   align-items: center;
-  border-radius: 5px;
-  transition: background 0.13s, color 0.13s;
+  justify-content: center;
+  border-radius: 6px;
+  transition: all 0.15s ease;
+  outline: none;
+  box-shadow: none;
 }
 
 .sb-toggle:hover {
   background: var(--surface);
-  color: var(--ink);
+  color: var(--green);
+}
+
+.sb-toggle:active {
+  transform: scale(0.95);
 }
 
 .bc-root {
@@ -2610,17 +2679,23 @@ watch(activeSection, (newSection) => {
   height: 2px;
   background: var(--rule);
   margin: 0 0.4rem;
+  position: relative;
+  overflow: hidden;
 }
 
-.step-spinner {
-  position: absolute;
-  inset: -4px;
-  border-radius: 50%;
-  border: 2px solid transparent;
-  border-top-color: var(--green);
-  border-right-color: var(--green);
-  animation: spin 1.5s linear infinite;
-  pointer-events: none;
+.step-line.loading {
+  background: linear-gradient(90deg, 
+    var(--rule) 0%, 
+    var(--green) 50%, 
+    var(--rule) 100%
+  );
+  background-size: 200% 100%;
+  animation: step-line-sweep 1.2s infinite linear;
+}
+
+@keyframes step-line-sweep {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 
 @media (max-width: 480px) {
@@ -5365,6 +5440,8 @@ watch(activeSection, (newSection) => {
   color: var(--ink-3);
   font-style: italic;
 }
+
+
 
 .ref-textarea {
   min-height: 560px;
