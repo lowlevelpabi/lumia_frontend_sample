@@ -33,7 +33,7 @@ const isDesktop = computed(() => windowWidth.value > 1024)
 // Pagination
 const currentPage = ref(1)
 const totalResults = ref(0)
-const pageSize = ref(10)
+const pageSize = ref(5)
 const totalPages = computed(() => Math.ceil(totalResults.value / pageSize.value))
 
 // Filters
