@@ -53,7 +53,7 @@ import { BookOpen, Search, ClipboardList } from 'lucide-vue-next'
           <section id="testing-reproduction" class="card-section highlight-card">
             <div class="section-title">
               <ClipboardList class="text-green" :size="24" />
-              <h2>Testing & Reproduction</h2>
+              <h2>Evaluation Testing</h2>
             </div>
             <p>This sequence outlines the end-to-end user flow for testing the complete platform lifecycle:</p>
             <ol>
