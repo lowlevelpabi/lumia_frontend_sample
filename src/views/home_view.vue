@@ -40,6 +40,7 @@ const handleSearch = () => {
   if (searchQuery.value.trim()) {
     historyService.saveQuery(searchQuery.value)
     router.push({ name: 'explore', query: { q: searchQuery.value } })
+    showHistory.value = false
   }
 }
 </script>
@@ -84,7 +85,6 @@ const handleSearch = () => {
               </div>
             </div>
           </div>
-          <button class="search-btn" @click="handleSearch">Search</button>
         </div>
 
       </div>

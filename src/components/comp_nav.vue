@@ -7,10 +7,15 @@ import {
 } from 'lucide-vue-next'
 import { api } from '../services/api'
 import { useAuth } from '../composables/useAuth'
+import { historyService } from '../services/history'
 
 const router = useRouter()
 const route = useRoute()
 const searchQuery = ref('')
+const searchHistory = ref<string[]>([])
+const showHistory = ref(false)
+const historyRef = ref<HTMLElement | null>(null)
+
 const isLoggedIn = ref(false)
 const showMobileMenu = ref(false)
 const showMobileSearch = ref(false)
@@ -32,7 +37,15 @@ const closeProfileMenu = (e: MouseEvent) => {
 
 onMounted(() => {
   checkAuth()
+  searchHistory.value = historyService.getHistory()
   window.addEventListener('click', closeProfileMenu)
+  
+  // Close history when clicking outside
+  document.addEventListener('click', (e) => {
+    if (historyRef.value && !historyRef.value.contains(e.target as Node)) {
+      showHistory.value = false
+    }
+  })
 })
 
 onUnmounted(() => {
@@ -47,6 +60,11 @@ watch(() => route.path, () => {
   showMobileSearch.value = false
 })
 
+// Sync search query with URL
+watch(() => route.query.q, (newQ) => {
+  searchQuery.value = (newQ as string) || ''
+}, { immediate: true })
+
 const toggleMobileSearch = () => {
   showMobileSearch.value = !showMobileSearch.value
   if (showMobileSearch.value) showMobileMenu.value = false
@@ -59,10 +77,12 @@ const toggleMobileMenu = () => {
 
 const handleSearch = () => {
   if (searchQuery.value.trim()) {
+    historyService.saveQuery(searchQuery.value)
+    searchHistory.value = historyService.getHistory()
     router.push({ name: 'explore', query: { q: searchQuery.value } })
-    searchQuery.value = ''
     showMobileMenu.value = false
     showMobileSearch.value = false
+    showHistory.value = false
   }
 }
 
@@ -88,17 +108,32 @@ const logout = () => {
       </RouterLink>
 
       <!-- Center: Search Bar (Desktop) -->
-      <transition name="nav-search-fade">
         <div v-if="!['home', 'management', 'login', 'register', 'about', 'profile'].includes(route.name as string)"
           class="nav-search-wrap">
-          <div class="nav-search">
+          <div class="nav-search" ref="historyRef">
             <Search :size="14" class="search-icon" />
             <input v-model="searchQuery" type="text" placeholder="Search the repository..." @keyup.enter="handleSearch"
-              spellcheck="false" autocomplete="off" />
+              @focus="showHistory = true" spellcheck="false" autocomplete="off" />
             <div class="search-hint">⏎</div>
+
+            <!-- Search History Popup (Desktop) -->
+            <div v-if="showHistory && searchHistory.length > 0" class="history-popup">
+              <div class="history-head">
+                <span>Recent Searches</span>
+                <button @click.stop="historyService.clearHistory(); searchHistory = []">Clear All</button>
+              </div>
+              <div class="history-list">
+                <div v-for="h in searchHistory" :key="h" class="history-item" @click.stop="searchQuery = h; handleSearch()">
+                  <Search :size="12" />
+                  <span>{{ h }}</span>
+                  <button class="h-remove" @click.stop="historyService.removeQuery(h); searchHistory = historyService.getHistory()">
+                    <X :size="10" />
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
-      </transition>
 
       <!-- Right: Desktop Actions & Profile -->
       <div class="nav-actions-desktop">
@@ -243,10 +278,27 @@ const logout = () => {
           <div class="mobile-search-container">
             <Search :size="18" class="m-search-icon" />
             <input v-model="searchQuery" type="text" placeholder="Search publications..." @keyup.enter="handleSearch"
-              autofocus />
+              @focus="showHistory = true" autofocus />
             <button @click="showMobileSearch = false" class="close-search">
               <X :size="20" />
             </button>
+
+            <!-- Search History Popup (Mobile) -->
+            <div v-if="showHistory && searchHistory.length > 0" class="mobile-history-popup">
+              <div class="history-head">
+                <span>Recent Searches</span>
+                <button @click.stop="historyService.clearHistory(); searchHistory = []">Clear All</button>
+              </div>
+              <div class="history-list">
+                <div v-for="h in searchHistory" :key="h" class="history-item" @click.stop="searchQuery = h; handleSearch()">
+                  <Search :size="12" />
+                  <span>{{ h }}</span>
+                  <button class="h-remove" @click.stop="historyService.removeQuery(h); searchHistory = historyService.getHistory()">
+                    <X :size="10" />
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </transition>
@@ -398,6 +450,98 @@ const logout = () => {
   padding: 2px 5px;
   border-radius: 3px;
   pointer-events: none;
+}
+
+/* ── History Popup ────────────────────────────────────────────── */
+.history-popup {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  background: #ffffff;
+  border: 1px solid #dfe0db;
+  border-radius: 8px;
+  box-shadow: 0 12px 32px -8px rgba(0, 0, 0, 0.15);
+  z-index: 1100;
+  overflow: hidden;
+}
+
+.mobile-history-popup {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: #ffffff;
+  border-top: 1px solid #dfe0db;
+  z-index: 2200;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.history-head {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: #f5f5f2;
+  border-bottom: 1px solid #dfe0db;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #7a7f75;
+}
+
+.history-head button {
+  background: none;
+  border: none;
+  color: #00a651;
+  cursor: pointer;
+  font-size: 0.65rem;
+  font-weight: 700;
+}
+
+.history-list {
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.history-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: background 0.1s;
+  font-size: 0.9rem;
+  color: #3d4239;
+}
+
+.history-item:hover {
+  background: #f5f5f2;
+  color: #00a651;
+}
+
+.history-item svg {
+  color: #7a7f75;
+  opacity: 0.5;
+}
+
+.h-remove {
+  margin-left: auto;
+  opacity: 0.3;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  border-radius: 4px;
+}
+
+.h-remove:hover {
+  opacity: 1;
+  background: #fee2e2;
+  color: #ef4444;
 }
 
 /* ── Desktop Actions ───────────────────────────────────────────── */

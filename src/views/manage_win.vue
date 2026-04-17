@@ -1,16 +1,58 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed, watch, reactive, nextTick, type Component } from 'vue'
+import {
+  ref,
+  onMounted,
+  onUnmounted,
+  computed,
+  watch,
+  reactive,
+  nextTick,
+  type Component,
+} from 'vue'
 import { useRouter } from 'vue-router'
 import {
-  Library, Trash2, Edit3,
-  Search, Plus, FolderOpen, Loader2,
-  FileText, Users, Calendar, ChevronRight,
-  Settings, ArrowLeft, Save,
-  UserCheck, Menu, X, Clock, Eye,
-  FileUp, CheckCircle, AlertCircle, Check,
-  AlertTriangle, RefreshCw, PanelLeftOpen, PanelLeftClose, ShieldAlert, ShieldCheck, UserCog, UserPlus, ArchiveRestore, GripVertical
+  Library,
+  Trash2,
+  Edit3,
+  Search,
+  Plus,
+  FolderOpen,
+  Loader2,
+  FileText,
+  Users,
+  Calendar,
+  ChevronRight,
+  Save,
+  UserCheck,
+  Menu,
+  X,
+  Clock,
+  Eye,
+  FileUp,
+  CheckCircle,
+  AlertCircle,
+  Check,
+  AlertTriangle,
+  RefreshCw,
+  PanelLeftOpen,
+  PanelLeftClose,
+  ShieldAlert,
+  ShieldCheck,
+  UserCog,
+  UserPlus,
+  ArchiveRestore,
+  GripVertical,
 } from 'lucide-vue-next'
-import { api, BASE_URL, type Paper, type UserResponse, type PartialPaperMetadata, type ActivityLog, type SampleDocument, type RepositoryStats } from '../services/api'
+import {
+  api,
+  BASE_URL,
+  type Paper,
+  type UserResponse,
+  type PartialPaperMetadata,
+  type ActivityLog,
+  type SampleDocument,
+  type RepositoryStats,
+} from '../services/api'
 import { useAuth } from '../composables/useAuth'
 import BookLoader from '../components/BookLoader.vue'
 
@@ -36,7 +78,9 @@ const closeMobileSidebar = () => {
 
 // Reactive mobile breakpoint check
 const isMobile = ref(window.innerWidth <= 768)
-const onResize = () => { isMobile.value = window.innerWidth <= 768 }
+const onResize = () => {
+  isMobile.value = window.innerWidth <= 768
+}
 onMounted(() => {
   window.addEventListener('resize', onResize)
   window.addEventListener('dragover', handleDragOver)
@@ -71,7 +115,7 @@ const formattedTime = computed(() => {
     hour: 'numeric',
     minute: '2-digit',
     second: '2-digit',
-    hour12: true
+    hour12: true,
   })
 })
 
@@ -81,7 +125,12 @@ const activeSection = ref<Section>('repository')
 
 const baseNavItems: { id: Section; label: string; icon: Component; description: string }[] = [
   { id: 'upload', label: 'Upload Research', icon: FileUp, description: 'Index new PDF documents' },
-  { id: 'repository', label: 'Thesis & Research', icon: Library, description: 'Browse & manage indexed works' },
+  {
+    id: 'repository',
+    label: 'Thesis & Research',
+    icon: Library,
+    description: 'Browse & manage indexed works',
+  },
 ]
 const adminNavItems: { id: Section; label: string; icon: Component; description: string }[] = [
   { id: 'users', label: 'Membership', icon: Users, description: 'Manage students & faculty' },
@@ -96,14 +145,19 @@ const navItems = computed(() => {
     items.push(...adminNavItems)
     items.push(...canEditNavItems)
   } else if (canEdit.value) {
-    items.push({ id: 'logs' as Section, label: 'Activity Log', icon: Clock, description: 'Track uploads, edits & deletes' })
+    items.push({
+      id: 'logs' as Section,
+      label: 'Activity Log',
+      icon: Clock,
+      description: 'Track uploads, edits & deletes',
+    })
     items.push(...canEditNavItems)
   }
   return items
 })
 
 const activeLabel = computed(() => {
-  return navItems.value.find(i => i.id === activeSection.value)?.label ?? 'Repository'
+  return navItems.value.find((i) => i.id === activeSection.value)?.label ?? 'Repository'
 })
 
 const setSection = (s: Section) => {
@@ -124,15 +178,18 @@ const setSection = (s: Section) => {
 
 onMounted(() => {
   const tab = router.currentRoute.value.query.tab as Section
-  if (tab && navItems.value.map(i => i.id).includes(tab)) {
+  if (tab && navItems.value.map((i) => i.id).includes(tab)) {
     activeSection.value = tab
   }
 })
-watch(() => router.currentRoute.value.query.tab, (newTab) => {
-  if (newTab && navItems.value.map(i => i.id).includes(newTab as Section)) {
-    activeSection.value = newTab as Section
-  }
-})
+watch(
+  () => router.currentRoute.value.query.tab,
+  (newTab) => {
+    if (newTab && navItems.value.map((i) => i.id).includes(newTab as Section)) {
+      activeSection.value = newTab as Section
+    }
+  },
+)
 
 // ── Data ─────────────────────────────────────────────────────────
 const papers = ref<Paper[]>([])
@@ -145,7 +202,7 @@ const statsLoading = ref(false)
 const statsPercentages = computed(() => {
   if (!repoStats.value || repoStats.value.total_papers === 0) return { thesis: 50, capstone: 50 }
   const total = repoStats.value.total_papers
-  const t = (repoStats.value.by_project_type['Thesis'] || 0) / total * 100
+  const t = ((repoStats.value.by_project_type['Thesis'] || 0) / total) * 100
   return { thesis: t, capstone: 100 - t }
 })
 
@@ -165,49 +222,78 @@ const fetchPapers = async () => {
   try {
     papers.value = await api.listAllPapers()
     await fetchStats()
+  } catch (e) {
+    console.error(e)
+  } finally {
+    loading.value = false
   }
-  catch (e) { console.error(e) }
-  finally { loading.value = false }
 }
 onMounted(fetchPapers)
 
 const filteredPapers = computed(() => {
   let list = papers.value
-  if (activeFilter.value !== 'all')
-    list = list.filter(p => p.project_type === activeFilter.value)
+  if (activeFilter.value !== 'all') list = list.filter((p) => p.project_type === activeFilter.value)
   const q = searchQuery.value.trim().toLowerCase()
   if (!q) return list
-  return list.filter(p =>
-    p.title.toLowerCase().includes(q) ||
-    p.author.toLowerCase().includes(q) ||
-    (p.department ?? '').toLowerCase().includes(q)
+  return list.filter(
+    (p) =>
+      p.title.toLowerCase().includes(q) ||
+      p.author.toLowerCase().includes(q) ||
+      (p.department ?? '').toLowerCase().includes(q),
   )
 })
 
 const totalPapers = computed(() => papers.value.length)
-const thesisCount = computed(() => papers.value.filter(p => p.project_type === 'Thesis').length)
-const capstoneCount = computed(() => papers.value.filter(p => p.project_type === 'Capstone Project').length)
-const yearSpan = computed(() => new Set(papers.value.map(p => p.year)).size)
+const thesisCount = computed(() => papers.value.filter((p) => p.project_type === 'Thesis').length)
+const capstoneCount = computed(
+  () => papers.value.filter((p) => p.project_type === 'Capstone Project').length,
+)
+const yearSpan = computed(() => new Set(papers.value.map((p) => p.year)).size)
 
 // ── Helpers ───────────────────────────────────────────────────────
 const initials = (title: string) =>
-  title.trim().split(' ').slice(0, 2).map(w => w[0]?.toUpperCase() ?? '').join('')
+  title
+    .trim()
+    .split(' ')
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? '')
+    .join('')
 
-const typeColor = (type: string) => type === 'Thesis' ? 'blue' : 'orange'
+const typeColor = (type: string) => (type === 'Thesis' ? 'blue' : 'orange')
 
-// ── Editing ──────────────────────────────────────────────────────
+// Metadata Edit State
 const showEditModal = ref(false)
 const editingPaper = ref<Partial<Paper>>({})
+const editAuthors = ref<string[]>([''])
 const updating = ref(false)
 
 const openEditModal = (paper: Paper) => {
   editingPaper.value = { ...paper }
+  // Split joined author string into array for editing
+  if (paper.author) {
+    const split = paper.author
+      .split(/\s*\|\s*/)
+      .map((a) => a.trim())
+      .filter((a) => a.length > 0)
+    editAuthors.value = split.length > 0 ? split : ['']
+  } else {
+    editAuthors.value = ['']
+  }
   showEditModal.value = true
 }
 
 const closeEditModal = () => {
   showEditModal.value = false
   editingPaper.value = {}
+  editAuthors.value = ['']
+}
+
+const addEditAuthor = () => {
+  editAuthors.value.push('')
+}
+const removeEditAuthor = (index: number) => {
+  if (editAuthors.value.length > 1) editAuthors.value.splice(index, 1)
+  else editAuthors.value[0] = ''
 }
 
 const handleUpdate = async () => {
@@ -215,6 +301,12 @@ const handleUpdate = async () => {
   updating.value = true
   try {
     const { id, ...updates } = editingPaper.value as Paper
+    // Join authors back with pipe separator
+    updates.author = editAuthors.value
+      .map((a) => a.trim())
+      .filter((a) => a.length > 0)
+      .join(' | ')
+
     await api.updatePaper(id, updates)
     await fetchPapers()
     closeEditModal()
@@ -229,8 +321,12 @@ const handleUpdate = async () => {
 // ── Actions ───────────────────────────────────────────────────────
 const handleDelete = async (id: string) => {
   if (!confirm('Delete this paper? This cannot be undone.')) return
-  try { await api.deletePaper(id); await fetchPapers() }
-  catch { alert('Failed to delete. Are you logged in as admin?') }
+  try {
+    await api.deletePaper(id)
+    await fetchPapers()
+  } catch {
+    alert('Failed to delete. Are you logged in as admin?')
+  }
 }
 
 // ── User Management ──────────────────────────────────────────────
@@ -248,9 +344,9 @@ const fetchUsers = async () => {
   }
 }
 
-const adminCount = computed(() => users.value.filter(u => u.role === 'Admin').length)
-const facultyCount = computed(() => users.value.filter(u => u.role === 'Faculty').length)
-const studentCount = computed(() => users.value.filter(u => u.role === 'Student').length)
+const adminCount = computed(() => users.value.filter((u) => u.role === 'Admin').length)
+const facultyCount = computed(() => users.value.filter((u) => u.role === 'Faculty').length)
+const studentCount = computed(() => users.value.filter((u) => u.role === 'Student').length)
 
 // ── Activity Logs ─────────────────────────────────────────────────
 const logs = ref<ActivityLog[]>([])
@@ -272,7 +368,7 @@ const logActionColor = (action: string) => {
   if (action === 'Edit') return 'blue'
   if (action === 'Delete') return 'red'
   if (action === 'Restore') return 'green'
-  if (action === 'Purge') return 'red'
+  if (action === 'Purge') return 'purple'
   return ''
 }
 
@@ -283,7 +379,9 @@ const formatLogDate = (iso: string) => {
   return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 }
 
-watch(activeSection, (s) => { if (s === 'logs') fetchLogs() })
+watch(activeSection, (s) => {
+  if (s === 'logs') fetchLogs()
+})
 
 // ── Trash / Recycle Bin ───────────────────────────────────────────
 const trashedPapers = ref<Paper[]>([])
@@ -294,9 +392,13 @@ const purging = ref(false)
 
 const fetchTrashedPapers = async () => {
   loadingTrash.value = true
-  try { trashedPapers.value = await api.getTrashedPapers() }
-  catch (e) { console.error('Failed to fetch trash:', e) }
-  finally { loadingTrash.value = false }
+  try {
+    trashedPapers.value = await api.getTrashedPapers()
+  } catch (e) {
+    console.error('Failed to fetch trash:', e)
+  } finally {
+    loadingTrash.value = false
+  }
 }
 
 const daysRemaining = (deletedAt: string): number => {
@@ -373,7 +475,10 @@ const closeRoleModal = () => {
 
 const handleRoleChange = async () => {
   if (!roleTarget.value || !roleNew.value) return
-  if (roleNew.value === roleTarget.value.role) { closeRoleModal(); return }
+  if (roleNew.value === roleTarget.value.role) {
+    closeRoleModal()
+    return
+  }
   roleChanging.value = true
   roleError.value = ''
   try {
@@ -396,7 +501,7 @@ const createdPassword = ref('')
 const newUser = reactive({
   username: '',
   full_name: '',
-  role: 'Faculty'
+  role: 'Faculty',
 })
 
 const openCreateUserModal = () => {
@@ -467,14 +572,22 @@ const loadSampleDocs = async () => {
  * This is used by both drag-and-drop and direct click/tap.
  */
 const attachSampleDoc = async (doc: SampleDocument) => {
-  if (processingDoc.value || fetchingSampleDocId.value || activeSection.value !== 'upload' || step.value !== 1) {
+  if (
+    processingDoc.value ||
+    fetchingSampleDocId.value ||
+    activeSection.value !== 'upload' ||
+    step.value !== 1
+  ) {
     return
   }
 
   fetchingSampleDocId.value = doc.id
   uploadError.value = ''
   try {
-    const safeFilename = `${doc.name.replace(/[^a-zA-Z0-9 ]/g, '').trim().replace(/\s+/g, '_')}.pdf`
+    const safeFilename = `${doc.name
+      .replace(/[^a-zA-Z0-9 ]/g, '')
+      .trim()
+      .replace(/\s+/g, '_')}.pdf`
     file.value = await api.fetchSampleDocumentAsFile(doc.id, safeFilename)
     startInitialExtraction(true)
   } catch (err) {
@@ -534,10 +647,10 @@ function listenForProgress(sid: string) {
 }
 
 interface PageData {
-  page_num: number;
-  thumbnail: string;
-  preview_text: string;
-  label?: string;
+  page_num: number
+  thumbnail: string
+  preview_text: string
+  label?: string
 }
 
 const pages = ref<PageData[]>([])
@@ -552,37 +665,53 @@ const uploadMetadata = reactive<PartialPaperMetadata>({
   degree_program: 'N/A',
   detected_subheadings: [],
   trim_points: {},
-  media: {} as Record<string, string>
+  media: {} as Record<string, string>,
 })
-const activeImradTab = ref<'introduction' | 'methods' | 'results' | 'discussion' | 'references'>('introduction')
+const activeImradTab = ref<'introduction' | 'methods' | 'results' | 'discussion' | 'references'>(
+  'introduction',
+)
 
 // Keep in sync with imrad_service.py METHODOLOGY_SUBHEADINGS labels
 const METHODOLOGY_SUBHEADING_LABELS = [
-  'Research Design', 'Research Approach', 'Research Settings', 'Business Process',
-  'Participants of the Study', 'Sampling Technique', 'Research Instruments',
-  'Data Collection, Instrument, and Procedure', 'Sources of Data',
-  'Statistical Treatment of Data', 'Data Analysis', 'Ethical Considerations',
+  'Research Design',
+  'Research Approach',
+  'Research Settings',
+  'Business Process',
+  'Participants of the Study',
+  'Sampling Technique',
+  'Research Instruments',
+  'Data Collection, Instrument, and Procedure',
+  'Sources of Data',
+  'Statistical Treatment of Data',
+  'Data Analysis',
+  'Ethical Considerations',
   'Development Model',
 ]
 
 const SECTION_KEY_MAP = {
-  'Introduction': 'introduction',
-  'Methodology': 'methods',
-  'Results': 'results',
-  'Discussion': 'discussion'
+  Introduction: 'introduction',
+  Methodology: 'methods',
+  Results: 'results',
+  Discussion: 'discussion',
 } as const
 
 const REQUIRED_SECTIONS = Object.keys(SECTION_KEY_MAP) as (keyof typeof SECTION_KEY_MAP)[]
 
 type ImradKey = 'introduction' | 'methods' | 'results' | 'discussion' | 'references'
-const ALL_IMRAD_TABS: ImradKey[] = ['introduction', 'methods', 'results', 'discussion', 'references']
+const ALL_IMRAD_TABS: ImradKey[] = [
+  'introduction',
+  'methods',
+  'results',
+  'discussion',
+  'references',
+]
 
 const imradSections = reactive({
   introduction: '',
   methods: '',
   results: '',
   discussion: '',
-  references: ''
+  references: '',
 })
 
 // Raw sections keep [[TABLE_IMAGE:...]] markers intact so they are saved to DB
@@ -591,20 +720,19 @@ const rawImradSections = reactive({
   methods: '',
   results: '',
   discussion: '',
-  references: ''
+  references: '',
 })
 
 // RAD combined detection: results and discussion have identical text
 // when the backend stored a single combined RAD section
 
-
 // Available tabs — merges R+D into one tab
 const availableImradTabs = computed<ImradKey[]>(() => {
-  const all = ALL_IMRAD_TABS.filter(t => imradSections[t])
+  const all = ALL_IMRAD_TABS.filter((t) => imradSections[t])
   const hasResults = all.includes('results')
   const hasDiscussion = all.includes('discussion')
   if (hasResults || hasDiscussion) {
-    const merged: ImradKey[] = all.filter(t => t !== 'results' && t !== 'discussion')
+    const merged: ImradKey[] = all.filter((t) => t !== 'results' && t !== 'discussion')
     merged.push('results')
     return merged
   }
@@ -629,7 +757,7 @@ watch(
   async () => {
     await nextTick()
     autoResizeTextarea()
-  }
+  },
 )
 
 // ── References preview helpers ────────────────────────────────────────────────
@@ -641,15 +769,24 @@ const parsedReferencesPreview = computed((): string[] => {
   if (!raw) return []
 
   // Primary: blank-line separation (output of backend _postprocess_references)
-  const byBlankLine = raw.split(/\n\n+/).map(s => s.replace(/\n/g, ' ').trim()).filter(Boolean)
+  const byBlankLine = raw
+    .split(/\n\n+/)
+    .map((s) => s.replace(/\n/g, ' ').trim())
+    .filter(Boolean)
   if (byBlankLine.length > 1) return byBlankLine
 
   // Fallback A: IEEE-style numeric markers [1] [2] …
-  const byIEEE = raw.split(/(?=\[\d+\])/).map(s => s.trim()).filter(Boolean)
+  const byIEEE = raw
+    .split(/(?=\[\d+\])/)
+    .map((s) => s.trim())
+    .filter(Boolean)
   if (byIEEE.length > 1) return byIEEE
 
   // Fallback B: numbered list "1. " "2. " …
-  const byNumbered = raw.split(/(?=\d+\.\s)/).map(s => s.trim()).filter(Boolean)
+  const byNumbered = raw
+    .split(/(?=\d+\.\s)/)
+    .map((s) => s.trim())
+    .filter(Boolean)
   if (byNumbered.length > 1) return byNumbered
 
   // Last resort: one entry
@@ -662,18 +799,18 @@ const parsedReferencesPreview = computed((): string[] => {
  * APA parser: bold authors, italic title, live DOI/URL links.
  */
 const linkifyReferences = (raw: string): string => {
-  const esc = (s: string) =>
-    s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
   const linkify = (s: string): string => {
     let out = s.replace(
       /https?:\/\/[^\s,)\]&]+/g,
-      url => `<a href="${url}" target="_blank" rel="noopener noreferrer" class="ref-link-preview">${url}</a>`
+      (url) =>
+        `<a href="${url}" target="_blank" rel="noopener noreferrer" class="ref-link-preview">${url}</a>`,
     )
     out = out.replace(
       /(?<!href=")(?:doi:\s*)(10\.[^\s,)\]&]+)/gi,
       (_, doi) =>
-        `doi: <a href="https://doi.org/${doi}" target="_blank" rel="noopener noreferrer" class="ref-link-preview">${doi}</a>`
+        `doi: <a href="https://doi.org/${doi}" target="_blank" rel="noopener noreferrer" class="ref-link-preview">${doi}</a>`,
     )
     return out
   }
@@ -708,7 +845,9 @@ const linkifyReferences = (raw: string): string => {
   // IEEE [1]
   const ieeeMatch = escapedRaw.match(/^(\[\d+\])\s+(.*)$/s)
   if (ieeeMatch) {
-    return `<span class="ref-num-preview">${ieeeMatch[1] ?? ''}</span> ` + linkify(ieeeMatch[2] ?? '')
+    return (
+      `<span class="ref-num-preview">${ieeeMatch[1] ?? ''}</span> ` + linkify(ieeeMatch[2] ?? '')
+    )
   }
 
   // Numbered 1.
@@ -729,8 +868,6 @@ const missingSections = computed(() => {
   const present = Object.keys(uploadMetadata.section_pages || {})
   return REQUIRED_SECTIONS.filter((s) => !present.includes(SECTION_KEY_MAP[s]))
 })
-
-
 
 const triggerFallback = async () => {
   if (!file.value) return
@@ -757,7 +894,7 @@ const triggerFallback = async () => {
       // Store raw (with markers) for DB submission
       Object.assign(rawImradSections, preview.sections as Record<string, string>)
       // Strip markers for clean display
-      const cleaned = { ...preview.sections as Record<string, string> }
+      const cleaned = { ...(preview.sections as Record<string, string>) }
       for (const k of ALL_IMRAD_TABS) {
         if (cleaned[k]) cleaned[k] = cleaned[k].replace(/\[\[(?:TABLE|FIGURE)_IMAGE:.*?\]\]/g, '')
       }
@@ -771,11 +908,15 @@ const triggerFallback = async () => {
       rawImradSections.references = preview.references
     }
     sectionPages.value = preview.section_pages || {}
-    selectedPages.value = preview.pages.map(p => p.page_num)
+    selectedPages.value = preview.pages.map((p) => p.page_num)
     isManuscript.value = false
-    const firstAvailable = ALL_IMRAD_TABS.find(t => imradSections[t])
-    if (firstAvailable) activeImradTab.value = firstAvailable === 'discussion' ? 'results' : firstAvailable
-    setTimeout(() => { step.value = 2; processingDoc.value = false }, 400)
+    const firstAvailable = ALL_IMRAD_TABS.find((t) => imradSections[t])
+    if (firstAvailable)
+      activeImradTab.value = firstAvailable === 'discussion' ? 'results' : firstAvailable
+    setTimeout(() => {
+      step.value = 2
+      processingDoc.value = false
+    }, 400)
   } catch (err) {
     stopProgressListening()
     uploadError.value = (err as Error).message || 'Failed to trigger fallback.'
@@ -785,13 +926,23 @@ const triggerFallback = async () => {
 }
 
 const cancelUpload = () => {
-  step.value = 1; file.value = null; pages.value = []; selectedPages.value = []; uploadMetadata.title = ''
+  step.value = 1
+  file.value = null
+  pages.value = []
+  selectedPages.value = []
+  uploadMetadata.title = ''
 }
 
 const showZoomModal = ref(false)
 const zoomedPage = ref<PageData | null>(null)
-const openZoom = (page: PageData) => { zoomedPage.value = page; showZoomModal.value = true }
-const closeZoom = () => { showZoomModal.value = false; zoomedPage.value = null }
+const openZoom = (page: PageData) => {
+  zoomedPage.value = page
+  showZoomModal.value = true
+}
+const closeZoom = () => {
+  showZoomModal.value = false
+  zoomedPage.value = null
+}
 
 const thumbSrc = (thumbnail: string) => {
   if (!thumbnail) return ''
@@ -818,7 +969,7 @@ const handleDrop = async (e: DragEvent) => {
   // ── Sample document drag (custom MIME type set by handleSampleDocDragStart) ──
   const sampleDocId = e.dataTransfer?.getData('application/x-lumia-sample-doc')
   if (sampleDocId) {
-    const doc = sampleDocs.value.find(d => d.id === sampleDocId)
+    const doc = sampleDocs.value.find((d) => d.id === sampleDocId)
     if (doc) attachSampleDoc(doc)
     return
   }
@@ -845,7 +996,6 @@ const handleDragLeave = (e: DragEvent) => {
   if (e.relatedTarget === null) isDragging.value = false
 }
 
-
 const startInitialExtraction = async (autoExtract: boolean = true) => {
   if (!file.value) return
   processingDoc.value = true
@@ -866,9 +1016,14 @@ const startInitialExtraction = async (autoExtract: boolean = true) => {
     sessionId.value = preview.session_id
     Object.assign(uploadMetadata, preview.metadata)
     if (preview.metadata.author) {
-      const splitAuthors = preview.metadata.author.split(/\s*\|\s*/).map((a: string) => a.trim()).filter((a: string) => a.length > 0)
+      const splitAuthors = preview.metadata.author
+        .split(/\s*\|\s*/)
+        .map((a: string) => a.trim())
+        .filter((a: string) => a.length > 0)
       authors.value = splitAuthors.length > 0 ? splitAuthors : ['']
-    } else { authors.value = [''] }
+    } else {
+      authors.value = ['']
+    }
 
     pages.value = preview.pages
     selectedPages.value = preview.pages.map((p: PageData) => p.page_num)
@@ -876,7 +1031,7 @@ const startInitialExtraction = async (autoExtract: boolean = true) => {
       // Store raw (with markers) for DB submission
       Object.assign(rawImradSections, preview.sections as Record<string, string>)
       // Strip markers for clean display
-      const cleaned = { ...preview.sections as Record<string, string> }
+      const cleaned = { ...(preview.sections as Record<string, string>) }
       for (const k of ALL_IMRAD_TABS) {
         if (cleaned[k]) cleaned[k] = cleaned[k].replace(/\[\[(?:TABLE|FIGURE)_IMAGE:.*?\]\]/g, '')
       }
@@ -891,9 +1046,13 @@ const startInitialExtraction = async (autoExtract: boolean = true) => {
     }
 
     // Set active tab to the first section that actually has content
-    const firstAvailable = ALL_IMRAD_TABS.find(t => imradSections[t])
-    if (firstAvailable) activeImradTab.value = firstAvailable === 'discussion' ? 'results' : firstAvailable
-    setTimeout(() => { step.value = 2; processingDoc.value = false }, 400)
+    const firstAvailable = ALL_IMRAD_TABS.find((t) => imradSections[t])
+    if (firstAvailable)
+      activeImradTab.value = firstAvailable === 'discussion' ? 'results' : firstAvailable
+    setTimeout(() => {
+      step.value = 2
+      processingDoc.value = false
+    }, 400)
   } catch (err: unknown) {
     stopProgressListening()
     processingDoc.value = false
@@ -909,8 +1068,9 @@ const startInitialExtraction = async (autoExtract: boolean = true) => {
 
 const togglePage = (pageNum: number, event: Event) => {
   // if a zoom-trigger/button or the image itself was clicked, do nothing
-  const tgt = (event.target as HTMLElement)
-  if (tgt.closest('.zoom-trigger') || tgt.closest('.thumb-img') || tgt.closest('.thumb-hover-hint')) return
+  const tgt = event.target as HTMLElement
+  if (tgt.closest('.zoom-trigger') || tgt.closest('.thumb-img') || tgt.closest('.thumb-hover-hint'))
+    return
   const index = selectedPages.value.indexOf(pageNum)
   if (index > -1) selectedPages.value.splice(index, 1)
   else selectedPages.value.push(pageNum)
@@ -924,20 +1084,32 @@ const getSectionsForPage = (pageNum: number) => {
   return found
 }
 
-const selectAll = () => { selectedPages.value = pages.value.map(p => p.page_num) }
-const deselectAll = () => { selectedPages.value = [] }
-const addAuthor = () => { authors.value.push('') }
+const selectAll = () => {
+  selectedPages.value = pages.value.map((p) => p.page_num)
+}
+const deselectAll = () => {
+  selectedPages.value = []
+}
+const addAuthor = () => {
+  authors.value.push('')
+}
 const removeAuthor = (index: number) => {
   if (authors.value.length > 1) authors.value.splice(index, 1)
   else authors.value[0] = ''
 }
 
 const handleFinalConfirm = async () => {
-  if (selectedPages.value.length === 0) { uploadError.value = 'Please select at least one page to index.'; return }
+  if (selectedPages.value.length === 0) {
+    uploadError.value = 'Please select at least one page to index.'
+    return
+  }
   uploadingPaper.value = true
   uploadError.value = ''
   try {
-    const finalAuthorString = authors.value.map(a => a.trim()).filter(a => a.length > 0).join(' | ')
+    const finalAuthorString = authors.value
+      .map((a) => a.trim())
+      .filter((a) => a.length > 0)
+      .join(' | ')
     await api.confirmUpload({
       session_id: sessionId.value,
       metadata: {
@@ -964,22 +1136,26 @@ const handleFinalConfirm = async () => {
     }, 200)
   } catch (err) {
     uploadError.value = (err as Error).message || 'Failed to finalize upload.'
-  } finally { uploadingPaper.value = false }
+  } finally {
+    uploadingPaper.value = false
+  }
 }
 
-
-watch(activeSection, (newSection) => {
-  if (newSection === 'repository') fetchPapers()
-  if (newSection === 'users' && users.value.length === 0) fetchUsers()
-  if (newSection === 'upload' && sampleDocs.value.length === 0) loadSampleDocs()
-}, { immediate: true })
+watch(
+  activeSection,
+  (newSection) => {
+    if (newSection === 'repository') fetchPapers()
+    if (newSection === 'users' && users.value.length === 0) fetchUsers()
+    if (newSection === 'upload' && sampleDocs.value.length === 0) loadSampleDocs()
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
   <div class="mgmt" :class="{ 'sb-collapsed': sidebarCollapsed }">
-
     <!-- Full page drag overlay -->
-    <transition name='fade'>
+    <transition name="fade">
       <div v-if="isDragging" class="drag-overlay">
         <div class="drag-overlay-inner">
           <FileUp :size="48" color="#00a651" />
@@ -997,7 +1173,7 @@ watch(activeSection, (newSection) => {
     <aside class="sidebar" :class="{ collapsed: sidebarCollapsed, 'mob-open': mobileSidebarOpen }">
       <div class="sb-brand">
         <div class="sb-brand-icon">
-          <img src="/lumia_logo.ico" style="width: 18px; height: 18px; object-fit: contain;" />
+          <img src="/lumia_logo.ico" style="width: 18px; height: 18px; object-fit: contain" />
         </div>
         <div class="sb-brand-text">
           <span class="sb-name">Lumia</span>
@@ -1008,8 +1184,14 @@ watch(activeSection, (newSection) => {
       <p class="sb-group-label">Navigation</p>
 
       <nav class="sb-nav">
-        <button v-for="item in navItems" :key="item.id" class="sb-item" :class="{ active: activeSection === item.id }"
-          @click="setSection(item.id)" :title="sidebarCollapsed ? item.label : undefined">
+        <button
+          v-for="item in navItems"
+          :key="item.id"
+          class="sb-item"
+          :class="{ active: activeSection === item.id }"
+          @click="setSection(item.id)"
+          :title="sidebarCollapsed ? item.label : undefined"
+        >
           <div class="sb-icon" :class="{ active: activeSection === item.id }">
             <component :is="item.icon" :size="16" stroke-width="2.2" />
           </div>
@@ -1031,7 +1213,6 @@ watch(activeSection, (newSection) => {
 
     <!-- ══ MAIN ═══════════════════════════════════════════════════ -->
     <div class="mgmt-main">
-
       <!-- Topbar -->
       <header class="topbar">
         <div class="topbar-left">
@@ -1053,23 +1234,17 @@ watch(activeSection, (newSection) => {
           <!-- Upload step rail -->
           <div v-if="activeSection === 'upload'" class="steps-rail inside-navbar">
             <div class="step-item" :class="{ active: step >= 1, done: step > 1 }">
-              <div class="step-num">
-                <Check v-if="step > 1" :size="12" /><span v-else>1</span>
-              </div>
+              <div class="step-num"><Check v-if="step > 1" :size="12" /><span v-else>1</span></div>
               <span class="step-label">Upload</span>
             </div>
             <div class="step-line" :class="{ loading: step === 1 }" />
             <div class="step-item" :class="{ active: step >= 2, done: step > 2 }">
-              <div class="step-num">
-                <Check v-if="step > 2" :size="12" /><span v-else>2</span>
-              </div>
+              <div class="step-num"><Check v-if="step > 2" :size="12" /><span v-else>2</span></div>
               <span class="step-label">Review</span>
             </div>
             <div class="step-line" :class="{ loading: step === 2 }" />
             <div class="step-item" :class="{ active: step >= 3 }">
-              <div class="step-num">
-                <Check v-if="step > 3" :size="12" /><span v-else>3</span>
-              </div>
+              <div class="step-num"><Check v-if="step > 3" :size="12" /><span v-else>3</span></div>
               <span class="step-label">Done</span>
             </div>
           </div>
@@ -1082,8 +1257,6 @@ watch(activeSection, (newSection) => {
 
       <!-- ── Content ─────────────────────────────────────────── -->
       <div class="content">
-
-
         <!-- ══ UPLOAD ════════════════════════════════════════════ -->
         <template v-if="activeSection === 'upload'">
           <div class="upload-wrap">
@@ -1107,7 +1280,6 @@ watch(activeSection, (newSection) => {
             -->
 
             <div v-if="step !== 2" class="upload-center">
-
               <!-- Clean Processing View (Visible only during parsing) -->
               <div v-if="processingDoc" class="processing-container">
                 <BookLoader :progress="extractionProgress" :message="extractionMessage" />
@@ -1115,7 +1287,6 @@ watch(activeSection, (newSection) => {
 
               <!-- Initial Upload State -->
               <div v-else-if="step === 1" class="upload-card">
-
                 <div class="upload-card-head">
                   <div class="upload-card-icon">
                     <FileUp :size="22" color="#00a651" />
@@ -1123,21 +1294,38 @@ watch(activeSection, (newSection) => {
                   <h1 class="upload-card-title">Upload Document</h1>
                   <p>Upload a PDF to index into the research repository.</p>
                 </div>
-                <div v-if="uploadError" class="error-banner"
-                  :class="{ 'terminal-error': uploadError.includes('Upload Terminated') }">
+                <div
+                  v-if="uploadError"
+                  class="error-banner"
+                  :class="{ 'terminal-error': uploadError.includes('Upload Terminated') }"
+                >
                   <ShieldAlert v-if="uploadError.includes('Upload Terminated')" :size="24" />
                   <AlertCircle v-else :size="16" />
                   <div class="error-content">
-                    <strong>{{ uploadError.includes('Upload Terminated') ? 'Upload Rejected' : 'Error Detected'
-                      }}</strong>
+                    <strong>{{
+                      uploadError.includes('Upload Terminated')
+                        ? 'Upload Rejected'
+                        : 'Error Detected'
+                    }}</strong>
                     <p>{{ uploadError }}</p>
                   </div>
                 </div>
-                <div class="drop-zone" @click="!processingDoc && fileInput?.click()" @drop="handleDrop"
-                  @dragover="handleDragOver" @dragleave="handleDragLeave"
-                  :class="{ processing: processingDoc, dragging: isDragging }">
-                  <input type="file" ref="fileInput" @change="handleFileChange" style="display:none"
-                    accept="application/pdf" :disabled="processingDoc" />
+                <div
+                  class="drop-zone"
+                  @click="!processingDoc && fileInput?.click()"
+                  @drop="handleDrop"
+                  @dragover="handleDragOver"
+                  @dragleave="handleDragLeave"
+                  :class="{ processing: processingDoc, dragging: isDragging }"
+                >
+                  <input
+                    type="file"
+                    ref="fileInput"
+                    @change="handleFileChange"
+                    style="display: none"
+                    accept="application/pdf"
+                    :disabled="processingDoc"
+                  />
                   <FileUp :size="40" color="#00a651" />
                   <div class="drop-text">
                     <strong>Click to upload</strong> or drag and drop
@@ -1155,26 +1343,36 @@ watch(activeSection, (newSection) => {
                       </div>
                       <div>
                         <p class="sample-docs-title">Sample Documents</p>
-                        <p class="sample-docs-subtitle">Click/Tap or drag any document below into the upload area above
-                          to process it.</p>
+                        <p class="sample-docs-subtitle">
+                          Click/Tap or drag any document below into the upload area above to process
+                          it.
+                        </p>
                       </div>
                     </div>
                   </div>
 
                   <ul class="sample-docs-list">
-                    <li v-for="doc in sampleDocs" :key="doc.id" class="sample-doc-row"
-                      :class="{ 'is-loading': fetchingSampleDocId === doc.id }" draggable="true"
+                    <li
+                      v-for="doc in sampleDocs"
+                      :key="doc.id"
+                      class="sample-doc-row"
+                      :class="{ 'is-loading': fetchingSampleDocId === doc.id }"
+                      draggable="true"
                       :aria-label="`Drag or click ${doc.name} to upload`"
-                      @dragstart="handleSampleDocDragStart($event, doc)" @click="attachSampleDoc(doc)">
+                      @dragstart="handleSampleDocDragStart($event, doc)"
+                      @click="attachSampleDoc(doc)"
+                    >
                       <div class="sample-doc-icon">
                         <Loader2 v-if="fetchingSampleDocId === doc.id" :size="14" class="spin" />
                         <FileText v-else :size="14" color="#00a651" />
                       </div>
                       <span class="sample-doc-name">{{ doc.name }}</span>
                       <span class="sample-doc-size">
-                        {{ doc.size_bytes >= 1_048_576
-                          ? (doc.size_bytes / 1_048_576).toFixed(1) + ' MB'
-                          : Math.round(doc.size_bytes / 1024) + ' KB' }}
+                        {{
+                          doc.size_bytes >= 1_048_576
+                            ? (doc.size_bytes / 1_048_576).toFixed(1) + ' MB'
+                            : Math.round(doc.size_bytes / 1024) + ' KB'
+                        }}
                       </span>
                       <div class="sample-doc-actions">
                         <div class="attach-btn-mobile">
@@ -1187,7 +1385,6 @@ watch(activeSection, (newSection) => {
                   </ul>
                 </div>
                 <!-- ──────────────────────────────────────────────────── -->
-
               </div>
 
               <!-- Success State -->
@@ -1216,10 +1413,16 @@ watch(activeSection, (newSection) => {
                   <div class="file-pill">
                     <span class="file-pill-label">FILE</span>
                     <span class="file-pill-name">{{ file?.name }}</span>
-                    <span class="file-pill-count"><strong>{{ selectedPages.length }}</strong>/{{ pages.length }}
-                      pages</span>
+                    <span class="file-pill-count"
+                      ><strong>{{ selectedPages.length }}</strong
+                      >/{{ pages.length }} pages</span
+                    >
                   </div>
-                  <button @click="handleFinalConfirm" class="confirm-btn" :disabled="uploadingPaper">
+                  <button
+                    @click="handleFinalConfirm"
+                    class="confirm-btn"
+                    :disabled="uploadingPaper"
+                  >
                     <Loader2 v-if="uploadingPaper" :size="15" class="spin" />
                     <Check v-else :size="15" />
                     Confirm Indexing
@@ -1232,16 +1435,21 @@ watch(activeSection, (newSection) => {
                   <AlertCircle :size="18" color="#3b82f6" />
                 </div>
                 <div class="notice-body">
-                  <p class="notice-title" style="color:#1e40af">Manuscript / In-Progress Document</p>
-                  <p class="notice-desc" style="color:#3b82f6">No IMRAD section headings were detected. The first 10
-                    pages are shown
-                    for preview. Fill in sections manually or browse all pages.</p>
+                  <p class="notice-title" style="color: #1e40af">
+                    Manuscript / In-Progress Document
+                  </p>
+                  <p class="notice-desc" style="color: #3b82f6">
+                    No IMRAD section headings were detected. The first 10 pages are shown for
+                    preview. Fill in sections manually or browse all pages.
+                  </p>
                 </div>
                 <div class="notice-actions">
-                  <button @click="triggerFallback" class="notice-btn" style="background:#1d4ed8">
+                  <button @click="triggerFallback" class="notice-btn" style="background: #1d4ed8">
                     <RefreshCw :size="13" /> Browse All Pages
                   </button>
-                  <button @click="cancelUpload" class="notice-btn ghost">Decline &amp; Reset</button>
+                  <button @click="cancelUpload" class="notice-btn ghost">
+                    Decline &amp; Reset
+                  </button>
                 </div>
               </div>
 
@@ -1251,12 +1459,14 @@ watch(activeSection, (newSection) => {
                 </div>
                 <div class="notice-body">
                   <p class="notice-title">Document uploaded has incomplete IMRAD structure.</p>
-                  <p class="notice-desc">The following sections could not be found. Search accuracy may be reduced.
+                  <p class="notice-desc">
+                    The following sections could not be found. Search accuracy may be reduced.
                     Canceling the indexing is recommended.
                   </p>
                   <div class="missing-list">
-                    <span v-for="s in missingSections" :key="s" class="missing-badge"><span class="missing-dot" />{{ s
-                    }}</span>
+                    <span v-for="s in missingSections" :key="s" class="missing-badge"
+                      ><span class="missing-dot" />{{ s }}</span
+                    >
                   </div>
                 </div>
                 <div class="notice-actions">
@@ -1270,13 +1480,19 @@ watch(activeSection, (newSection) => {
                     <span class="step-badge">1</span>
                     <h4>Verify Metadata</h4>
                   </div>
-                  <div class="fg"><label>Title</label><textarea v-model="uploadMetadata.title"
-                      placeholder="Research Title" /></div>
+                  <div class="fg">
+                    <label>Title</label
+                    ><textarea v-model="uploadMetadata.title" placeholder="Research Title" />
+                  </div>
                   <div class="fg">
                     <label>Author(s)</label>
                     <div class="authors-stack">
                       <div v-for="(author, index) in authors" :key="index" class="author-row">
-                        <input v-model="authors[index]" type="text" placeholder="Full Name of Author" />
+                        <input
+                          v-model="authors[index]"
+                          type="text"
+                          placeholder="Full Name of Author"
+                        />
                         <button @click="removeAuthor(index)" class="icon-btn red">
                           <Trash2 :size="14" />
                         </button>
@@ -1287,31 +1503,32 @@ watch(activeSection, (newSection) => {
                     </div>
                   </div>
                   <div class="fg-row">
-                    <div class="fg"><label>Year</label><input v-model="uploadMetadata.year" type="text"
-                        placeholder="e.g., 2025" />
+                    <div class="fg">
+                      <label>Year</label
+                      ><input v-model="uploadMetadata.year" type="text" placeholder="e.g., 2025" />
                     </div>
                     <div class="fg">
                       <label>Type</label>
                       <select v-model="uploadMetadata.project_type">
                         <option>Thesis</option>
                         <option>Capstone Project</option>
-                        <option>Technical Report</option>
                       </select>
                     </div>
                   </div>
-                  <div class="fg"><label>Abstract</label><textarea v-model="uploadMetadata.abstract"
-                      class="abstract-area" placeholder="Enter abstract…" /></div>
+                  <div class="fg">
+                    <label>Abstract</label
+                    ><textarea
+                      v-model="uploadMetadata.abstract"
+                      class="abstract-area"
+                      placeholder="Enter abstract…"
+                    />
+                  </div>
                   <div class="fg">
                     <label>Department</label>
                     <select v-model="uploadMetadata.department">
                       <option>N/A</option>
                       <option>Department of Computer Science</option>
                       <option>Department of Information Technology</option>
-                      <option>Department of Information Systems</option>
-                      <option>Department of Computer Engineering</option>
-                      <option>College of Computer Science</option>
-                      <option>College of Engineering</option>
-                      <option>College of Information Technology</option>
                     </select>
                   </div>
                   <div class="fg">
@@ -1326,56 +1543,95 @@ watch(activeSection, (newSection) => {
                   </div>
                   <div class="fg">
                     <label>Keywords</label>
-                    <input v-model="uploadMetadata.keywords" type="text"
-                      placeholder="e.g. machine learning, NLP, deep learning" />
+                    <input
+                      v-model="uploadMetadata.keywords"
+                      type="text"
+                      placeholder="e.g. machine learning, NLP, deep learning"
+                    />
                   </div>
                 </section>
 
                 <div class="review-main">
                   <!-- IMRAD Section Analysis -->
                   <section class="imrad-panel">
-                    <div class="meta-panel-head" style="margin-bottom: 1.5rem;">
+                    <div class="meta-panel-head" style="margin-bottom: 1.5rem">
                       <span class="step-badge">2</span>
                       <h4>Refine IMRAD Sections</h4>
                     </div>
 
-                    <div v-if="uploadMetadata.detected_subheadings && uploadMetadata.detected_subheadings.length > 0"
-                      class="subheadings-preview">
+                    <div
+                      v-if="
+                        uploadMetadata.detected_subheadings &&
+                        uploadMetadata.detected_subheadings.length > 0
+                      "
+                      class="subheadings-preview"
+                    >
                       <template
-                        v-if="uploadMetadata.detected_subheadings.some(s => METHODOLOGY_SUBHEADING_LABELS.includes(s))">
+                        v-if="
+                          uploadMetadata.detected_subheadings.some((s) =>
+                            METHODOLOGY_SUBHEADING_LABELS.includes(s),
+                          )
+                        "
+                      >
                         <label class="fg-label">Detected Methodology Components:</label>
-                        <div class="sub-tags" style="margin-bottom:0.75rem">
+                        <div class="sub-tags" style="margin-bottom: 0.75rem">
                           <span
-                            v-for="sub in uploadMetadata.detected_subheadings.filter(s => METHODOLOGY_SUBHEADING_LABELS.includes(s))"
-                            :key="sub" class="sub-tag">
+                            v-for="sub in uploadMetadata.detected_subheadings.filter((s) =>
+                              METHODOLOGY_SUBHEADING_LABELS.includes(s),
+                            )"
+                            :key="sub"
+                            class="sub-tag"
+                          >
                             <Check :size="12" /> {{ sub }}
                           </span>
                         </div>
                       </template>
 
                       <template
-                        v-if="uploadMetadata.detected_subheadings.some(s => !METHODOLOGY_SUBHEADING_LABELS.includes(s))">
+                        v-if="
+                          uploadMetadata.detected_subheadings.some(
+                            (s) => !METHODOLOGY_SUBHEADING_LABELS.includes(s),
+                          )
+                        "
+                      >
                         <label class="fg-label">Detected Results Components:</label>
                         <div class="sub-tags">
                           <span
-                            v-for="sub in uploadMetadata.detected_subheadings.filter(s => !METHODOLOGY_SUBHEADING_LABELS.includes(s))"
-                            :key="sub" class="sub-tag sub-tag-results">
+                            v-for="sub in uploadMetadata.detected_subheadings.filter(
+                              (s) => !METHODOLOGY_SUBHEADING_LABELS.includes(s),
+                            )"
+                            :key="sub"
+                            class="sub-tag sub-tag-results"
+                          >
                             <Check :size="12" /> {{ sub }}
                           </span>
                         </div>
                       </template>
                     </div>
                     <div class="imrad-tabs">
-                      <button v-for="tab in availableImradTabs" :key="tab" type="button" class="imrad-tab-btn"
-                        :class="{ active: activeImradTab === tab }" @click="activeImradTab = tab as ImradKey">
-                        {{ tab === 'results' ? 'Results and Discussion' : tab.charAt(0).toUpperCase() + tab.slice(1) }}
+                      <button
+                        v-for="tab in availableImradTabs"
+                        :key="tab"
+                        type="button"
+                        class="imrad-tab-btn"
+                        :class="{ active: activeImradTab === tab }"
+                        @click="activeImradTab = tab as ImradKey"
+                      >
+                        {{
+                          tab === 'results'
+                            ? 'Results and Discussion'
+                            : tab.charAt(0).toUpperCase() + tab.slice(1)
+                        }}
                       </button>
                     </div>
 
-
                     <div class="imrad-content">
-                      <div v-if="uploadMetadata.trim_points && uploadMetadata.trim_points[activeImradTab]"
-                        class="trim-alert">
+                      <div
+                        v-if="
+                          uploadMetadata.trim_points && uploadMetadata.trim_points[activeImradTab]
+                        "
+                        class="trim-alert"
+                      >
                         <AlertCircle :size="16" />
                         <span>
                           <strong>Auto-Trimmed:</strong> This section was trimmed at
@@ -1390,12 +1646,20 @@ watch(activeSection, (newSection) => {
                           <div class="ref-preview-pane">
                             <div class="ref-pane-label">
                               <span>Preview</span>
-                              <span class="ref-count-badge">{{ parsedReferencesPreview.length }} entr{{
-                                parsedReferencesPreview.length === 1 ? 'y' : 'ies' }} detected</span>
+                              <span class="ref-count-badge"
+                                >{{ parsedReferencesPreview.length }} entr{{
+                                  parsedReferencesPreview.length === 1 ? 'y' : 'ies'
+                                }}
+                                detected</span
+                              >
                             </div>
                             <div v-if="parsedReferencesPreview.length > 0" class="ref-preview-list">
-                              <div v-for="(entry, idx) in parsedReferencesPreview" :key="idx" class="ref-preview-entry"
-                                v-html="linkifyReferences(entry)" />
+                              <div
+                                v-for="(entry, idx) in parsedReferencesPreview"
+                                :key="idx"
+                                class="ref-preview-entry"
+                                v-html="linkifyReferences(entry)"
+                              />
                             </div>
                             <div v-else class="ref-preview-empty">
                               <span>No references extracted yet.</span>
@@ -1406,17 +1670,26 @@ watch(activeSection, (newSection) => {
                             <div class="ref-pane-label">
                               <span>Raw Text <span class="ref-pane-hint">(editable)</span></span>
                             </div>
-                            <textarea ref="imradTextarea" v-model="imradSections[activeImradTab]"
-                              class="imrad-textarea ref-textarea" @input="autoResizeTextarea"
-                              placeholder="No references extracted for this section…" />
+                            <textarea
+                              ref="imradTextarea"
+                              v-model="imradSections[activeImradTab]"
+                              class="imrad-textarea ref-textarea"
+                              @input="autoResizeTextarea"
+                              placeholder="No references extracted for this section…"
+                            />
                           </div>
                         </div>
                       </template>
 
                       <!-- All other tabs: single editable textarea -->
-                      <textarea v-else ref="imradTextarea" v-model="imradSections[activeImradTab]"
-                        class="imrad-textarea maximized" @input="autoResizeTextarea"
-                        placeholder="No text extracted for this section…"></textarea>
+                      <textarea
+                        v-else
+                        ref="imradTextarea"
+                        v-model="imradSections[activeImradTab]"
+                        class="imrad-textarea maximized"
+                        @input="autoResizeTextarea"
+                        placeholder="No text extracted for this section…"
+                      ></textarea>
                     </div>
                   </section>
 
@@ -1436,17 +1709,33 @@ watch(activeSection, (newSection) => {
                       </div>
                     </div>
                     <div class="thumbs-grid">
-                      <div v-for="(p, idx) in pages" :key="p.label || p.page_num + '-' + idx" class="thumb-card"
+                      <div
+                        v-for="(p, idx) in pages"
+                        :key="p.label || p.page_num + '-' + idx"
+                        class="thumb-card"
                         :class="{ selected: selectedPages.includes(p.page_num) }"
-                        @click="togglePage(p.page_num, $event)">
+                        @click="togglePage(p.page_num, $event)"
+                      >
                         <div class="thumb-wrap">
-                          <img :src="thumbSrc(p.thumbnail)" loading="lazy" class="thumb-img" @click.stop="openZoom(p)"
-                            title="Click to preview" />
+                          <img
+                            :src="thumbSrc(p.thumbnail)"
+                            loading="lazy"
+                            class="thumb-img"
+                            @click.stop="openZoom(p)"
+                            title="Click to preview"
+                          />
                           <div class="thumb-num">{{ p.label || 'P' + p.page_num }}</div>
-                          <div class="thumb-sec-badges" v-if="getSectionsForPage(p.page_num).length > 0">
-                            <span v-for="sec in getSectionsForPage(p.page_num)" :key="sec" class="sec-badge"
-                              :class="sec">{{
-                                sec.substring(0, 4) }}</span>
+                          <div
+                            class="thumb-sec-badges"
+                            v-if="getSectionsForPage(p.page_num).length > 0"
+                          >
+                            <span
+                              v-for="sec in getSectionsForPage(p.page_num)"
+                              :key="sec"
+                              class="sec-badge"
+                              :class="sec"
+                              >{{ sec.substring(0, 4) }}</span
+                            >
                           </div>
                           <div class="thumb-hover-hint">
                             <Eye :size="14" />
@@ -1479,25 +1768,37 @@ watch(activeSection, (newSection) => {
               <div class="stat-ico green">
                 <Library :size="15" />
               </div>
-              <div><span class="stat-val">{{ totalPapers }}</span><span class="stat-lbl">Total Papers</span></div>
+              <div>
+                <span class="stat-val">{{ totalPapers }}</span
+                ><span class="stat-lbl">Total Papers</span>
+              </div>
             </div>
             <div class="stat-card">
               <div class="stat-ico blue">
                 <FileText :size="15" />
               </div>
-              <div><span class="stat-val">{{ thesisCount }}</span><span class="stat-lbl">Thesis</span></div>
+              <div>
+                <span class="stat-val">{{ thesisCount }}</span
+                ><span class="stat-lbl">Thesis</span>
+              </div>
             </div>
             <div class="stat-card">
               <div class="stat-ico orange">
                 <Users :size="15" />
               </div>
-              <div><span class="stat-val">{{ capstoneCount }}</span><span class="stat-lbl">Capstone</span></div>
+              <div>
+                <span class="stat-val">{{ capstoneCount }}</span
+                ><span class="stat-lbl">Capstone</span>
+              </div>
             </div>
             <div class="stat-card">
               <div class="stat-ico purple">
                 <Calendar :size="15" />
               </div>
-              <div><span class="stat-val">{{ yearSpan }}</span><span class="stat-lbl">Year Span</span></div>
+              <div>
+                <span class="stat-val">{{ yearSpan }}</span
+                ><span class="stat-lbl">Year Span</span>
+              </div>
             </div>
           </div>
 
@@ -1509,8 +1810,12 @@ watch(activeSection, (newSection) => {
                 <span class="chart-desc">Thesis vs. Capstone Projects</span>
               </div>
               <div class="pie-container">
-                <div class="pie-chart"
-                  :style="{ background: `conic-gradient(var(--blue) 0% ${statsPercentages.thesis}%, var(--orange) ${statsPercentages.thesis}% 100%)` }">
+                <div
+                  class="pie-chart"
+                  :style="{
+                    background: `conic-gradient(var(--blue) 0% ${statsPercentages.thesis}%, var(--orange) ${statsPercentages.thesis}% 100%)`,
+                  }"
+                >
                   <div class="pie-center">
                     <span class="pie-total">{{ repoStats.total_papers }}</span>
                     <span class="pie-label">Indexed</span>
@@ -1533,8 +1838,8 @@ watch(activeSection, (newSection) => {
 
             <div class="chart-card">
               <div class="chart-header">
-                <span class="chart-title">Program Distribution</span>
-                <span class="chart-desc">Uploads per Degree Program</span>
+                <span class="chart-title">Distribution by Program</span>
+                <span class="chart-desc">Total uploads per degree program</span>
               </div>
               <div class="prog-list">
                 <div v-for="(count, prog) in repoStats.by_program" :key="prog" class="prog-row">
@@ -1543,7 +1848,10 @@ watch(activeSection, (newSection) => {
                     <span class="prog-count">{{ count }}</span>
                   </div>
                   <div class="prog-track">
-                    <div class="prog-fill" :style="{ width: (count / repoStats.total_papers * 100) + '%' }"></div>
+                    <div
+                      class="prog-fill"
+                      :style="{ width: (count / repoStats.total_papers) * 100 + '%' }"
+                    ></div>
                   </div>
                 </div>
               </div>
@@ -1553,22 +1861,46 @@ watch(activeSection, (newSection) => {
           <div class="toolbar">
             <div class="search-box">
               <Search :size="13" class="search-ico" />
-              <input v-model="searchQuery" type="text" placeholder="Search by title, author, or department…" />
+              <input
+                v-model="searchQuery"
+                type="text"
+                placeholder="Search by title, author, or department…"
+              />
             </div>
             <div class="filter-chips">
-              <button class="chip" :class="{ active: activeFilter === 'all' }"
-                @click="activeFilter = 'all'">All</button>
-              <button class="chip" :class="{ active: activeFilter === 'Thesis' }"
-                @click="activeFilter = 'Thesis'">Thesis</button>
-              <button class="chip" :class="{ active: activeFilter === 'Capstone Project' }"
-                @click="activeFilter = 'Capstone Project'">Capstone</button>
+              <button
+                class="chip"
+                :class="{ active: activeFilter === 'all' }"
+                @click="activeFilter = 'all'"
+              >
+                All
+              </button>
+              <button
+                class="chip"
+                :class="{ active: activeFilter === 'Thesis' }"
+                @click="activeFilter = 'Thesis'"
+              >
+                Thesis
+              </button>
+              <button
+                class="chip"
+                :class="{ active: activeFilter === 'Capstone Project' }"
+                @click="activeFilter = 'Capstone Project'"
+              >
+                Capstone
+              </button>
             </div>
           </div>
 
           <div class="tbl-card">
             <div class="tbl-card-head">
-              <span class="tbl-count">{{ filteredPapers.length }} paper{{ filteredPapers.length !== 1 ? 's' : '' }}<span
-                  v-if="searchQuery || activeFilter !== 'all'" class="tbl-hint"> · filtered</span></span>
+              <span class="tbl-count"
+                >Overall record: {{ filteredPapers.length }} paper{{
+                  filteredPapers.length !== 1 ? 's' : ''
+                }}<span v-if="searchQuery || activeFilter !== 'all'" class="tbl-hint">
+                  · filtered</span
+                ></span
+              >
             </div>
             <div class="tbl-scroll">
               <table class="tbl">
@@ -1621,10 +1953,18 @@ watch(activeSection, (newSection) => {
                       <div class="tbl-empty">
                         <FolderOpen :size="40" />
                         <h3>No papers found</h3>
-                        <p>{{ searchQuery || activeFilter !== 'all' ? 'Try a different search or filter.' :
-                          'Upload the first researchpaper to get started.' }}</p>
-                        <button v-if="!searchQuery && activeFilter === 'all'" @click="setSection('upload')"
-                          class="empty-cta">
+                        <p>
+                          {{
+                            searchQuery || activeFilter !== 'all'
+                              ? 'Try a different search or filter.'
+                              : 'Upload the first researchpaper to get started.'
+                          }}
+                        </p>
+                        <button
+                          v-if="!searchQuery && activeFilter === 'all'"
+                          @click="setSection('upload')"
+                          class="empty-cta"
+                        >
                           <Plus :size="13" /> Upload Now
                         </button>
                       </div>
@@ -1633,29 +1973,58 @@ watch(activeSection, (newSection) => {
                   <tr v-for="paper in filteredPapers" :key="paper.id" class="tbl-row">
                     <td class="td-paper">
                       <div class="paper-cell">
-                        <div class="paper-av" :data-t="typeColor(paper.project_type)">{{ initials(paper.title) }}</div>
-                        <div class="paper-info"><span class="paper-name">{{ paper.title }}</span><span
-                            class="paper-author">{{
-                              paper.author }}</span></div>
+                        <div class="paper-av" :data-t="typeColor(paper.project_type)">
+                          {{ initials(paper.title) }}
+                        </div>
+                        <div class="paper-info">
+                          <span class="paper-name">{{ paper.title }}</span
+                          ><span class="paper-author">{{ paper.author }}</span>
+                        </div>
                       </div>
                     </td>
-                    <td><span class="year-chip">{{ paper.year }}</span></td>
-                    <td><span class="dept-chip">{{ paper.department }}</span></td>
-                    <td><span class="type-badge" :class="typeColor(paper.project_type)">{{ paper.project_type }}</span>
-                    </td>
-                    <td><span class="uploader-chip">{{ paper.uploaded_by ?? '—' }}</span></td>
                     <td>
-                      <span class="type-badge"
-                        :class="paper.uploader_role === 'Admin' ? 'purple' : paper.uploader_role === 'Faculty' ? 'green' : 'blue'">
+                      <span class="year-chip">{{ paper.year }}</span>
+                    </td>
+                    <td>
+                      <span class="dept-chip">{{ paper.department }}</span>
+                    </td>
+                    <td>
+                      <span class="type-badge" :class="typeColor(paper.project_type)">{{
+                        paper.project_type
+                      }}</span>
+                    </td>
+                    <td>
+                      <span class="uploader-chip">{{ paper.uploaded_by ?? '—' }}</span>
+                    </td>
+                    <td>
+                      <span
+                        class="type-badge"
+                        :class="
+                          paper.uploader_role === 'Admin'
+                            ? 'purple'
+                            : paper.uploader_role === 'Faculty'
+                              ? 'green'
+                              : 'blue'
+                        "
+                      >
                         {{ paper.uploader_role ?? '—' }}
                       </span>
                     </td>
                     <td class="td-r">
-                      <button v-if="canEdit" @click="openEditModal(paper)" class="row-btn" title="Edit">
+                      <button
+                        v-if="canEdit"
+                        @click="openEditModal(paper)"
+                        class="row-btn"
+                        title="Edit"
+                      >
                         <Edit3 :size="13" />
                       </button>
-                      <button v-if="isAdmin || isFaculty" @click="handleDelete(paper.id)" class="row-btn danger"
-                        title="Delete">
+                      <button
+                        v-if="isAdmin || isFaculty"
+                        @click="handleDelete(paper.id)"
+                        class="row-btn danger"
+                        title="Delete"
+                      >
                         <Trash2 :size="13" />
                       </button>
                     </td>
@@ -1665,7 +2034,6 @@ watch(activeSection, (newSection) => {
             </div>
           </div>
         </template>
-
 
         <!-- ══ USER MANAGER ══════════════════════════════════════ -->
         <template v-else-if="activeSection === 'users'">
@@ -1685,19 +2053,28 @@ watch(activeSection, (newSection) => {
               <div class="stat-ico purple">
                 <ShieldAlert :size="15" />
               </div>
-              <div><span class="stat-val">{{ adminCount }}</span><span class="stat-lbl">Admins</span></div>
+              <div>
+                <span class="stat-val">{{ adminCount }}</span
+                ><span class="stat-lbl">Admins</span>
+              </div>
             </div>
             <div class="stat-card">
               <div class="stat-ico green">
                 <UserCheck :size="15" />
               </div>
-              <div><span class="stat-val">{{ facultyCount }}</span><span class="stat-lbl">Faculty</span></div>
+              <div>
+                <span class="stat-val">{{ facultyCount }}</span
+                ><span class="stat-lbl">Faculty</span>
+              </div>
             </div>
             <div class="stat-card">
               <div class="stat-ico blue">
                 <Users :size="15" />
               </div>
-              <div><span class="stat-val">{{ studentCount }}</span><span class="stat-lbl">Students</span></div>
+              <div>
+                <span class="stat-val">{{ studentCount }}</span
+                ><span class="stat-lbl">Students</span>
+              </div>
             </div>
           </div>
 
@@ -1724,13 +2101,23 @@ watch(activeSection, (newSection) => {
                       <td>
                         <div class="paper-cell">
                           <div class="user-av">{{ user.username?.[0]?.toUpperCase() || '?' }}</div>
-                          <div class="paper-info"><span class="paper-name">{{ user.username }}</span></div>
+                          <div class="paper-info">
+                            <span class="paper-name">{{ user.username }}</span>
+                          </div>
                         </div>
                       </td>
                       <td>
-                        <span class="type-badge"
-                          :class="user.role === 'Admin' ? 'purple' : user.role === 'Faculty' ? 'green' : 'blue'">{{
-                            user.role }}</span>
+                        <span
+                          class="type-badge"
+                          :class="
+                            user.role === 'Admin'
+                              ? 'purple'
+                              : user.role === 'Faculty'
+                                ? 'green'
+                                : 'blue'
+                          "
+                          >{{ user.role }}</span
+                        >
                       </td>
                       <td class="td-r">
                         <button @click="openRoleModal(user)" class="row-btn" title="Change role">
@@ -1753,72 +2140,6 @@ watch(activeSection, (newSection) => {
           </div>
         </template>
 
-        <!-- ══ EDIT OVERLAY ══════════════════════════════════════ -->
-        <div v-if="showEditModal" class="edit-overlay">
-          <header class="edit-header">
-            <div class="edit-header-left">
-              <button @click="closeEditModal" class="edit-back">
-                <ArrowLeft :size="15" />
-              </button>
-              <div>
-                <div class="edit-bc">
-                  <span>Management</span>
-                  <ChevronRight :size="11" /><span>Repository</span>
-                  <ChevronRight :size="11" /><span class="edit-bc-active">Edit Research</span>
-                </div>
-                <h2 class="edit-title">{{ editingPaper.title || 'Edit Paper' }}</h2>
-              </div>
-            </div>
-            <div class="edit-header-right">
-              <span class="id-badge">ID #{{ editingPaper.id }}</span>
-              <button @click="closeEditModal" class="ghost-btn">Cancel</button>
-              <button @click="handleUpdate" :disabled="updating" class="save-btn">
-                <Loader2 v-if="updating" :size="13" class="spin" />
-                <Save v-else :size="13" />
-                {{ updating ? 'Saving…' : 'Save Changes' }}
-              </button>
-            </div>
-          </header>
-          <div class="edit-body">
-            <section class="edit-form-wrap">
-              <div class="edit-form-head">
-                <div class="edit-form-icon">
-                  <Settings :size="16" />
-                </div>
-                <div>
-                  <h3>Document Metadata</h3>
-                  <p>Update core information for this indexed document.</p>
-                </div>
-              </div>
-              <form @submit.prevent="handleUpdate" class="edit-form">
-                <div class="fg"><label>Research Title</label><textarea v-model="editingPaper.title" required rows="3"
-                    placeholder="Enter full research title…" /></div>
-                <div class="fg-row">
-                  <div class="fg"><label>Author / Group</label><input v-model="editingPaper.author" type="text" required
-                      placeholder="Main author names…" /></div>
-                  <div class="fg"><label>Publication Year</label><input v-model="editingPaper.year" type="text" required
-                      placeholder="e.g. 2024" /></div>
-                </div>
-                <div class="fg-row">
-                  <div class="fg"><label>Department</label><input v-model="editingPaper.department" type="text" required
-                      placeholder="e.g. Computer Science" /></div>
-                  <div class="fg">
-                    <label>Project Type</label>
-                    <select v-model="editingPaper.project_type" required>
-                      <option value="Thesis">Thesis</option>
-                      <option value="Capstone Project">Capstone Project</option>
-                    </select>
-                  </div>
-                </div>
-                <div class="fg"><label>Keywords (comma separated)</label><input v-model="editingPaper.keywords"
-                    type="text" placeholder="AI, Deep Learning, BERT…" /></div>
-                <div class="fg"><label>Abstract / Summary</label><textarea v-model="editingPaper.abstract" rows="12"
-                    placeholder="Enter abstract content…" /></div>
-              </form>
-            </section>
-          </div>
-        </div>
-
         <!-- ══ ACTIVITY LOG ════════════════════════════════════════ -->
         <template v-else-if="activeSection === 'logs'">
           <div class="page-head">
@@ -1827,11 +2148,40 @@ watch(activeSection, (newSection) => {
           </div>
 
           <div class="tbl-card">
-            <div class="tbl-card-head">
-              <span class="tbl-count">{{ logs.length }} event{{ logs.length !== 1 ? 's' : '' }}</span>
-              <button @click="fetchLogs" class="ghost-btn" title="Refresh">
-                <RefreshCw :size="13" />
+            <div class="tbl-card-head logs-header">
+              <span class="tbl-count">{{ logs.length }} events tracked</span>
+              <button
+                @click="fetchLogs"
+                class="refresh-btn"
+                :disabled="loadingLogs"
+                title="Refresh Logs"
+              >
+                <RefreshCw :size="14" :class="{ spin: loadingLogs }" />
+                <span>Refresh</span>
               </button>
+            </div>
+
+            <div class="logs-legend">
+              <div class="legend-item">
+                <span class="log-badge green"><FileUp :size="12" /></span>
+                <span class="legend-lbl">Upload: New paper indexed</span>
+              </div>
+              <div class="legend-item">
+                <span class="log-badge blue"><Edit3 :size="12" /></span>
+                <span class="legend-lbl">Edit: Metadata updated</span>
+              </div>
+              <div class="legend-item">
+                <span class="log-badge red"><Trash2 :size="12" /></span>
+                <span class="legend-lbl">Trash: Moved to trash bin</span>
+              </div>
+              <div class="legend-item">
+                <span class="log-badge green"><ArchiveRestore :size="12" /></span>
+                <span class="legend-lbl">Restore: Recovered from trash</span>
+              </div>
+              <div class="legend-item">
+                <span class="log-badge purple"><Trash2 :size="12" /></span>
+                <span class="legend-lbl">Erase: Permanently removed from the repository</span>
+              </div>
             </div>
             <div class="tbl-scroll">
               <table class="tbl">
@@ -1875,9 +2225,24 @@ watch(activeSection, (newSection) => {
                   </tr>
                   <tr v-else v-for="log in logs" :key="log.id" class="tbl-row">
                     <td>
-                      <span class="log-badge" :class="logActionColor(log.action)">
-                        {{ log.action }}
-                      </span>
+                      <div class="log-action-cell">
+                        <div class="log-badge" :class="logActionColor(log.action)">
+                          <FileUp v-if="log.action === 'Upload'" :size="12" />
+                          <Edit3 v-else-if="log.action === 'Edit'" :size="12" />
+                          <Trash2
+                            v-else-if="log.action === 'Delete' || log.action === 'Purge'"
+                            :size="12"
+                          />
+                          <ArchiveRestore v-else-if="log.action === 'Restore'" :size="12" />
+                          {{
+                            log.action === 'Purge'
+                              ? 'Erase'
+                              : log.action === 'Delete'
+                                ? 'Trash'
+                                : log.action
+                          }}
+                        </div>
+                      </div>
                     </td>
                     <td class="td-paper">
                       <span class="paper-name">{{ log.paper_title }}</span>
@@ -1886,8 +2251,16 @@ watch(activeSection, (newSection) => {
                       <span class="uploader-chip">{{ log.performed_by }}</span>
                     </td>
                     <td>
-                      <span class="type-badge"
-                        :class="log.performed_by_role === 'Admin' ? 'purple' : log.performed_by_role === 'Faculty' ? 'green' : 'blue'">
+                      <span
+                        class="type-badge"
+                        :class="
+                          log.performed_by_role === 'Admin'
+                            ? 'purple'
+                            : log.performed_by_role === 'Faculty'
+                              ? 'green'
+                              : 'blue'
+                        "
+                      >
                         {{ log.performed_by_role ?? '—' }}
                       </span>
                     </td>
@@ -1906,20 +2279,32 @@ watch(activeSection, (newSection) => {
           <div class="page-head">
             <div>
               <h1 class="page-title">Trash</h1>
-              <p class="page-sub">Deleted documents are automatically purged after 15 days. Restore them anytime before
-                the deadline.</p>
+              <p class="page-sub">
+                Deleted documents are automatically purged after 15 days. Restore them anytime
+                before the deadline.
+              </p>
             </div>
           </div>
 
           <div class="tbl-card">
-            <div class="tbl-card-head" style="display:flex;align-items:center;justify-content:space-between">
-              <span class="tbl-count">{{ trashedPapers.length }} document{{ trashedPapers.length !== 1 ? 's' : '' }} in
-                Trash</span>
-              <div style="display:flex;align-items:center;gap:0.75rem">
+            <div
+              class="tbl-card-head"
+              style="display: flex; align-items: center; justify-content: space-between"
+            >
+              <span class="tbl-count"
+                >{{ trashedPapers.length }} document{{ trashedPapers.length !== 1 ? 's' : '' }} in
+                Trash</span
+              >
+              <div style="display: flex; align-items: center; gap: 0.75rem">
                 <span v-if="loadingTrash" class="sync-text">
                   <RefreshCw :size="11" class="spin" /> Syncing with system clock...
                 </span>
-                <button @click="fetchTrashedPapers" class="ghost-btn" title="Refresh" :disabled="loadingTrash">
+                <button
+                  @click="fetchTrashedPapers"
+                  class="ghost-btn"
+                  title="Refresh"
+                  :disabled="loadingTrash"
+                >
                   <RefreshCw :size="13" :class="{ spin: loadingTrash }" />
                 </button>
               </div>
@@ -1964,35 +2349,58 @@ watch(activeSection, (newSection) => {
                       <div class="tbl-empty">
                         <Trash2 :size="40" />
                         <h3>Trash is empty</h3>
-                        <p>Deleted documents will appear here for 15 days before being permanently removed.</p>
+                        <p>
+                          Deleted documents will appear here for 15 days before being permanently
+                          removed.
+                        </p>
                       </div>
                     </td>
                   </tr>
                   <tr v-else v-for="paper in trashedPapers" :key="paper.id" class="tbl-row">
                     <td class="td-paper">
                       <div class="paper-cell">
-                        <div class="paper-av" :data-t="typeColor(paper.project_type)">{{ initials(paper.title) }}</div>
+                        <div class="paper-av" :data-t="typeColor(paper.project_type)">
+                          {{ initials(paper.title) }}
+                        </div>
                         <div class="paper-info">
                           <span class="paper-name">{{ paper.title }}</span>
                           <span class="paper-author">{{ paper.author }}</span>
                         </div>
                       </div>
                     </td>
-                    <td><span class="year-chip">{{ paper.year }}</span></td>
-                    <td><span class="type-badge" :class="typeColor(paper.project_type)">{{ paper.project_type }}</span>
-                    </td>
-                    <td><span class="uploader-chip">{{ paper.deleted_by ?? '—' }}</span></td>
                     <td>
-                      <span class="days-badge" :class="daysBadgeClass(daysRemaining(paper.deleted_at!))">
+                      <span class="year-chip">{{ paper.year }}</span>
+                    </td>
+                    <td>
+                      <span class="type-badge" :class="typeColor(paper.project_type)">{{
+                        paper.project_type
+                      }}</span>
+                    </td>
+                    <td>
+                      <span class="uploader-chip">{{ paper.deleted_by ?? '—' }}</span>
+                    </td>
+                    <td>
+                      <span
+                        class="days-badge"
+                        :class="daysBadgeClass(daysRemaining(paper.deleted_at!))"
+                      >
                         {{ daysRemaining(paper.deleted_at!) }}d left
                       </span>
                     </td>
                     <td class="td-r">
-                      <button @click="handleRestore(paper)" class="row-btn restore-btn" title="Restore">
+                      <button
+                        @click="handleRestore(paper)"
+                        class="row-btn restore-btn"
+                        title="Restore"
+                      >
                         <ArchiveRestore :size="13" />
                       </button>
-                      <button v-if="isAdmin" @click="openPurgeModal(paper)" class="row-btn danger"
-                        title="Purge permanently">
+                      <button
+                        v-if="isAdmin"
+                        @click="openPurgeModal(paper)"
+                        class="row-btn danger"
+                        title="Delete permanently"
+                      >
                         <Trash2 :size="13" />
                       </button>
                     </td>
@@ -2005,8 +2413,6 @@ watch(activeSection, (newSection) => {
 
         <!-- ══ TELEPORTED MODALS ══════════════════════════════════ -->
         <Teleport to="body">
-
-
           <!-- Zoom modal -->
           <div v-if="showZoomModal" class="modal-overlay" @click="closeZoom">
             <div class="zoom-modal" @click.stop>
@@ -2028,7 +2434,9 @@ watch(activeSection, (newSection) => {
                 </div>
                 <div>
                   <h3>Change Role</h3>
-                  <p>Assign a new role to <strong>{{ roleTarget.username }}</strong></p>
+                  <p>
+                    Assign a new role to <strong>{{ roleTarget.username }}</strong>
+                  </p>
                 </div>
                 <button @click="closeRoleModal" class="modal-close">
                   <X :size="18" />
@@ -2040,9 +2448,10 @@ watch(activeSection, (newSection) => {
                   <div class="role-opt-ico blue">
                     <Users :size="15" />
                   </div>
-                  <div class="role-opt-info"><span class="role-opt-name">Student</span><span class="role-opt-desc">Can
-                      search
-                      and view papers only.</span></div>
+                  <div class="role-opt-info">
+                    <span class="role-opt-name">Student</span
+                    ><span class="role-opt-desc">Can search and view papers only.</span>
+                  </div>
                   <Check v-if="roleNew === 'Student'" :size="13" class="role-check" />
                 </label>
                 <label class="role-opt" :class="{ selected: roleNew === 'Faculty' }">
@@ -2050,9 +2459,10 @@ watch(activeSection, (newSection) => {
                   <div class="role-opt-ico green">
                     <ShieldCheck :size="15" />
                   </div>
-                  <div class="role-opt-info"><span class="role-opt-name">Faculty</span><span class="role-opt-desc">Can
-                      upload
-                      and manage research papers.</span></div>
+                  <div class="role-opt-info">
+                    <span class="role-opt-name">Faculty</span
+                    ><span class="role-opt-desc">Can upload and manage research papers.</span>
+                  </div>
                   <Check v-if="roleNew === 'Faculty'" :size="13" class="role-check" />
                 </label>
                 <label class="role-opt" :class="{ selected: roleNew === 'Admin' }">
@@ -2060,17 +2470,21 @@ watch(activeSection, (newSection) => {
                   <div class="role-opt-ico purple">
                     <ShieldAlert :size="15" />
                   </div>
-                  <div class="role-opt-info"><span class="role-opt-name">Admin</span><span class="role-opt-desc">Full
-                      access
-                      including user management.</span></div>
+                  <div class="role-opt-info">
+                    <span class="role-opt-name">Admin</span
+                    ><span class="role-opt-desc">Full access including user management.</span>
+                  </div>
                   <Check v-if="roleNew === 'Admin'" :size="13" class="role-check" />
                 </label>
               </div>
               <p v-if="roleError" class="role-error">{{ roleError }}</p>
               <div class="modal-foot">
                 <button @click="closeRoleModal" class="ghost-btn">Cancel</button>
-                <button @click="handleRoleChange" :disabled="roleChanging || roleNew === roleTarget.role"
-                  class="save-btn">
+                <button
+                  @click="handleRoleChange"
+                  :disabled="roleChanging || roleNew === roleTarget.role"
+                  class="save-btn"
+                >
                   <Loader2 v-if="roleChanging" :size="13" class="spin" />
                   <Check v-else :size="13" />
                   {{ roleChanging ? 'Updating…' : 'Confirm Role Change' }}
@@ -2100,11 +2514,21 @@ watch(activeSection, (newSection) => {
                   <div class="form-grid">
                     <div class="form-group">
                       <label class="form-lbl">Username</label>
-                      <input v-model="newUser.username" type="text" class="form-input" placeholder="e.g. maruf" />
+                      <input
+                        v-model="newUser.username"
+                        type="text"
+                        class="form-input"
+                        placeholder="e.g. maruf"
+                      />
                     </div>
                     <div class="form-group">
                       <label class="form-lbl">Full Name</label>
-                      <input v-model="newUser.full_name" type="text" class="form-input" placeholder="e.g. Yna Maruf" />
+                      <input
+                        v-model="newUser.full_name"
+                        type="text"
+                        class="form-input"
+                        placeholder="e.g. Yna Maruf"
+                      />
                     </div>
                   </div>
                   <div class="form-group">
@@ -2140,7 +2564,8 @@ watch(activeSection, (newSection) => {
                       <CheckCircle :size="32" class="success-ico" />
                     </div>
                     <h4 class="success-title">Account Created!</h4>
-                    <p class="success-msg">Please save the auto-generated password below. It will not be shown again.
+                    <p class="success-msg">
+                      Please save the auto-generated password below. It will not be shown again.
                     </p>
                     <div class="pw-box">
                       <span class="pw-lbl">Password</span>
@@ -2154,7 +2579,12 @@ watch(activeSection, (newSection) => {
                 <button @click="closeCreateUserModal" class="ghost-btn">
                   {{ createdPassword ? 'Close' : 'Cancel' }}
                 </button>
-                <button v-if="!createdPassword" @click="handleCreateStaff" class="save-btn" :disabled="creatingUser">
+                <button
+                  v-if="!createdPassword"
+                  @click="handleCreateStaff"
+                  class="save-btn"
+                  :disabled="creatingUser"
+                >
                   <Loader2 v-if="creatingUser" :size="16" class="spin" />
                   <span v-else>Generate Account</span>
                 </button>
@@ -2178,16 +2608,19 @@ watch(activeSection, (newSection) => {
                 </button>
               </div>
               <div class="modal-body purge-body">
-                <p class="purge-warning">You are about to permanently remove this document from the system. All vectors
-                  and the
-                  original PDF will be deleted.</p>
+                <p class="purge-warning">
+                  You are about to permanently remove this document from the system. All vectors and
+                  the original PDF will be deleted.
+                </p>
                 <div class="purge-paper-box">
-                  <div class="paper-av" :data-t="typeColor(purgeTarget?.project_type ?? '')">{{
-                    initials(purgeTarget?.title ??
-                      '') }}</div>
+                  <div class="paper-av" :data-t="typeColor(purgeTarget?.project_type ?? '')">
+                    {{ initials(purgeTarget?.title ?? '') }}
+                  </div>
                   <div>
                     <span class="paper-name">{{ purgeTarget?.title }}</span>
-                    <span class="paper-author">{{ purgeTarget?.author }} · {{ purgeTarget?.year }}</span>
+                    <span class="paper-author"
+                      >{{ purgeTarget?.author }} · {{ purgeTarget?.year }}</span
+                    >
                   </div>
                 </div>
               </div>
@@ -2196,16 +2629,109 @@ watch(activeSection, (newSection) => {
                 <button @click="handlePurgeConfirm" class="purge-confirm-btn" :disabled="purging">
                   <Loader2 v-if="purging" :size="13" class="spin" />
                   <Trash2 v-else :size="13" />
-                  {{ purging ? 'Purging…' : 'Delete Permanently' }}
+                  {{ purging ? 'Deleting...' : 'Hard Delete' }}
                 </button>
               </div>
             </div>
           </div>
-
         </Teleport>
       </div>
+      <!-- ══ EDIT MODAL (Simplified) ════════════════════════════ -->
+      <Teleport to="body">
+        <div v-if="showEditModal" class="modal-overlay" @click.self="closeEditModal">
+          <div class="modal-card edit-modal-card">
+            <div class="modal-head">
+              <div class="modal-head-icon">
+                <Edit3 :size="18" />
+              </div>
+              <div>
+                <h3>Edit Metadata</h3>
+                <p>
+                  Update metadata for <strong>THESIS ID #{{ editingPaper.id }}</strong>
+                </p>
+              </div>
+            </div>
+
+            <div class="modal-body">
+              <div class="edit-form-minimal">
+                <div class="fg">
+                  <label>Research Title</label>
+                  <textarea v-model="editingPaper.title" rows="3" placeholder="Full Title..." />
+                </div>
+
+                <div class="fg">
+                  <label>Authors</label>
+                  <div class="authors-stack">
+                    <div v-for="(author, index) in editAuthors" :key="index" class="author-row">
+                      <input v-model="editAuthors[index]" type="text" placeholder="Author Name" />
+                      <button @click="removeEditAuthor(index)" class="icon-btn red">
+                        <Trash2 :size="14" />
+                      </button>
+                    </div>
+                    <button @click="addEditAuthor" class="add-btn">
+                      <Plus :size="12" /> Add Author
+                    </button>
+                  </div>
+                </div>
+
+                <div class="fg-row">
+                  <div class="fg">
+                    <label>Publication Year</label>
+                    <input v-model="editingPaper.year" type="text" placeholder="Year" />
+                  </div>
+                  <div class="fg">
+                    <label>Project Type</label>
+                    <select v-model="editingPaper.project_type">
+                      <option value="Thesis">Thesis</option>
+                      <option value="Capstone Project">Capstone Project</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="fg">
+                  <label>Department</label>
+                  <select v-model="editingPaper.department">
+                    <option>N/A</option>
+                    <option>Department of Computer Science</option>
+                    <option>Department of Information Technology</option>
+                  </select>
+                </div>
+
+                <div class="fg">
+                  <label>Keywords</label>
+                  <input
+                    v-model="editingPaper.keywords"
+                    type="text"
+                    placeholder="AI, NLP, BERT..."
+                  />
+                </div>
+
+                <div class="fg">
+                  <label>Abstract</label>
+                  <textarea
+                    v-model="editingPaper.abstract"
+                    rows="8"
+                    placeholder="Paper Abstract..."
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div class="modal-foot">
+              <button @click="closeEditModal" class="ghost-btn">Cancel</button>
+              <button @click="handleUpdate" :disabled="updating" class="save-btn">
+                <Loader2 v-if="updating" :size="13" class="spin" />
+                <Save v-else :size="13" />
+                {{ updating ? 'Saving...' : 'Update Metadata' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Teleport>
     </div>
+    <!-- Close mgmt-main -->
   </div>
+  <!-- Close mgmt -->
 </template>
 
 <style scoped>
@@ -2600,7 +3126,6 @@ watch(activeSection, (newSection) => {
 }
 
 @keyframes pulse-op {
-
   0%,
   100% {
     opacity: 0.7;
@@ -2737,10 +3262,7 @@ watch(activeSection, (newSection) => {
 }
 
 .step-line.loading {
-  background: linear-gradient(90deg,
-      var(--rule) 0%,
-      var(--green) 50%,
-      var(--rule) 100%);
+  background: linear-gradient(90deg, var(--rule) 0%, var(--green) 50%, var(--rule) 100%);
   background-size: 200% 100%;
   animation: step-line-sweep 1.2s infinite linear;
 }
@@ -3040,12 +3562,12 @@ watch(activeSection, (newSection) => {
   flex-shrink: 0;
 }
 
-.paper-av[data-t="blue"] {
+.paper-av[data-t='blue'] {
   background: #eff6ff;
   color: #2563eb;
 }
 
-.paper-av[data-t="orange"] {
+.paper-av[data-t='orange'] {
   background: #fff7ed;
   color: #c2410c;
 }
@@ -3195,11 +3717,11 @@ watch(activeSection, (newSection) => {
 
 @keyframes shimmer {
   0% {
-    background-position: 200% 0
+    background-position: 200% 0;
   }
 
   100% {
-    background-position: -200% 0
+    background-position: -200% 0;
   }
 }
 
@@ -3342,12 +3864,12 @@ watch(activeSection, (newSection) => {
   flex-shrink: 0;
 }
 
-.dash-av[data-t="blue"] {
+.dash-av[data-t='blue'] {
   background: #eff6ff;
   color: #2563eb;
 }
 
-.dash-av[data-t="orange"] {
+.dash-av[data-t='orange'] {
   background: #fff7ed;
   color: #c2410c;
 }
@@ -3409,7 +3931,7 @@ watch(activeSection, (newSection) => {
   border-right: none;
 }
 
-.stat-tile:nth-last-child(-n+2) {
+.stat-tile:nth-last-child(-n + 2) {
   border-bottom: none;
 }
 
@@ -3515,7 +4037,9 @@ watch(activeSection, (newSection) => {
   flex-direction: column;
   align-items: center;
   gap: 0.75rem;
-  transition: border-color 0.14s, background 0.14s;
+  transition:
+    border-color 0.14s,
+    background 0.14s;
 }
 
 .drop-zone.dragging {
@@ -3628,7 +4152,9 @@ watch(activeSection, (newSection) => {
   padding: 0.7rem 1rem;
   cursor: grab;
   border-bottom: 1px solid var(--rule);
-  transition: background 0.12s, border-left-color 0.12s;
+  transition:
+    background 0.12s,
+    border-left-color 0.12s;
   border-left: 3px solid transparent;
   user-select: none;
 }
@@ -3943,7 +4469,7 @@ watch(activeSection, (newSection) => {
 }
 
 .notice-desc {
-  font-size: 0.80rem;
+  font-size: 0.8rem;
   margin: 0;
   text-align: justify;
 }
@@ -4461,203 +4987,79 @@ watch(activeSection, (newSection) => {
   margin: 0;
 }
 
-/* ══ EDIT OVERLAY ══════════════════════════════════════════════ */
-.edit-overlay {
-  position: fixed;
-  inset: 0;
-  background: var(--surface);
-  z-index: 500;
+/* ══ EDIT MODAL (Simplified) ══════════════════════════════════ */
+.edit-modal-card {
+  max-width: 600px;
+  max-height: 90vh;
   display: flex;
   flex-direction: column;
+}
+
+.edit-modal-card .modal-body {
   overflow-y: auto;
+  flex: 1;
 }
 
-.edit-header {
-  background: var(--paper);
-  border-bottom: 1px solid var(--rule);
-  padding: 0.85rem 1.5rem;
+.edit-form-minimal {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
   gap: 1rem;
-  flex-wrap: wrap;
-  position: sticky;
-  top: 0;
-  z-index: 10;
 }
 
-.edit-header-left {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
+.edit-form-minimal .fg {
+  margin-bottom: 0;
 }
 
-.edit-back {
-  background: none;
-  border: 1px solid var(--rule);
-  color: var(--ink-3);
-  border-radius: 5px;
-  padding: 0.35rem 0.45rem;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  transition: all 0.13s;
-}
-
-.edit-back:hover {
-  border-color: var(--ink);
-  color: var(--ink);
-}
-
-.edit-bc {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-size: 0.72rem;
-  color: var(--ink-3);
-  margin-bottom: 0.15rem;
-}
-
-.edit-bc-active {
-  color: var(--ink);
-  font-weight: 600;
-}
-
-.edit-title {
-  font-family: 'Lora', serif;
-  font-size: 1.05rem;
-  font-weight: 600;
-  margin: 0;
-  color: var(--ink);
-  max-width: 500px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.edit-header-right {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-}
-
-.id-badge {
-  font-size: 0.68rem;
+.edit-form-minimal label {
+  font-size: 0.7rem;
   font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
   color: var(--ink-3);
+  margin-bottom: 0.4rem;
+  display: block;
+}
+
+.edit-form-minimal input,
+.edit-form-minimal select,
+.edit-form-minimal textarea {
   background: var(--surface);
   border: 1px solid var(--rule);
-  padding: 0.2rem 0.55rem;
-  border-radius: 4px;
-}
-
-.ghost-btn {
-  background: none;
-  border: 1.5px solid var(--rule);
-  color: var(--ink-3);
-  font-family: 'Source Sans 3', sans-serif;
-  font-size: 0.82rem;
-  font-weight: 600;
-  padding: 0.4rem 0.85rem;
-  border-radius: 5px;
-  cursor: pointer;
-  transition: all 0.13s;
-}
-
-.ghost-btn:hover {
-  border-color: var(--ink);
-  color: var(--ink);
-}
-
-.save-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  background: #1a3020;
-  color: #fff;
-  border: none;
-  border-radius: 5px;
-  padding: 0.45rem 1rem;
-  font-family: 'Source Sans 3', sans-serif;
-  font-size: 0.82rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.14s;
-}
-
-.save-btn:hover:not(:disabled) {
-  background: #00a651;
-  color: #fff;
-}
-
-.save-btn:disabled {
-  opacity: 0.6;
-  cursor: wait;
-}
-
-.edit-body {
-  padding: 2rem;
-  display: flex;
-  justify-content: center;
-}
-
-.edit-form-wrap {
-  width: 100%;
-  max-width: 680px;
-  background: var(--paper);
-  border: 1px solid var(--rule);
-  border-radius: 8px;
-  padding: 1.75rem;
-}
-
-.edit-form-head {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.75rem;
-  margin-bottom: 1.75rem;
-  padding-bottom: 1rem;
-  border-bottom: 1px solid var(--rule);
-}
-
-.edit-form-icon {
-  width: 36px;
-  height: 36px;
   border-radius: 6px;
-  background: var(--surface);
-  border: 1px solid var(--rule);
+  padding: 0.6rem 0.8rem;
+  font-size: 0.88rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.edit-form-minimal input:focus,
+.edit-form-minimal select:focus,
+.edit-form-minimal textarea:focus {
+  border-color: var(--green);
+  outline: none;
+  background: #fff;
+}
+
+.edit-form-minimal .authors-stack {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--ink-3);
-  flex-shrink: 0;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 
-.edit-form-head h3 {
-  margin: 0 0 0.15rem;
-  font-size: 0.96rem;
-  font-weight: 700;
-  color: var(--ink);
-}
-
-.edit-form-head p {
-  margin: 0;
-  font-size: 0.8rem;
-  color: var(--ink-3);
-}
-
-.edit-form .fg:last-child textarea {
-  min-height: 240px;
-}
-
-.foot-notice {
+.edit-form-minimal .author-row {
   display: flex;
+  gap: 0.5rem;
   align-items: center;
-  gap: 0.4rem;
-  font-size: 0.74rem;
-  color: var(--ink-3);
-  margin-top: 2rem;
-  padding-top: 1rem;
-  border-top: 1px solid var(--rule);
+}
+
+.edit-form-minimal .author-row input {
+  flex: 1;
+}
+
+.edit-form-minimal .add-btn {
+  width: fit-content;
+  margin-top: 0.25rem;
+  border-style: dashed;
 }
 
 /* ══ MODALS ════════════════════════════════════════════════════ */
@@ -4684,10 +5086,8 @@ watch(activeSection, (newSection) => {
 }
 
 .modal-body {
-  padding: 1.25rem
+  padding: 1.25rem;
 }
-
-
 
 .modal-card {
   background: #ffffff;
@@ -4767,8 +5167,6 @@ watch(activeSection, (newSection) => {
   padding: 0;
 }
 
-
-
 .modal-head-icon.purple {
   background: #f5f3ff;
   color: #7c3aed;
@@ -4822,6 +5220,162 @@ watch(activeSection, (newSection) => {
   border-color: var(--green);
 }
 
+/* ══ BUTTONS ════════════════════════════════════════════════════ */
+.save-btn {
+  background: var(--green);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 0.55rem 1.25rem;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  transition: all 0.15s;
+}
+
+.save-btn:hover:not(:disabled) {
+  background: var(--green-dk);
+  transform: translateY(-1px);
+}
+
+.save-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ghost-btn {
+  background: none;
+  border: 1px solid var(--rule);
+  color: var(--ink-2);
+  border-radius: 6px;
+  padding: 0.55rem 1.25rem;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.ghost-btn:hover {
+  background: var(--surface);
+  border-color: var(--ink-3);
+  color: var(--ink);
+}
+
+/* ── Activity Log Refinements ────────────────────────────────── */
+.logs-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 1.25rem;
+}
+
+.refresh-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  padding: 0.4rem 0.85rem;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.refresh-btn:hover:not(:disabled) {
+  background: var(--surface);
+  border-color: var(--ink-3);
+  color: var(--ink);
+}
+
+.refresh-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.log-action-cell {
+  display: flex;
+  align-items: center;
+}
+
+.log-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.log-badge.green {
+  background: #ecfdf5;
+  color: #059669;
+  border: 1px solid #a7f3d0;
+}
+
+.log-badge.blue {
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+}
+
+.log-badge.red {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+}
+
+.log-badge.purple {
+  background: #f5f3ff;
+  color: #7c3aed;
+  border: 1px solid #ddd6fe;
+}
+
+.log-date {
+  font-size: 0.78rem;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.logs-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  padding: 0.75rem 1.25rem;
+  background: #fafaf9;
+  border-bottom: 1px solid var(--rule);
+  justify-content: center;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.legend-item .log-badge {
+  padding: 0.2rem 0.65rem;
+  pointer-events: none;
+}
+
+.legend-lbl {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
 /* Success display */
 .success-box {
   padding: 0.5rem 0;
@@ -4837,6 +5391,33 @@ watch(activeSection, (newSection) => {
   align-items: center;
   justify-content: center;
   margin: 0 auto 1.25rem;
+}
+
+.purge-confirm-btn {
+  background: #dc2626;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 0.55rem 1.25rem;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  transition: all 0.15s;
+}
+
+.purge-confirm-btn:hover:not(:disabled) {
+  background: #b91c1c;
+  transform: translateY(-1px);
+}
+
+.purge-confirm-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .success-title {
@@ -4883,7 +5464,6 @@ watch(activeSection, (newSection) => {
   color: var(--green-dk);
   letter-spacing: 0.05em;
 }
-
 
 .zoom-modal {
   position: relative;
@@ -4937,7 +5517,9 @@ watch(activeSection, (newSection) => {
   cursor: pointer;
   border: 2px solid #e5e7eb;
   background: #ffffff;
-  transition: background 0.13s, border-color 0.13s;
+  transition:
+    background 0.13s,
+    border-color 0.13s;
 }
 
 .role-opt input {
@@ -5015,11 +5597,10 @@ watch(activeSection, (newSection) => {
   padding: 1rem 1.25rem;
   margin: 1rem 0;
   box-shadow: 0 2px 8px rgba(153, 27, 27, 0.08);
-  animation: shake 0.4s cubic-bezier(.36, .07, .19, .97) both;
+  animation: shake 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
 }
 
 @keyframes shake {
-
   10%,
   90% {
     transform: translate3d(-1px, 0, 0);
@@ -5304,7 +5885,6 @@ watch(activeSection, (newSection) => {
 }
 
 @keyframes pulse-red {
-
   0%,
   100% {
     opacity: 1;
@@ -5497,8 +6077,6 @@ watch(activeSection, (newSection) => {
   color: var(--ink-3);
   font-style: italic;
 }
-
-
 
 .ref-textarea {
   min-height: 560px;

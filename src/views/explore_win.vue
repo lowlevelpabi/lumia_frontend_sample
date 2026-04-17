@@ -164,6 +164,7 @@ const submitMobileSearch = () => {
   if (!mobileSearchInput.value.trim()) return
   router.push({ name: 'explore', query: { q: mobileSearchInput.value.trim() } })
   showMobileSearch.value = false
+  showHistory.value = false
 }
 
 const openMobileSearch = () => {
