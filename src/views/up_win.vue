@@ -200,14 +200,14 @@ function stopProgressListening() {
 
 function listenForProgress(sid: string) {
   stopProgressListening()
-  
+
   // Poll every 2 seconds
   progressTimer = window.setInterval(async () => {
     try {
       const data = await api.getUploadStatus(sid)
       if (data.progress !== undefined) extractionProgress.value = data.progress
       if (data.message) extractionMessage.value = data.message
-      
+
       if (data.status === 'completed' || data.status === 'failed') {
         stopProgressListening()
       }
@@ -466,7 +466,7 @@ onMounted(loadSampleDocs)
         <div class="up-logo-mark">
           <FileUp :size="18" color="#00a651" />
         </div>
-        <span class="up-brand">Upload Research</span>
+        <span class="up-brand">Upload Document</span>
       </div>
 
 

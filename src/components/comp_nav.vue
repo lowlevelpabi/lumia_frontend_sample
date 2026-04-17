@@ -3,7 +3,8 @@ import { ref, onMounted, watch, onUnmounted } from 'vue'
 import { useRouter, useRoute, RouterLink } from 'vue-router'
 import {
   Search, BookOpen, ArrowRight, LogOut, Settings,
-  ChevronDown, Home, Compass, UserCircle, X, Menu, HelpCircle
+  ChevronDown, Home, Compass, UserCircle, X, Menu, HelpCircle,
+  BookUp
 } from 'lucide-vue-next'
 import { api } from '../services/api'
 import { useAuth } from '../composables/useAuth'
@@ -247,7 +248,7 @@ const logout = () => {
               <div class="drawer-section">Account & Actions</div>
               <RouterLink v-if="isStudent" :to="{ name: 'upload' }" class="drawer-item"
                 style="color: #00a651; font-weight: 600;">
-                <BookOpen :size="18" /> New Upload
+                <BookUp :size="18" /> Upload Document
               </RouterLink>
               <RouterLink :to="{ name: 'profile' }" class="drawer-item">
                 <UserCircle :size="18" /> My Profile
