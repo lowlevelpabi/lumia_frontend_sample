@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { BookOpen, Search, ClipboardList } from 'lucide-vue-next'
+import { Search, ClipboardList, Upload, Sparkle } from 'lucide-vue-next'
 </script>
 
 <template>
@@ -19,6 +19,7 @@ import { BookOpen, Search, ClipboardList } from 'lucide-vue-next'
             <h3>Contents</h3>
             <ul>
               <li><a href="#getting-started">Getting Started</a></li>
+              <li><a href="#upload-guide">Upload Guide</a></li>
               <li><a href="#testing-reproduction">Testing & Reproduction</a></li>
               <li><a href="#searching">Searching & Exploring</a></li>
             </ul>
@@ -29,7 +30,7 @@ import { BookOpen, Search, ClipboardList } from 'lucide-vue-next'
         <article class="guide-body">
           <section id="getting-started" class="card-section">
             <div class="section-title">
-              <BookOpen class="text-green" :size="24" />
+              <Sparkle class="text-green" :size="24" />
               <h2>Getting Started</h2>
             </div>
             <p>Welcome to Lumia, a specialized Research Retrieval System. This platform is designed to effortlessly
@@ -47,6 +48,39 @@ import { BookOpen, Search, ClipboardList } from 'lucide-vue-next'
               <li><strong>Admin:</strong> You have the overall control of the system. You can manage users, upload new
                 documents, and manage the repository.</li>
             </ul>
+          </section>
+
+          <!-- Upload Guide Section -->
+          <section id="upload-guide" class="card-section">
+            <div class="section-title">
+              <Upload class="text-green" :size="24" />
+              <h2>Upload Guide</h2>
+            </div>
+
+            <h3 class="subsection-title">For Students:</h3>
+            <ol>
+              <li><strong>Create an Account:</strong> Register and log in using a student account.</li>
+              <li><strong>Upload a Document:</strong> Navigate to the upload section and submit the document.</li>
+              <li><strong>Verify the Document:</strong> Review the uploaded document to ensure successful extraction.
+              </li>
+              <li><strong>Index the Document:</strong> Finalize the process by indexing the verified document.</li>
+              <li><strong>Explore the Repository:</strong> Search for or locate the indexed document in the repository.
+              </li>
+            </ol>
+
+            <h3 class="subsection-title" style="margin-top: 1.5rem;">For Faculty:</h3>
+            <ol>
+              <li><strong>Log In:</strong> Access the system using a faculty account.</li>
+              <li><strong>Access Management:</strong> Navigate to the "Management" tab in the main navigation bar.</li>
+              <li><strong>Open Upload Menu:</strong> Click the "Upload Research" tab located in the side menu panel.
+              </li>
+              <li><strong>Upload File:</strong> Drag and drop or manually upload the PDF or soft copy of the thesis or
+                capstone.</li>
+              <li><strong>Review Content:</strong> Carefully review the extracted content after the upload is complete.
+              </li>
+              <li><strong>Index and Verify:</strong> Index the document and verify its presence in the "Thesis &
+                Research" section.</li>
+            </ol>
           </section>
 
           <!-- Testing & Reproduction Content -->
@@ -228,6 +262,14 @@ import { BookOpen, Search, ClipboardList } from 'lucide-vue-next'
   font-size: 1.5rem;
   color: #181c18;
   margin: 0;
+}
+
+.subsection-title {
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 1.1rem;
+  color: #181c18;
+  margin-bottom: 0.75rem;
+  font-weight: 600;
 }
 
 .card-section p,
