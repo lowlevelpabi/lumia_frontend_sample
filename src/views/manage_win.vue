@@ -45,7 +45,6 @@ import {
 } from 'lucide-vue-next'
 import {
   api,
-  BASE_URL,
   type Paper,
   type UserResponse,
   type PartialPaperMetadata,
@@ -550,7 +549,7 @@ const fileInput = ref<HTMLInputElement | null>(null)
 const sessionId = ref('')
 const extractionProgress = ref(0)
 const extractionMessage = ref('')
-let currentEventSource: EventSource | null = null
+let progressTimer: number | null = null
 
 // ── Sample Documents (System Evaluation Feature) ──────────────────
 // Loaded once per upload-section visit. Hidden automatically when
@@ -613,22 +612,19 @@ const handleSampleDocDragStart = (e: DragEvent, doc: SampleDocument) => {
 }
 
 function stopProgressListening() {
-  if (currentEventSource) {
-    currentEventSource.close()
-    currentEventSource = null
+  if (progressTimer) {
+    clearInterval(progressTimer)
+    progressTimer = null
   }
 }
 
 function listenForProgress(sid: string) {
   stopProgressListening()
 
-  // SSE endpoint for state streaming
-  const url = `${BASE_URL}/papers/upload/status/${sid}`
-  currentEventSource = new EventSource(url)
-
-  currentEventSource.onmessage = (event) => {
+  // Poll every 2 seconds
+  progressTimer = window.setInterval(async () => {
     try {
-      const data = JSON.parse(event.data)
+      const data = await api.getUploadStatus(sid)
       if (data.progress !== undefined) extractionProgress.value = data.progress
       if (data.message) extractionMessage.value = data.message
 
@@ -636,14 +632,9 @@ function listenForProgress(sid: string) {
         stopProgressListening()
       }
     } catch (err) {
-      console.warn('[SSE] Failed to parse message:', err)
+      console.error('Polling error:', err)
     }
-  }
-
-  currentEventSource.onerror = (err) => {
-    console.warn('[SSE] Connection error:', err)
-    stopProgressListening()
-  }
+  }, 2000)
 }
 
 interface PageData {
