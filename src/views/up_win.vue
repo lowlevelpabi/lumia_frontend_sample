@@ -6,7 +6,7 @@ import {
   FileText, Check, Plus, Trash2, X,
   Eye, RefreshCw, ShieldAlert, AlertTriangle
 } from 'lucide-vue-next'
-import { api, BASE_URL, type PartialPaperMetadata, type SampleDocument } from '../services/api'
+import { api, type PartialPaperMetadata, type SampleDocument } from '../services/api'
 import { useAuth } from '../composables/useAuth'
 import BookLoader from '../components/BookLoader.vue'
 
@@ -34,7 +34,6 @@ const fileInput = ref<HTMLInputElement | null>(null)
 const sessionId = ref('')
 const extractionProgress = ref(0)
 const extractionMessage = ref('')
-let currentEventSource: EventSource | null = null
 
 interface PageData {
   page_num: number
@@ -189,24 +188,34 @@ const thumbSrc = (thumbnail: string) => {
   return `data:image/jpeg;base64,${thumbnail}`
 }
 
-// ── SSE progress ─────────────────────────────────────────────────────
+// ── Progress Polling ─────────────────────────────────────────────────
+let progressTimer: number | null = null
+
 function stopProgressListening() {
-  if (currentEventSource) { currentEventSource.close(); currentEventSource = null }
+  if (progressTimer) {
+    clearInterval(progressTimer)
+    progressTimer = null
+  }
 }
 
 function listenForProgress(sid: string) {
   stopProgressListening()
-  const url = `${BASE_URL}/papers/upload/status/${sid}`
-  currentEventSource = new EventSource(url)
-  currentEventSource.onmessage = (event) => {
+  
+  // Poll every 2 seconds
+  progressTimer = window.setInterval(async () => {
     try {
-      const data = JSON.parse(event.data)
+      const data = await api.getUploadStatus(sid)
       if (data.progress !== undefined) extractionProgress.value = data.progress
       if (data.message) extractionMessage.value = data.message
-      if (data.status === 'completed' || data.status === 'failed') stopProgressListening()
-    } catch { /* ignore */ }
-  }
-  currentEventSource.onerror = () => stopProgressListening()
+      
+      if (data.status === 'completed' || data.status === 'failed') {
+        stopProgressListening()
+      }
+    } catch (err) {
+      console.error('Polling error:', err)
+      // We don't stop on a single error to handle transient network hiccups
+    }
+  }, 2000)
 }
 
 // ── File handling ────────────────────────────────────────────────────

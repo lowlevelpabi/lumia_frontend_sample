@@ -664,4 +664,16 @@ export const api = {
     const blob = await response.blob()
     return new File([blob], filename, { type: 'application/pdf' })
   },
+
+  async getUploadStatus(sessionId: string): Promise<{
+    progress: number
+    message: string
+    status: string
+  }> {
+    const response = await apiFetch(`${BASE_URL}/papers/upload/status/${sessionId}`, {
+      headers: getAuthHeaders(),
+    })
+    if (!response.ok) throw new Error('Failed to fetch status')
+    return response.json()
+  },
 }
