@@ -39,7 +39,7 @@ onMounted(() => {
   checkAuth()
   searchHistory.value = historyService.getHistory()
   window.addEventListener('click', closeProfileMenu)
-  
+
   // Close history when clicking outside
   document.addEventListener('click', (e) => {
     if (historyRef.value && !historyRef.value.contains(e.target as Node)) {
@@ -108,7 +108,7 @@ const logout = () => {
       </RouterLink>
 
       <!-- Center: Search Bar (Desktop) -->
-        <div v-if="!['home', 'management', 'login', 'register', 'about', 'profile'].includes(route.name as string)"
+        <div v-if="!['home', 'management', 'login', 'register', 'about', 'profile', 'upload'].includes(route.name as string)"
           class="nav-search-wrap">
           <div class="nav-search" ref="historyRef">
             <Search :size="14" class="search-icon" />
@@ -191,7 +191,7 @@ const logout = () => {
       <!-- Mobile UI Controls -->
       <div class="mobile-controls">
         <button
-          v-if="!['home', 'management', 'login', 'register', 'about', 'profile', 'explore'].includes(route.name as string)"
+          v-if="!['home', 'management', 'login', 'register', 'about', 'profile', 'explore', 'upload'].includes(route.name as string)"
           class="mobile-control-btn" @click="toggleMobileSearch">
           <Search :size="20" />
         </button>
