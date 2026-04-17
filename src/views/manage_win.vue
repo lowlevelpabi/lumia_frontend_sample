@@ -1049,32 +1049,31 @@ watch(activeSection, (newSection) => {
           <ChevronRight :size="12" class="bc-sep" />
           <span class="bc-active">{{ activeLabel }}</span>
         </div>
-        <!-- Upload step rail (Desktop only) -->
-        <div v-if="activeSection === 'upload' && !isMobile" class="steps-rail inside-navbar">
-          <div class="step-item" :class="{ active: step >= 1, done: step > 1 }">
-            <div class="step-num">
-              <Check v-if="step > 1" :size="12" /><span v-else>1</span>
+        <div class="topbar-right">
+          <!-- Upload step rail -->
+          <div v-if="activeSection === 'upload'" class="steps-rail inside-navbar">
+            <div class="step-item" :class="{ active: step >= 1, done: step > 1 }">
+              <div class="step-num">
+                <Check v-if="step > 1" :size="12" /><span v-else>1</span>
+              </div>
+              <span class="step-label">Upload</span>
             </div>
-            <span class="step-label">Upload</span>
-          </div>
-          <div class="step-line" :class="{ loading: step === 1 }" />
-          <div class="step-item" :class="{ active: step >= 2, done: step > 2 }">
-            <div class="step-num">
-              <Check v-if="step > 2" :size="12" /><span v-else>2</span>
+            <div class="step-line" :class="{ loading: step === 1 }" />
+            <div class="step-item" :class="{ active: step >= 2, done: step > 2 }">
+              <div class="step-num">
+                <Check v-if="step > 2" :size="12" /><span v-else>2</span>
+              </div>
+              <span class="step-label">Review</span>
             </div>
-            <span class="step-label">Review</span>
-          </div>
-          <div class="step-line" :class="{ loading: step === 2 }" />
-          <div class="step-item" :class="{ active: step >= 3 }">
-            <div class="step-num">
-              <Check v-if="step > 3" :size="12" /><span v-else>3</span>
+            <div class="step-line" :class="{ loading: step === 2 }" />
+            <div class="step-item" :class="{ active: step >= 3 }">
+              <div class="step-num">
+                <Check v-if="step > 3" :size="12" /><span v-else>3</span>
+              </div>
+              <span class="step-label">Done</span>
             </div>
-            <span class="step-label">Done</span>
           </div>
-        </div>
-
-        <div v-if="!isMobile" class="topbar-right">
-          <div class="live-clock">
+          <div v-else-if="!isMobile" class="live-clock">
             <Clock :size="13" stroke-width="2.5" />
             <span>{{ formattedTime }}</span>
           </div>
@@ -1088,29 +1087,6 @@ watch(activeSection, (newSection) => {
         <!-- ══ UPLOAD ════════════════════════════════════════════ -->
         <template v-if="activeSection === 'upload'">
           <div class="upload-wrap">
-            <!-- Detached steps rail (Mobile only) -->
-            <div v-if="isMobile" class="steps-rail detached">
-              <div class="step-item" :class="{ active: step >= 1, done: step > 1 }">
-                <div class="step-num">
-                  <Check v-if="step > 1" :size="12" /><span v-else>1</span>
-                </div>
-                <span class="step-label">Upload</span>
-              </div>
-              <div class="step-line" :class="{ loading: step === 1 }" />
-              <div class="step-item" :class="{ active: step >= 2, done: step > 2 }">
-                <div class="step-num">
-                  <Check v-if="step > 2" :size="12" /><span v-else>2</span>
-                </div>
-                <span class="step-label">Review</span>
-              </div>
-              <div class="step-line" :class="{ loading: step === 2 }" />
-              <div class="step-item" :class="{ active: step >= 3 }">
-                <div class="step-num">
-                  <Check v-if="step > 3" :size="12" /><span v-else>3</span>
-                </div>
-                <span class="step-label">Done</span>
-              </div>
-            </div>
             <!--
             <div v-if="sampleDocs.length > 0 && step === 1"
               class="notice-banner green flat-notice sample-ethics-notice-top">
@@ -1153,7 +1129,7 @@ watch(activeSection, (newSection) => {
                   <AlertCircle v-else :size="16" />
                   <div class="error-content">
                     <strong>{{ uploadError.includes('Upload Terminated') ? 'Upload Rejected' : 'Error Detected'
-                    }}</strong>
+                      }}</strong>
                     <p>{{ uploadError }}</p>
                   </div>
                 </div>
@@ -1280,7 +1256,7 @@ watch(activeSection, (newSection) => {
                   </p>
                   <div class="missing-list">
                     <span v-for="s in missingSections" :key="s" class="missing-badge"><span class="missing-dot" />{{ s
-                      }}</span>
+                    }}</span>
                   </div>
                 </div>
                 <div class="notice-actions">
@@ -2027,10 +2003,6 @@ watch(activeSection, (newSection) => {
           </div>
         </template>
 
-        <p class="foot-notice">
-          <ShieldAlert :size="12" /> Only Admin, Faculty, and Librarians can upload or modify papers.
-        </p>
-
         <!-- ══ TELEPORTED MODALS ══════════════════════════════════ -->
         <Teleport to="body">
 
@@ -2256,7 +2228,8 @@ watch(activeSection, (newSection) => {
   --blue: #2563eb;
   --orange: #c2410c;
   --purple: #7c3aed;
-  --sb-bg: #008a44; /* Clean solid forest green */
+  --sb-bg: #008a44;
+  /* Clean solid forest green */
 
   display: flex;
   min-height: calc(100vh - 64px);
@@ -2411,7 +2384,8 @@ watch(activeSection, (newSection) => {
 }
 
 .sb-item.active .sb-item-desc {
-  color: rgba(0, 138, 68, 0.5); /* 50% opacity of --sb-bg */
+  color: rgba(0, 138, 68, 0.5);
+  /* 50% opacity of --sb-bg */
 }
 
 .sb-item.active .sb-arrow {
@@ -2428,7 +2402,8 @@ watch(activeSection, (newSection) => {
 .sidebar.collapsed .sb-item.active::before {
   content: '';
   position: absolute;
-  width: 44px; /* Slightly smaller for better proportions */
+  width: 44px;
+  /* Slightly smaller for better proportions */
   height: 44px;
   background: #fff;
   border-radius: 12px;
@@ -2554,7 +2529,9 @@ watch(activeSection, (newSection) => {
     padding: 0 0.75rem;
     gap: 0.5rem;
   }
-  .bc-root, .bc-sep {
+
+  .bc-root,
+  .bc-sep {
     display: none;
   }
 }
@@ -2594,6 +2571,7 @@ watch(activeSection, (newSection) => {
   .live-clock svg {
     display: none;
   }
+
   .live-clock {
     padding: 0.4rem 0.5rem;
   }
@@ -2759,18 +2737,22 @@ watch(activeSection, (newSection) => {
 }
 
 .step-line.loading {
-  background: linear-gradient(90deg, 
-    var(--rule) 0%, 
-    var(--green) 50%, 
-    var(--rule) 100%
-  );
+  background: linear-gradient(90deg,
+      var(--rule) 0%,
+      var(--green) 50%,
+      var(--rule) 100%);
   background-size: 200% 100%;
   animation: step-line-sweep 1.2s infinite linear;
 }
 
 @keyframes step-line-sweep {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 @media (max-width: 480px) {

@@ -460,33 +460,33 @@ onMounted(loadSampleDocs)
         <span class="up-brand">Upload Research</span>
       </div>
 
-      <!-- Step rail (Desktop only) -->
-      <div v-if="!isMobile" class="steps-rail inside-navbar">
-        <div class="step-item" :class="{ active: step >= 1, done: step > 1 }">
-          <div class="step-num">
-            <Check v-if="step > 1" :size="12" /><span v-else>1</span>
-          </div>
-          <span class="step-label">Upload</span>
-        </div>
-        <div class="step-line" :class="{ loading: step === 1 }" />
-        <div class="step-item" :class="{ active: step >= 2, done: step > 2 }">
-          <div class="step-num">
-            <Check v-if="step > 2" :size="12" /><span v-else>2</span>
-          </div>
-          <span class="step-label">Review</span>
-        </div>
-        <div class="step-line" :class="{ loading: step === 2 }" />
-        <div class="step-item" :class="{ active: step >= 3 }">
-          <div class="step-num">
-            <span>3</span>
-          </div>
-          <span class="step-label">Done</span>
-        </div>
-      </div>
-
 
       <div class="up-topbar-right">
-        <button v-if="step === 2" class="cancel-btn" @click="cancelUpload">
+        <!-- Step rail -->
+        <div class="steps-rail inside-navbar">
+          <div class="step-item" :class="{ active: step >= 1, done: step > 1 }">
+            <div class="step-num">
+              <Check v-if="step > 1" :size="12" /><span v-else>1</span>
+            </div>
+            <span class="step-label">Upload</span>
+          </div>
+          <div class="step-line" :class="{ loading: step === 1 }" />
+          <div class="step-item" :class="{ active: step >= 2, done: step > 2 }">
+            <div class="step-num">
+              <Check v-if="step > 2" :size="12" /><span v-else>2</span>
+            </div>
+            <span class="step-label">Review</span>
+          </div>
+          <div class="step-line" :class="{ loading: step === 2 }" />
+          <div class="step-item" :class="{ active: step >= 3 }">
+            <div class="step-num">
+              <span>3</span>
+            </div>
+            <span class="step-label">Done</span>
+          </div>
+        </div>
+
+        <button v-if="step === 2" class="cancel-btn" @click="cancelUpload" style="margin-left: 1rem;">
           <X :size="14" /> Cancel
         </button>
       </div>
@@ -494,30 +494,6 @@ onMounted(loadSampleDocs)
 
     <!-- ── Content ─────────────────────────────────────────── -->
     <main class="up-content">
-      <!-- Detached steps rail (Mobile only) -->
-      <div v-if="isMobile" class="steps-rail detached">
-        <div class="step-item" :class="{ active: step >= 1, done: step > 1 }">
-          <div class="step-num">
-            <Check v-if="step > 1" :size="12" /><span v-else>1</span>
-          </div>
-          <span class="step-label">Upload</span>
-        </div>
-        <div class="step-line" :class="{ loading: step === 1 }" />
-        <div class="step-item" :class="{ active: step >= 2, done: step > 2 }">
-          <div class="step-num">
-            <Check v-if="step > 2" :size="12" /><span v-else>2</span>
-          </div>
-          <span class="step-label">Review</span>
-        </div>
-        <div class="step-line" :class="{ loading: step === 2 }" />
-        <div class="step-item" :class="{ active: step >= 3 }">
-          <div class="step-num">
-            <span>3</span>
-          </div>
-          <span class="step-label">Done</span>
-        </div>
-      </div>
-
       <!-- Step 1 & 3: Centered card -->
       <div v-if="step !== 2" class="upload-center">
 
@@ -659,7 +635,7 @@ onMounted(loadSampleDocs)
             <p class="notice-desc">The following sections could not be found. Search accuracy may be reduced.</p>
             <div class="missing-list">
               <span v-for="s in missingSections" :key="s" class="missing-badge"><span class="missing-dot" />{{ s
-              }}</span>
+                }}</span>
             </div>
           </div>
           <div class="notice-actions">
@@ -948,7 +924,7 @@ onMounted(loadSampleDocs)
 
 @media (max-width: 480px) {
   .up-brand {
-    display: none;
+    display: block;
   }
 }
 
@@ -1062,18 +1038,22 @@ onMounted(loadSampleDocs)
 }
 
 .step-line.loading {
-  background: linear-gradient(90deg, 
-    var(--rule) 0%, 
-    var(--green) 50%, 
-    var(--rule) 100%
-  );
+  background: linear-gradient(90deg,
+      var(--rule) 0%,
+      var(--green) 50%,
+      var(--rule) 100%);
   background-size: 200% 100%;
   animation: step-line-sweep 1.2s infinite linear;
 }
 
 @keyframes step-line-sweep {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 @keyframes spin {
@@ -1827,7 +1807,8 @@ onMounted(loadSampleDocs)
   border-radius: 8px;
   margin-bottom: 1rem;
   overflow-x: auto;
-  scrollbar-width: none; /* Hide scrollbar for cleaner look */
+  scrollbar-width: none;
+  /* Hide scrollbar for cleaner look */
 }
 
 .imrad-tabs::-webkit-scrollbar {
@@ -2368,7 +2349,9 @@ onMounted(loadSampleDocs)
     box-sizing: border-box;
   }
 
-  .imrad-panel, .meta-panel, .page-panel {
+  .imrad-panel,
+  .meta-panel,
+  .page-panel {
     padding: 1rem;
   }
 }
