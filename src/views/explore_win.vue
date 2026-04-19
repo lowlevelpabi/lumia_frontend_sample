@@ -463,7 +463,6 @@ const openMobileSearch = () => {
 </template>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400;1,600&family=Source+Sans+3:wght@400;500;600;700&display=swap');
 
 /* ── Design tokens ───────────────────────────────────────── */
 .results-page {

@@ -133,7 +133,6 @@ import { BookOpen, ScanLine, Brain, FileJson, Network } from 'lucide-vue-next'
 </script>
 
 <style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400;0,600;1,400;1,600&family=Source+Sans+3:wght@300;400;500;600&display=swap');
 
 /* ── Design Tokens ───────────────────────────────── */
 .about-page {
