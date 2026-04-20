@@ -664,19 +664,12 @@ const activeImradTab = ref<'introduction' | 'methods' | 'results' | 'discussion'
 
 // Keep in sync with imrad_service.py METHODOLOGY_SUBHEADINGS labels
 const METHODOLOGY_SUBHEADING_LABELS = [
-  'Research Design',
-  'Research Approach',
-  'Research Settings',
-  'Business Process',
-  'Participants of the Study',
-  'Sampling Technique',
-  'Research Instruments',
-  'Data Collection, Instrument, and Procedure',
-  'Sources of Data',
-  'Statistical Treatment of Data',
-  'Data Analysis',
-  'Ethical Considerations',
-  'Development Model',
+  'Research Design', 'Research Approach', 'Research Settings', 'Business Process',
+  'Participants of the Study', 'Sampling Technique', 'Research Instruments',
+  'Data Collection, Instrument, and Procedure', 'Sources of Data', 'Data to be Gathered',
+  'Statistical Treatment of Data', 'Data Analysis', 'Ethical Considerations',
+  'Development Model', 'Analysis and Quick Design', 'Prototype Cycles',
+  'Testing', 'Implementation', 'Requirement Analysis', 'System Development', 'System Evaluation'
 ]
 
 const SECTION_KEY_MAP = {

@@ -62,9 +62,10 @@ const activeImradTab = ref<'introduction' | 'methods' | 'results' | 'discussion'
 const METHODOLOGY_SUBHEADING_LABELS = [
   'Research Design', 'Research Approach', 'Research Settings', 'Business Process',
   'Participants of the Study', 'Sampling Technique', 'Research Instruments',
-  'Data Collection, Instrument, and Procedure', 'Sources of Data',
+  'Data Collection, Instrument, and Procedure', 'Sources of Data', 'Data to be Gathered',
   'Statistical Treatment of Data', 'Data Analysis', 'Ethical Considerations',
-  'Development Model',
+  'Development Model', 'Analysis and Quick Design', 'Prototype Cycles',
+  'Testing', 'Implementation', 'Requirement Analysis', 'System Development', 'System Evaluation'
 ]
 
 const SECTION_KEY_MAP = {
