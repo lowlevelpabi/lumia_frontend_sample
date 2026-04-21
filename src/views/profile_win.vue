@@ -4,7 +4,7 @@ import { useRouter, RouterLink } from 'vue-router'
 import {
   Loader2, ArrowUpRight,
   User, KeyRound, LogOut, ChevronRight,
-  ShieldCheck, BookMarked, Bookmark
+  ShieldCheck, BookMarked
 } from 'lucide-vue-next'
 import { api, type Paper } from '../services/api'
 
@@ -15,15 +15,13 @@ interface UserDetails {
 }
 
 // ── State ─────────────────────────────────────────────────────────────────────
-type Section = 'dashboard' | 'credentials' | 'cited' | 'bookmarks'
+type Section = 'dashboard' | 'credentials' | 'cited'
 const activeSection = ref<Section>('dashboard')
 
 const user = ref<UserDetails | null>(null)
 const citations = ref<Paper[]>([])
-const bookmarks = ref<Paper[]>([])
 const loading = ref(true)
 const citLoading = ref(false)
-const bookmarkLoading = ref(false)
 const router = useRouter()
 
 // ── Credentials form ──────────────────────────────────────────────────────────
@@ -72,21 +70,15 @@ const fetchData = async () => {
   try {
     user.value = await api.getUserMe()
     citLoading.value = true
-    bookmarkLoading.value = true
-    
-    const [cities, marks] = await Promise.all([
-      api.getUserCitations(),
-      api.getUserBookmarks()
-    ])
-    
+
+    const cities = await api.getUserCitations()
+
     citations.value = cities
-    bookmarks.value = marks
   } catch (e) {
     console.error(e)
   } finally {
     loading.value = false
     citLoading.value = false
-    bookmarkLoading.value = false
   }
 }
 
@@ -151,8 +143,7 @@ onMounted(fetchData)
           </button>
 
           <button v-for="item in [
-            { id: 'cited', icon: BookMarked, label: 'Studies I Cited', count: citations.length },
-            { id: 'bookmarks', icon: Bookmark, label: 'Bookmarked Studies', count: bookmarks.length }
+            { id: 'cited', icon: BookMarked, label: 'Studies I Cited', count: citations.length }
           ]" :key="item.id" class="sb-item" :class="{ active: activeSection === item.id }"
             @click="setSection(item.id as Section)">
             <component :is="item.icon" :size="15" class="sb-item-icon" />
@@ -189,16 +180,8 @@ onMounted(fetchData)
                 <span class="stat-tile-lbl">Studies Cited</span>
               </div>
             </div>
-            
-            <div class="stat-tile">
-              <div class="stat-tile-ico blue">
-                <Bookmark :size="16" />
-              </div>
-              <div>
-                <span class="stat-tile-val">{{ bookmarks.length }}</span>
-                <span class="stat-tile-lbl">Saved Studies</span>
-              </div>
-            </div>
+
+
           </div>
 
           <!-- Account details card -->
@@ -313,7 +296,7 @@ onMounted(fetchData)
                 </span>
                 <div class="cite-card-tags">
                   <span v-if="paper.department && paper.department !== 'N/A'" class="cite-tag">{{ paper.department
-                  }}</span>
+                    }}</span>
                   <span v-if="paper.project_type" class="cite-tag cite-tag-type">{{ paper.project_type }}</span>
                 </div>
               </div>
@@ -332,59 +315,12 @@ onMounted(fetchData)
           </div>
         </template>
 
-        <!-- ══ Bookmarked Studies ══════════════════════════════════ -->
-        <template v-else-if="activeSection === 'bookmarks'">
-          <div class="section-head">
-            <h2 class="section-title">Saved Studies</h2>
-            <p class="section-sub">
-              Research papers you have bookmarked for quick access.
-            </p>
-          </div>
-
-          <div v-if="bookmarkLoading" class="inline-loader">
-            <Loader2 :size="16" class="spin" /> Loading bookmarks…
-          </div>
-
-          <div v-else-if="bookmarks.length > 0" class="cite-list">
-            <RouterLink v-for="(paper, idx) in bookmarks" :key="paper.id"
-              :to="{ name: 'detail', params: { id: paper.id } }" class="cite-card">
-              <div class="cite-card-num">{{ String(idx + 1).padStart(2, '0') }}</div>
-              <div class="cite-card-body">
-                <span class="cite-card-title">{{ paper.title }}</span>
-                <span class="cite-card-meta">
-                  {{ paper.author }}
-                  <span v-if="paper.year" class="cite-card-dot">·</span>
-                  {{ paper.year }}
-                </span>
-                <div class="cite-card-tags">
-                  <span v-if="paper.department && paper.department !== 'N/A'" class="cite-tag">{{ paper.department
-                  }}</span>
-                  <span v-if="paper.project_type" class="cite-tag cite-tag-type">{{ paper.project_type }}</span>
-                </div>
-              </div>
-              <ArrowUpRight :size="14" class="cite-card-arrow" />
-            </RouterLink>
-          </div>
-
-          <div v-else class="empty-state">
-            <div class="empty-icon">
-              <Bookmark :size="28" />
-            </div>
-            <p class="empty-title">No bookmarks yet</p>
-            <p class="empty-sub">Papers you bookmark will appear here for easy reference.</p>
-            <RouterLink :to="{ name: 'home' }" class="empty-cta">Browse Repository</RouterLink>
-          </div>
-        </template>
-
-
-
       </main>
     </div>
   </div>
 </template>
 
 <style scoped>
-
 /* ── Tokens ───────────────────────────────────────────────────── */
 .profile-page {
   --green: #00a651;

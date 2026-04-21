@@ -123,20 +123,20 @@ type Section = 'repository' | 'users' | 'upload' | 'logs' | 'trash'
 const activeSection = ref<Section>('repository')
 
 const baseNavItems: { id: Section; label: string; icon: Component; description: string }[] = [
-  { id: 'upload', label: 'Upload Research', icon: FileUp, description: 'Index new PDF documents' },
+  { id: 'upload', label: 'Upload File', icon: FileUp, description: 'Index Document' },
   {
     id: 'repository',
-    label: 'Thesis & Research',
+    label: 'Repository',
     icon: Library,
-    description: 'Browse & manage indexed works',
+    description: 'Monitor Repository',
   },
 ]
 const adminNavItems: { id: Section; label: string; icon: Component; description: string }[] = [
-  { id: 'users', label: 'Membership', icon: Users, description: 'Manage students & faculty' },
-  { id: 'logs', label: 'Activity Log', icon: Clock, description: 'Track uploads, edits & deletes' },
+  { id: 'users', label: 'Users', icon: Users, description: 'Manage users' },
+  { id: 'logs', label: 'Activity Log', icon: Clock, description: 'Track System Logs' },
 ]
 const canEditNavItems: { id: Section; label: string; icon: Component; description: string }[] = [
-  { id: 'trash', label: 'Trash', icon: Trash2, description: 'Deleted docs · 15-day window' },
+  { id: 'trash', label: 'Trash', icon: Trash2, description: 'Erase Document' },
 ]
 const navItems = computed(() => {
   const items = [...baseNavItems]
@@ -544,6 +544,40 @@ const step = ref(1) // 1: Upload, 2: Review, 3: Done
 const processingDoc = ref(false)
 const uploadingPaper = ref(false)
 const uploadError = ref('')
+const showUploadMessage = ref(false)
+const uploadNotification = ref('')
+let uploadMsgTimer: number | null = null
+
+const formatUploadMessage = (msg: string) => {
+  if (!msg) return ''
+  const low = msg.toLowerCase()
+  if (low.includes('duplicate') || low.includes('already exists')) return 'Duplicate entry detected. Document already exists in the repository.'
+  if (low.includes('missing') && low.includes('imrad')) return `Missing IMRAD sections detected.`
+  if (low.includes('empty') || low.includes('no pages') || low.includes('no content')) return 'Empty document or no readable pages detected.'
+  return msg
+}
+
+watch(uploadError, (val) => {
+  if (val) {
+    uploadNotification.value = formatUploadMessage(val)
+    showUploadMessage.value = true
+    if (uploadMsgTimer) clearTimeout(uploadMsgTimer)
+    uploadMsgTimer = window.setTimeout(() => {
+      showUploadMessage.value = false
+      uploadMsgTimer = null
+    }, 10000)
+  }
+})
+
+
+
+const closeUploadMessage = () => {
+  showUploadMessage.value = false
+  if (uploadMsgTimer) {
+    clearTimeout(uploadMsgTimer)
+    uploadMsgTimer = null
+  }
+}
 const file = ref<File | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
 const sessionId = ref('')
@@ -853,6 +887,19 @@ const missingSections = computed(() => {
   return REQUIRED_SECTIONS.filter((s) => !present.includes(SECTION_KEY_MAP[s]))
 })
 
+// Show missingSections via floating notification
+watch(missingSections, (list) => {
+  if (list && list.length > 0) {
+    uploadNotification.value = `Missing IMRAD sections: ${list.join(', ')}`
+    showUploadMessage.value = true
+    if (uploadMsgTimer) clearTimeout(uploadMsgTimer)
+    uploadMsgTimer = window.setTimeout(() => {
+      showUploadMessage.value = false
+      uploadMsgTimer = null
+    }, 5000)
+  }
+})
+
 const triggerFallback = async () => {
   if (!file.value) return
   processingDoc.value = true
@@ -1029,6 +1076,9 @@ const startInitialExtraction = async (autoExtract: boolean = true) => {
       rawImradSections.references = preview.references
     }
 
+    sectionPages.value = preview.section_pages || {}
+    isManuscript.value = preview.is_manuscript || false
+
     // Set active tab to the first section that actually has content
     const firstAvailable = ALL_IMRAD_TABS.find((t) => imradSections[t])
     if (firstAvailable)
@@ -1168,14 +1218,8 @@ watch(
       <p class="sb-group-label">Navigation</p>
 
       <nav class="sb-nav">
-        <button
-          v-for="item in navItems"
-          :key="item.id"
-          class="sb-item"
-          :class="{ active: activeSection === item.id }"
-          @click="setSection(item.id)"
-          :title="sidebarCollapsed ? item.label : undefined"
-        >
+        <button v-for="item in navItems" :key="item.id" class="sb-item" :class="{ active: activeSection === item.id }"
+          @click="setSection(item.id)" :title="sidebarCollapsed ? item.label : undefined">
           <div class="sb-icon" :class="{ active: activeSection === item.id }">
             <component :is="item.icon" :size="16" stroke-width="2.2" />
           </div>
@@ -1218,17 +1262,23 @@ watch(
           <!-- Upload step rail -->
           <div v-if="activeSection === 'upload'" class="steps-rail inside-navbar">
             <div class="step-item" :class="{ active: step >= 1, done: step > 1 }">
-              <div class="step-num"><Check v-if="step > 1" :size="12" /><span v-else>1</span></div>
+              <div class="step-num">
+                <Check v-if="step > 1" :size="12" /><span v-else>1</span>
+              </div>
               <span class="step-label">Upload</span>
             </div>
             <div class="step-line" :class="{ loading: step === 1 }" />
             <div class="step-item" :class="{ active: step >= 2, done: step > 2 }">
-              <div class="step-num"><Check v-if="step > 2" :size="12" /><span v-else>2</span></div>
+              <div class="step-num">
+                <Check v-if="step > 2" :size="12" /><span v-else>2</span>
+              </div>
               <span class="step-label">Review</span>
             </div>
             <div class="step-line" :class="{ loading: step === 2 }" />
             <div class="step-item" :class="{ active: step >= 3 }">
-              <div class="step-num"><Check v-if="step > 3" :size="12" /><span v-else>3</span></div>
+              <div class="step-num">
+                <Check v-if="step > 3" :size="12" /><span v-else>3</span>
+              </div>
               <span class="step-label">Done</span>
             </div>
           </div>
@@ -1241,6 +1291,23 @@ watch(
 
       <!-- ── Content ─────────────────────────────────────────── -->
       <div class="content">
+        <!-- Floating upload notification (appears above upload area) -->
+        <div class="upload-notification-wrap">
+          <div class="upload-notification" :class="{ show: showUploadMessage }">
+            <div class="notif-ico">
+              <ShieldAlert v-if="uploadNotification.includes('Upload Terminated')" :size="18" />
+              <AlertCircle v-else :size="16" />
+            </div>
+            <div class="notif-body">
+              <strong>{{ uploadNotification.includes('Upload Terminated') ? 'Upload Rejected' : 'Error Detected'
+                }}</strong>
+              <p>{{ uploadNotification }}</p>
+            </div>
+            <button class="notif-close" @click="closeUploadMessage">
+              <X :size="16" />
+            </button>
+          </div>
+        </div>
         <!-- ══ UPLOAD ════════════════════════════════════════════ -->
         <template v-if="activeSection === 'upload'">
           <div class="upload-wrap">
@@ -1278,38 +1345,25 @@ watch(
                   <h1 class="upload-card-title">Upload Document</h1>
                   <p>Upload a PDF to index into the research repository.</p>
                 </div>
-                <div
-                  v-if="uploadError"
-                  class="error-banner"
-                  :class="{ 'terminal-error': uploadError.includes('Upload Terminated') }"
-                >
-                  <ShieldAlert v-if="uploadError.includes('Upload Terminated')" :size="24" />
-                  <AlertCircle v-else :size="16" />
-                  <div class="error-content">
-                    <strong>{{
-                      uploadError.includes('Upload Terminated')
-                        ? 'Upload Rejected'
-                        : 'Error Detected'
-                    }}</strong>
-                    <p>{{ uploadError }}</p>
+                <div class="notice-banner amber" style="margin-bottom: 1rem">
+                  <div class="notice-icon">
+                    <AlertTriangle :size="18" color="#f59e0b" />
+                  </div>
+                  <div class="notice-body">
+                    <p class="notice-title">Upload Guidance</p>
+                    <p class="notice-desc">
+                      Scanned PDFs with heavy visual noise (handwritten marks, low contrast, skewed or blurry
+                      pages, curves) may fail extraction. For best results, upload clear, well-scanned pages or
+                      a born-PDF document.
+                    </p>
                   </div>
                 </div>
-                <div
-                  class="drop-zone"
-                  @click="!processingDoc && fileInput?.click()"
-                  @drop="handleDrop"
-                  @dragover="handleDragOver"
-                  @dragleave="handleDragLeave"
-                  :class="{ processing: processingDoc, dragging: isDragging }"
-                >
-                  <input
-                    type="file"
-                    ref="fileInput"
-                    @change="handleFileChange"
-                    style="display: none"
-                    accept="application/pdf"
-                    :disabled="processingDoc"
-                  />
+                <!-- Inline upload error banner removed — using floating notification instead -->
+                <div class="drop-zone" @click="!processingDoc && fileInput?.click()" @drop="handleDrop"
+                  @dragover="handleDragOver" @dragleave="handleDragLeave"
+                  :class="{ processing: processingDoc, dragging: isDragging }">
+                  <input type="file" ref="fileInput" @change="handleFileChange" style="display: none"
+                    accept="application/pdf" :disabled="processingDoc" />
                   <FileUp :size="40" color="#00a651" />
                   <div class="drop-text">
                     <strong>Click to upload</strong> or drag and drop
@@ -1336,16 +1390,10 @@ watch(
                   </div>
 
                   <ul class="sample-docs-list">
-                    <li
-                      v-for="doc in sampleDocs"
-                      :key="doc.id"
-                      class="sample-doc-row"
-                      :class="{ 'is-loading': fetchingSampleDocId === doc.id }"
-                      draggable="true"
+                    <li v-for="doc in sampleDocs" :key="doc.id" class="sample-doc-row"
+                      :class="{ 'is-loading': fetchingSampleDocId === doc.id }" draggable="true"
                       :aria-label="`Drag or click ${doc.name} to upload`"
-                      @dragstart="handleSampleDocDragStart($event, doc)"
-                      @click="attachSampleDoc(doc)"
-                    >
+                      @dragstart="handleSampleDocDragStart($event, doc)" @click="attachSampleDoc(doc)">
                       <div class="sample-doc-icon">
                         <Loader2 v-if="fetchingSampleDocId === doc.id" :size="14" class="spin" />
                         <FileText v-else :size="14" color="#00a651" />
@@ -1397,16 +1445,10 @@ watch(
                   <div class="file-pill">
                     <span class="file-pill-label">FILE</span>
                     <span class="file-pill-name">{{ file?.name }}</span>
-                    <span class="file-pill-count"
-                      ><strong>{{ selectedPages.length }}</strong
-                      >/{{ pages.length }} pages</span
-                    >
+                    <span class="file-pill-count"><strong>{{ selectedPages.length }}</strong>/{{ pages.length }}
+                      pages</span>
                   </div>
-                  <button
-                    @click="handleFinalConfirm"
-                    class="confirm-btn"
-                    :disabled="uploadingPaper"
-                  >
+                  <button @click="handleFinalConfirm" class="confirm-btn" :disabled="uploadingPaper">
                     <Loader2 v-if="uploadingPaper" :size="15" class="spin" />
                     <Check v-else :size="15" />
                     Confirm Indexing
@@ -1437,26 +1479,7 @@ watch(
                 </div>
               </div>
 
-              <div v-if="missingSections.length > 0" class="notice-banner amber">
-                <div class="notice-icon">
-                  <AlertTriangle :size="18" color="#f59e0b" />
-                </div>
-                <div class="notice-body">
-                  <p class="notice-title">Document uploaded has incomplete IMRAD structure.</p>
-                  <p class="notice-desc">
-                    The following sections could not be found. Search accuracy may be reduced.
-                    Canceling the indexing is recommended.
-                  </p>
-                  <div class="missing-list">
-                    <span v-for="s in missingSections" :key="s" class="missing-badge"
-                      ><span class="missing-dot" />{{ s }}</span
-                    >
-                  </div>
-                </div>
-                <div class="notice-actions">
-                  <button @click="cancelUpload" class="notice-btn ghost">Cancel Indexing</button>
-                </div>
-              </div>
+              <!-- Inline missing sections banner removed — missing sections are shown via floating notification -->
 
               <div class="review-grid">
                 <section class="meta-panel">
@@ -1465,18 +1488,13 @@ watch(
                     <h4>Verify Metadata</h4>
                   </div>
                   <div class="fg">
-                    <label>Title</label
-                    ><textarea v-model="uploadMetadata.title" placeholder="Research Title" />
+                    <label>Title</label><textarea v-model="uploadMetadata.title" placeholder="Research Title" />
                   </div>
                   <div class="fg">
                     <label>Author(s)</label>
                     <div class="authors-stack">
                       <div v-for="(author, index) in authors" :key="index" class="author-row">
-                        <input
-                          v-model="authors[index]"
-                          type="text"
-                          placeholder="Full Name of Author"
-                        />
+                        <input v-model="authors[index]" type="text" placeholder="Full Name of Author" />
                         <button @click="removeAuthor(index)" class="icon-btn red">
                           <Trash2 :size="14" />
                         </button>
@@ -1488,8 +1506,7 @@ watch(
                   </div>
                   <div class="fg-row">
                     <div class="fg">
-                      <label>Year</label
-                      ><input v-model="uploadMetadata.year" type="text" placeholder="e.g., 2025" />
+                      <label>Year</label><input v-model="uploadMetadata.year" type="text" placeholder="e.g., 2025" />
                     </div>
                     <div class="fg">
                       <label>Type</label>
@@ -1499,14 +1516,7 @@ watch(
                       </select>
                     </div>
                   </div>
-                  <div class="fg">
-                    <label>Abstract</label
-                    ><textarea
-                      v-model="uploadMetadata.abstract"
-                      class="abstract-area"
-                      placeholder="Enter abstract…"
-                    />
-                  </div>
+                  <!-- Abstract moved to IMRAD panel to keep metadata compact -->
                   <div class="fg">
                     <label>Department</label>
                     <select v-model="uploadMetadata.department">
@@ -1527,11 +1537,8 @@ watch(
                   </div>
                   <div class="fg">
                     <label>Keywords</label>
-                    <input
-                      v-model="uploadMetadata.keywords"
-                      type="text"
-                      placeholder="e.g. machine learning, NLP, deep learning"
-                    />
+                    <input v-model="uploadMetadata.keywords" type="text"
+                      placeholder="e.g. machine learning, NLP, deep learning" />
                   </div>
                 </section>
 
@@ -1543,64 +1550,48 @@ watch(
                       <h4>Refine IMRAD Sections</h4>
                     </div>
 
-                    <div
-                      v-if="
-                        uploadMetadata.detected_subheadings &&
-                        uploadMetadata.detected_subheadings.length > 0
-                      "
-                      class="subheadings-preview"
-                    >
-                      <template
-                        v-if="
-                          uploadMetadata.detected_subheadings.some((s) =>
-                            METHODOLOGY_SUBHEADING_LABELS.includes(s),
-                          )
-                        "
-                      >
+                    <div v-if="
+                      uploadMetadata.detected_subheadings &&
+                      uploadMetadata.detected_subheadings.length > 0
+                    " class="subheadings-preview">
+                      <!-- Abstract moved here from Verify Metadata -->
+                      <div class="fg" style="margin-bottom:0.85rem">
+                        <label>Abstract</label>
+                        <textarea v-model="uploadMetadata.abstract" class="abstract-area" placeholder="Enter abstract…" />
+                      </div>
+                      <template v-if="
+                        uploadMetadata.detected_subheadings.some((s) =>
+                          METHODOLOGY_SUBHEADING_LABELS.includes(s),
+                        )
+                      ">
                         <label class="fg-label">Detected Methodology Components:</label>
                         <div class="sub-tags" style="margin-bottom: 0.75rem">
-                          <span
-                            v-for="sub in uploadMetadata.detected_subheadings.filter((s) =>
-                              METHODOLOGY_SUBHEADING_LABELS.includes(s),
-                            )"
-                            :key="sub"
-                            class="sub-tag"
-                          >
+                          <span v-for="sub in uploadMetadata.detected_subheadings.filter((s) =>
+                            METHODOLOGY_SUBHEADING_LABELS.includes(s),
+                          )" :key="sub" class="sub-tag">
                             <Check :size="12" /> {{ sub }}
                           </span>
                         </div>
                       </template>
 
-                      <template
-                        v-if="
-                          uploadMetadata.detected_subheadings.some(
-                            (s) => !METHODOLOGY_SUBHEADING_LABELS.includes(s),
-                          )
-                        "
-                      >
+                      <template v-if="
+                        uploadMetadata.detected_subheadings.some(
+                          (s) => !METHODOLOGY_SUBHEADING_LABELS.includes(s),
+                        )
+                      ">
                         <label class="fg-label">Detected Results Components:</label>
                         <div class="sub-tags">
-                          <span
-                            v-for="sub in uploadMetadata.detected_subheadings.filter(
-                              (s) => !METHODOLOGY_SUBHEADING_LABELS.includes(s),
-                            )"
-                            :key="sub"
-                            class="sub-tag sub-tag-results"
-                          >
+                          <span v-for="sub in uploadMetadata.detected_subheadings.filter(
+                            (s) => !METHODOLOGY_SUBHEADING_LABELS.includes(s),
+                          )" :key="sub" class="sub-tag sub-tag-results">
                             <Check :size="12" /> {{ sub }}
                           </span>
                         </div>
                       </template>
                     </div>
                     <div class="imrad-tabs">
-                      <button
-                        v-for="tab in availableImradTabs"
-                        :key="tab"
-                        type="button"
-                        class="imrad-tab-btn"
-                        :class="{ active: activeImradTab === tab }"
-                        @click="activeImradTab = tab as ImradKey"
-                      >
+                      <button v-for="tab in availableImradTabs" :key="tab" type="button" class="imrad-tab-btn"
+                        :class="{ active: activeImradTab === tab }" @click="activeImradTab = tab as ImradKey">
                         {{
                           tab === 'results'
                             ? 'Results and Discussion'
@@ -1610,12 +1601,9 @@ watch(
                     </div>
 
                     <div class="imrad-content">
-                      <div
-                        v-if="
-                          uploadMetadata.trim_points && uploadMetadata.trim_points[activeImradTab]
-                        "
-                        class="trim-alert"
-                      >
+                      <div v-if="
+                        uploadMetadata.trim_points && uploadMetadata.trim_points[activeImradTab]
+                      " class="trim-alert">
                         <AlertCircle :size="16" />
                         <span>
                           <strong>Auto-Trimmed:</strong> This section was trimmed at
@@ -1630,20 +1618,14 @@ watch(
                           <div class="ref-preview-pane">
                             <div class="ref-pane-label">
                               <span>Preview</span>
-                              <span class="ref-count-badge"
-                                >{{ parsedReferencesPreview.length }} entr{{
-                                  parsedReferencesPreview.length === 1 ? 'y' : 'ies'
+                              <span class="ref-count-badge">{{ parsedReferencesPreview.length }} entr{{
+                                parsedReferencesPreview.length === 1 ? 'y' : 'ies'
                                 }}
-                                detected</span
-                              >
+                                detected</span>
                             </div>
                             <div v-if="parsedReferencesPreview.length > 0" class="ref-preview-list">
-                              <div
-                                v-for="(entry, idx) in parsedReferencesPreview"
-                                :key="idx"
-                                class="ref-preview-entry"
-                                v-html="linkifyReferences(entry)"
-                              />
+                              <div v-for="(entry, idx) in parsedReferencesPreview" :key="idx" class="ref-preview-entry"
+                                v-html="linkifyReferences(entry)" />
                             </div>
                             <div v-else class="ref-preview-empty">
                               <span>No references extracted yet.</span>
@@ -1654,26 +1636,17 @@ watch(
                             <div class="ref-pane-label">
                               <span>Raw Text <span class="ref-pane-hint">(editable)</span></span>
                             </div>
-                            <textarea
-                              ref="imradTextarea"
-                              v-model="imradSections[activeImradTab]"
-                              class="imrad-textarea ref-textarea"
-                              @input="autoResizeTextarea"
-                              placeholder="No references extracted for this section…"
-                            />
+                            <textarea ref="imradTextarea" v-model="imradSections[activeImradTab]"
+                              class="imrad-textarea ref-textarea" @input="autoResizeTextarea"
+                              placeholder="No references extracted for this section…" />
                           </div>
                         </div>
                       </template>
 
                       <!-- All other tabs: single editable textarea -->
-                      <textarea
-                        v-else
-                        ref="imradTextarea"
-                        v-model="imradSections[activeImradTab]"
-                        class="imrad-textarea maximized"
-                        @input="autoResizeTextarea"
-                        placeholder="No text extracted for this section…"
-                      ></textarea>
+                      <textarea v-else ref="imradTextarea" v-model="imradSections[activeImradTab]"
+                        class="imrad-textarea maximized" @input="autoResizeTextarea"
+                        placeholder="No text extracted for this section…"></textarea>
                     </div>
                   </section>
 
@@ -1693,33 +1666,17 @@ watch(
                       </div>
                     </div>
                     <div class="thumbs-grid">
-                      <div
-                        v-for="(p, idx) in pages"
-                        :key="p.label || p.page_num + '-' + idx"
-                        class="thumb-card"
+                      <div v-for="(p, idx) in pages" :key="p.label || p.page_num + '-' + idx" class="thumb-card"
                         :class="{ selected: selectedPages.includes(p.page_num) }"
-                        @click="togglePage(p.page_num, $event)"
-                      >
+                        @click="togglePage(p.page_num, $event)">
                         <div class="thumb-wrap">
-                          <img
-                            :src="thumbSrc(p.thumbnail)"
-                            loading="lazy"
-                            class="thumb-img"
-                            @click.stop="openZoom(p)"
-                            title="Click to preview"
-                          />
+                          <img :src="thumbSrc(p.thumbnail)" loading="lazy" class="thumb-img" @click.stop="openZoom(p)"
+                            title="Click to preview" />
                           <div class="thumb-num">{{ p.label || 'P' + p.page_num }}</div>
-                          <div
-                            class="thumb-sec-badges"
-                            v-if="getSectionsForPage(p.page_num).length > 0"
-                          >
-                            <span
-                              v-for="sec in getSectionsForPage(p.page_num)"
-                              :key="sec"
-                              class="sec-badge"
-                              :class="sec"
-                              >{{ sec.substring(0, 4) }}</span
-                            >
+                          <div class="thumb-sec-badges" v-if="getSectionsForPage(p.page_num).length > 0">
+                            <span v-for="sec in getSectionsForPage(p.page_num)" :key="sec" class="sec-badge"
+                              :class="sec">{{
+                                sec === 'references' ? 'Ref.' : sec.substring(0, 4) }}</span>
                           </div>
                           <div class="thumb-hover-hint">
                             <Eye :size="14" />
@@ -1753,8 +1710,7 @@ watch(
                 <Library :size="15" />
               </div>
               <div>
-                <span class="stat-val">{{ totalPapers }}</span
-                ><span class="stat-lbl">Total Papers</span>
+                <span class="stat-val">{{ totalPapers }}</span><span class="stat-lbl">Total Papers</span>
               </div>
             </div>
             <div class="stat-card">
@@ -1762,8 +1718,7 @@ watch(
                 <FileText :size="15" />
               </div>
               <div>
-                <span class="stat-val">{{ thesisCount }}</span
-                ><span class="stat-lbl">Thesis</span>
+                <span class="stat-val">{{ thesisCount }}</span><span class="stat-lbl">Thesis</span>
               </div>
             </div>
             <div class="stat-card">
@@ -1771,8 +1726,7 @@ watch(
                 <Users :size="15" />
               </div>
               <div>
-                <span class="stat-val">{{ capstoneCount }}</span
-                ><span class="stat-lbl">Capstone</span>
+                <span class="stat-val">{{ capstoneCount }}</span><span class="stat-lbl">Capstone</span>
               </div>
             </div>
             <div class="stat-card">
@@ -1780,8 +1734,7 @@ watch(
                 <Calendar :size="15" />
               </div>
               <div>
-                <span class="stat-val">{{ yearSpan }}</span
-                ><span class="stat-lbl">Year Span</span>
+                <span class="stat-val">{{ yearSpan }}</span><span class="stat-lbl">Year Span</span>
               </div>
             </div>
           </div>
@@ -1794,12 +1747,9 @@ watch(
                 <span class="chart-desc">Thesis vs. Capstone Projects</span>
               </div>
               <div class="pie-container">
-                <div
-                  class="pie-chart"
-                  :style="{
-                    background: `conic-gradient(var(--blue) 0% ${statsPercentages.thesis}%, var(--orange) ${statsPercentages.thesis}% 100%)`,
-                  }"
-                >
+                <div class="pie-chart" :style="{
+                  background: `conic-gradient(var(--blue) 0% ${statsPercentages.thesis}%, var(--orange) ${statsPercentages.thesis}% 100%)`,
+                }">
                   <div class="pie-center">
                     <span class="pie-total">{{ repoStats.total_papers }}</span>
                     <span class="pie-label">Indexed</span>
@@ -1832,10 +1782,7 @@ watch(
                     <span class="prog-count">{{ count }}</span>
                   </div>
                   <div class="prog-track">
-                    <div
-                      class="prog-fill"
-                      :style="{ width: (count / repoStats.total_papers) * 100 + '%' }"
-                    ></div>
+                    <div class="prog-fill" :style="{ width: (count / repoStats.total_papers) * 100 + '%' }"></div>
                   </div>
                 </div>
               </div>
@@ -1845,32 +1792,17 @@ watch(
           <div class="toolbar">
             <div class="search-box">
               <Search :size="13" class="search-ico" />
-              <input
-                v-model="searchQuery"
-                type="text"
-                placeholder="Search by title, author, or department…"
-              />
+              <input v-model="searchQuery" type="text" placeholder="Search by title, author, or department…" />
             </div>
             <div class="filter-chips">
-              <button
-                class="chip"
-                :class="{ active: activeFilter === 'all' }"
-                @click="activeFilter = 'all'"
-              >
+              <button class="chip" :class="{ active: activeFilter === 'all' }" @click="activeFilter = 'all'">
                 All
               </button>
-              <button
-                class="chip"
-                :class="{ active: activeFilter === 'Thesis' }"
-                @click="activeFilter = 'Thesis'"
-              >
+              <button class="chip" :class="{ active: activeFilter === 'Thesis' }" @click="activeFilter = 'Thesis'">
                 Thesis
               </button>
-              <button
-                class="chip"
-                :class="{ active: activeFilter === 'Capstone Project' }"
-                @click="activeFilter = 'Capstone Project'"
-              >
+              <button class="chip" :class="{ active: activeFilter === 'Capstone Project' }"
+                @click="activeFilter = 'Capstone Project'">
                 Capstone
               </button>
             </div>
@@ -1878,13 +1810,10 @@ watch(
 
           <div class="tbl-card">
             <div class="tbl-card-head">
-              <span class="tbl-count"
-                >Overall record: {{ filteredPapers.length }} paper{{
-                  filteredPapers.length !== 1 ? 's' : ''
+              <span class="tbl-count">Overall record: {{ filteredPapers.length }} paper{{
+                filteredPapers.length !== 1 ? 's' : ''
                 }}<span v-if="searchQuery || activeFilter !== 'all'" class="tbl-hint">
-                  · filtered</span
-                ></span
-              >
+                  · filtered</span></span>
             </div>
             <div class="tbl-scroll">
               <table class="tbl">
@@ -1944,11 +1873,8 @@ watch(
                               : 'Upload the first researchpaper to get started.'
                           }}
                         </p>
-                        <button
-                          v-if="!searchQuery && activeFilter === 'all'"
-                          @click="setSection('upload')"
-                          class="empty-cta"
-                        >
+                        <button v-if="!searchQuery && activeFilter === 'all'" @click="setSection('upload')"
+                          class="empty-cta">
                           <Plus :size="13" /> Upload Now
                         </button>
                       </div>
@@ -1961,8 +1887,8 @@ watch(
                           {{ initials(paper.title) }}
                         </div>
                         <div class="paper-info">
-                          <span class="paper-name">{{ paper.title }}</span
-                          ><span class="paper-author">{{ paper.author }}</span>
+                          <span class="paper-name">{{ paper.title }}</span><span class="paper-author">{{ paper.author
+                          }}</span>
                         </div>
                       </div>
                     </td>
@@ -1981,34 +1907,21 @@ watch(
                       <span class="uploader-chip">{{ paper.uploaded_by ?? '—' }}</span>
                     </td>
                     <td>
-                      <span
-                        class="type-badge"
-                        :class="
-                          paper.uploader_role === 'Admin'
-                            ? 'purple'
-                            : paper.uploader_role === 'Faculty'
-                              ? 'green'
-                              : 'blue'
-                        "
-                      >
+                      <span class="type-badge" :class="paper.uploader_role === 'Admin'
+                        ? 'purple'
+                        : paper.uploader_role === 'Faculty'
+                          ? 'green'
+                          : 'blue'
+                        ">
                         {{ paper.uploader_role ?? '—' }}
                       </span>
                     </td>
                     <td class="td-r">
-                      <button
-                        v-if="canEdit"
-                        @click="openEditModal(paper)"
-                        class="row-btn"
-                        title="Edit"
-                      >
+                      <button v-if="canEdit" @click="openEditModal(paper)" class="row-btn" title="Edit">
                         <Edit3 :size="13" />
                       </button>
-                      <button
-                        v-if="isAdmin || isFaculty"
-                        @click="handleDelete(paper.id)"
-                        class="row-btn danger"
-                        title="Delete"
-                      >
+                      <button v-if="isAdmin || isFaculty" @click="handleDelete(paper.id)" class="row-btn danger"
+                        title="Delete">
                         <Trash2 :size="13" />
                       </button>
                     </td>
@@ -2023,7 +1936,7 @@ watch(
         <template v-else-if="activeSection === 'users'">
           <div class="page-head">
             <div>
-              <h1 class="page-title">Membership Management</h1>
+              <h1 class="page-title">User Management</h1>
               <p class="page-sub">Monitor accounts and manage role-based access control.</p>
             </div>
             <button v-if="isAdmin" @click="openCreateUserModal" class="add-btn">
@@ -2038,8 +1951,7 @@ watch(
                 <ShieldAlert :size="15" />
               </div>
               <div>
-                <span class="stat-val">{{ adminCount }}</span
-                ><span class="stat-lbl">Admins</span>
+                <span class="stat-val">{{ adminCount }}</span><span class="stat-lbl">Admins</span>
               </div>
             </div>
             <div class="stat-card">
@@ -2047,8 +1959,7 @@ watch(
                 <UserCheck :size="15" />
               </div>
               <div>
-                <span class="stat-val">{{ facultyCount }}</span
-                ><span class="stat-lbl">Faculty</span>
+                <span class="stat-val">{{ facultyCount }}</span><span class="stat-lbl">Faculty</span>
               </div>
             </div>
             <div class="stat-card">
@@ -2056,8 +1967,7 @@ watch(
                 <Users :size="15" />
               </div>
               <div>
-                <span class="stat-val">{{ studentCount }}</span
-                ><span class="stat-lbl">Students</span>
+                <span class="stat-val">{{ studentCount }}</span><span class="stat-lbl">Students</span>
               </div>
             </div>
           </div>
@@ -2091,17 +2001,12 @@ watch(
                         </div>
                       </td>
                       <td>
-                        <span
-                          class="type-badge"
-                          :class="
-                            user.role === 'Admin'
-                              ? 'purple'
-                              : user.role === 'Faculty'
-                                ? 'green'
-                                : 'blue'
-                          "
-                          >{{ user.role }}</span
-                        >
+                        <span class="type-badge" :class="user.role === 'Admin'
+                          ? 'purple'
+                          : user.role === 'Faculty'
+                            ? 'green'
+                            : 'blue'
+                          ">{{ user.role }}</span>
                       </td>
                       <td class="td-r">
                         <button @click="openRoleModal(user)" class="row-btn" title="Change role">
@@ -2134,12 +2039,7 @@ watch(
           <div class="tbl-card">
             <div class="tbl-card-head logs-header">
               <span class="tbl-count">{{ logs.length }} events tracked</span>
-              <button
-                @click="fetchLogs"
-                class="refresh-btn"
-                :disabled="loadingLogs"
-                title="Refresh Logs"
-              >
+              <button @click="fetchLogs" class="refresh-btn" :disabled="loadingLogs" title="Refresh Logs">
                 <RefreshCw :size="14" :class="{ spin: loadingLogs }" />
                 <span>Refresh</span>
               </button>
@@ -2147,23 +2047,33 @@ watch(
 
             <div class="logs-legend">
               <div class="legend-item">
-                <span class="log-badge green"><FileUp :size="12" /></span>
+                <span class="log-badge green">
+                  <FileUp :size="12" />
+                </span>
                 <span class="legend-lbl">Upload: New paper indexed</span>
               </div>
               <div class="legend-item">
-                <span class="log-badge blue"><Edit3 :size="12" /></span>
+                <span class="log-badge blue">
+                  <Edit3 :size="12" />
+                </span>
                 <span class="legend-lbl">Edit: Metadata updated</span>
               </div>
               <div class="legend-item">
-                <span class="log-badge red"><Trash2 :size="12" /></span>
+                <span class="log-badge red">
+                  <Trash2 :size="12" />
+                </span>
                 <span class="legend-lbl">Trash: Moved to trash bin</span>
               </div>
               <div class="legend-item">
-                <span class="log-badge green"><ArchiveRestore :size="12" /></span>
+                <span class="log-badge green">
+                  <ArchiveRestore :size="12" />
+                </span>
                 <span class="legend-lbl">Restore: Recovered from trash</span>
               </div>
               <div class="legend-item">
-                <span class="log-badge purple"><Trash2 :size="12" /></span>
+                <span class="log-badge purple">
+                  <Trash2 :size="12" />
+                </span>
                 <span class="legend-lbl">Erase: Permanently removed from the repository</span>
               </div>
             </div>
@@ -2213,10 +2123,7 @@ watch(
                         <div class="log-badge" :class="logActionColor(log.action)">
                           <FileUp v-if="log.action === 'Upload'" :size="12" />
                           <Edit3 v-else-if="log.action === 'Edit'" :size="12" />
-                          <Trash2
-                            v-else-if="log.action === 'Delete' || log.action === 'Purge'"
-                            :size="12"
-                          />
+                          <Trash2 v-else-if="log.action === 'Delete' || log.action === 'Purge'" :size="12" />
                           <ArchiveRestore v-else-if="log.action === 'Restore'" :size="12" />
                           {{
                             log.action === 'Purge'
@@ -2235,16 +2142,12 @@ watch(
                       <span class="uploader-chip">{{ log.performed_by }}</span>
                     </td>
                     <td>
-                      <span
-                        class="type-badge"
-                        :class="
-                          log.performed_by_role === 'Admin'
-                            ? 'purple'
-                            : log.performed_by_role === 'Faculty'
-                              ? 'green'
-                              : 'blue'
-                        "
-                      >
+                      <span class="type-badge" :class="log.performed_by_role === 'Admin'
+                        ? 'purple'
+                        : log.performed_by_role === 'Faculty'
+                          ? 'green'
+                          : 'blue'
+                        ">
                         {{ log.performed_by_role ?? '—' }}
                       </span>
                     </td>
@@ -2271,24 +2174,14 @@ watch(
           </div>
 
           <div class="tbl-card">
-            <div
-              class="tbl-card-head"
-              style="display: flex; align-items: center; justify-content: space-between"
-            >
-              <span class="tbl-count"
-                >{{ trashedPapers.length }} document{{ trashedPapers.length !== 1 ? 's' : '' }} in
-                Trash</span
-              >
+            <div class="tbl-card-head" style="display: flex; align-items: center; justify-content: space-between">
+              <span class="tbl-count">{{ trashedPapers.length }} document{{ trashedPapers.length !== 1 ? 's' : '' }} in
+                Trash</span>
               <div style="display: flex; align-items: center; gap: 0.75rem">
                 <span v-if="loadingTrash" class="sync-text">
                   <RefreshCw :size="11" class="spin" /> Syncing with system clock...
                 </span>
-                <button
-                  @click="fetchTrashedPapers"
-                  class="ghost-btn"
-                  title="Refresh"
-                  :disabled="loadingTrash"
-                >
+                <button @click="fetchTrashedPapers" class="ghost-btn" title="Refresh" :disabled="loadingTrash">
                   <RefreshCw :size="13" :class="{ spin: loadingTrash }" />
                 </button>
               </div>
@@ -2364,27 +2257,16 @@ watch(
                       <span class="uploader-chip">{{ paper.deleted_by ?? '—' }}</span>
                     </td>
                     <td>
-                      <span
-                        class="days-badge"
-                        :class="daysBadgeClass(daysRemaining(paper.deleted_at!))"
-                      >
+                      <span class="days-badge" :class="daysBadgeClass(daysRemaining(paper.deleted_at!))">
                         {{ daysRemaining(paper.deleted_at!) }}d left
                       </span>
                     </td>
                     <td class="td-r">
-                      <button
-                        @click="handleRestore(paper)"
-                        class="row-btn restore-btn"
-                        title="Restore"
-                      >
+                      <button @click="handleRestore(paper)" class="row-btn restore-btn" title="Restore">
                         <ArchiveRestore :size="13" />
                       </button>
-                      <button
-                        v-if="isAdmin"
-                        @click="openPurgeModal(paper)"
-                        class="row-btn danger"
-                        title="Delete permanently"
-                      >
+                      <button v-if="isAdmin" @click="openPurgeModal(paper)" class="row-btn danger"
+                        title="Delete permanently">
                         <Trash2 :size="13" />
                       </button>
                     </td>
@@ -2433,8 +2315,8 @@ watch(
                     <Users :size="15" />
                   </div>
                   <div class="role-opt-info">
-                    <span class="role-opt-name">Student</span
-                    ><span class="role-opt-desc">Can search and view papers only.</span>
+                    <span class="role-opt-name">Student</span><span class="role-opt-desc">Can search and view papers
+                      only.</span>
                   </div>
                   <Check v-if="roleNew === 'Student'" :size="13" class="role-check" />
                 </label>
@@ -2444,8 +2326,8 @@ watch(
                     <ShieldCheck :size="15" />
                   </div>
                   <div class="role-opt-info">
-                    <span class="role-opt-name">Faculty</span
-                    ><span class="role-opt-desc">Can upload and manage research papers.</span>
+                    <span class="role-opt-name">Faculty</span><span class="role-opt-desc">Can upload and manage research
+                      papers.</span>
                   </div>
                   <Check v-if="roleNew === 'Faculty'" :size="13" class="role-check" />
                 </label>
@@ -2455,8 +2337,8 @@ watch(
                     <ShieldAlert :size="15" />
                   </div>
                   <div class="role-opt-info">
-                    <span class="role-opt-name">Admin</span
-                    ><span class="role-opt-desc">Full access including user management.</span>
+                    <span class="role-opt-name">Admin</span><span class="role-opt-desc">Full access including user
+                      management.</span>
                   </div>
                   <Check v-if="roleNew === 'Admin'" :size="13" class="role-check" />
                 </label>
@@ -2464,11 +2346,8 @@ watch(
               <p v-if="roleError" class="role-error">{{ roleError }}</p>
               <div class="modal-foot">
                 <button @click="closeRoleModal" class="ghost-btn">Cancel</button>
-                <button
-                  @click="handleRoleChange"
-                  :disabled="roleChanging || roleNew === roleTarget.role"
-                  class="save-btn"
-                >
+                <button @click="handleRoleChange" :disabled="roleChanging || roleNew === roleTarget.role"
+                  class="save-btn">
                   <Loader2 v-if="roleChanging" :size="13" class="spin" />
                   <Check v-else :size="13" />
                   {{ roleChanging ? 'Updating…' : 'Confirm Role Change' }}
@@ -2498,21 +2377,11 @@ watch(
                   <div class="form-grid">
                     <div class="form-group">
                       <label class="form-lbl">Username</label>
-                      <input
-                        v-model="newUser.username"
-                        type="text"
-                        class="form-input"
-                        placeholder="e.g. maruf"
-                      />
+                      <input v-model="newUser.username" type="text" class="form-input" placeholder="e.g. maruf" />
                     </div>
                     <div class="form-group">
                       <label class="form-lbl">Full Name</label>
-                      <input
-                        v-model="newUser.full_name"
-                        type="text"
-                        class="form-input"
-                        placeholder="e.g. Yna Maruf"
-                      />
+                      <input v-model="newUser.full_name" type="text" class="form-input" placeholder="e.g. Yna Maruf" />
                     </div>
                   </div>
                   <div class="form-group">
@@ -2563,12 +2432,7 @@ watch(
                 <button @click="closeCreateUserModal" class="ghost-btn">
                   {{ createdPassword ? 'Close' : 'Cancel' }}
                 </button>
-                <button
-                  v-if="!createdPassword"
-                  @click="handleCreateStaff"
-                  class="save-btn"
-                  :disabled="creatingUser"
-                >
+                <button v-if="!createdPassword" @click="handleCreateStaff" class="save-btn" :disabled="creatingUser">
                   <Loader2 v-if="creatingUser" :size="16" class="spin" />
                   <span v-else>Generate Account</span>
                 </button>
@@ -2602,9 +2466,7 @@ watch(
                   </div>
                   <div>
                     <span class="paper-name">{{ purgeTarget?.title }}</span>
-                    <span class="paper-author"
-                      >{{ purgeTarget?.author }} · {{ purgeTarget?.year }}</span
-                    >
+                    <span class="paper-author">{{ purgeTarget?.author }} · {{ purgeTarget?.year }}</span>
                   </div>
                 </div>
               </div>
@@ -2683,20 +2545,12 @@ watch(
 
                 <div class="fg">
                   <label>Keywords</label>
-                  <input
-                    v-model="editingPaper.keywords"
-                    type="text"
-                    placeholder="AI, NLP, BERT..."
-                  />
+                  <input v-model="editingPaper.keywords" type="text" placeholder="AI, NLP, BERT..." />
                 </div>
 
                 <div class="fg">
                   <label>Abstract</label>
-                  <textarea
-                    v-model="editingPaper.abstract"
-                    rows="8"
-                    placeholder="Paper Abstract..."
-                  />
+                  <textarea v-model="editingPaper.abstract" rows="8" placeholder="Paper Abstract..." />
                 </div>
               </div>
             </div>
@@ -2719,7 +2573,6 @@ watch(
 </template>
 
 <style scoped>
-
 /* ── Design Tokens ───────────────────────────────────────────── */
 .mgmt {
   --ink: #181c18;
@@ -3109,6 +2962,7 @@ watch(
 }
 
 @keyframes pulse-op {
+
   0%,
   100% {
     opacity: 0.7;
@@ -3281,10 +3135,9 @@ watch(
 
 .content {
   flex: 1;
-  padding: 2rem 2.5rem 5rem;
-  max-width: 1440px;
-  /* Expanded for widescreen */
-  width: 100%;
+  padding: 1.5rem 2rem 4rem; /* reduce gutter to fit more content */
+  max-width: 1600px; /* allow wider review content */
+  width: calc(100% - 4rem);
   margin: 0 auto;
   box-sizing: border-box;
 }
@@ -3949,7 +3802,7 @@ watch(
   border-radius: 10px;
   padding: 2.5rem;
   width: 100%;
-  max-width: 520px;
+  max-width: 520px; /* keep upload card compact for step 1 */
 }
 
 .upload-card-head {
@@ -4518,7 +4371,7 @@ watch(
 
 .review-grid {
   display: grid;
-  grid-template-columns: 380px 1fr;
+  grid-template-columns: 480px 1fr; /* increase left column to maximize content area */
   gap: 1.25rem;
   align-items: start;
 }
@@ -4876,6 +4729,10 @@ watch(
 
 .sec-badge.abstract {
   background: #be185d;
+}
+
+.sec-badge.references {
+  background: #065f46;
 }
 
 /* Remove zoom-trigger styles, add this instead: */
@@ -5584,6 +5441,7 @@ watch(
 }
 
 @keyframes shake {
+
   10%,
   90% {
     transform: translate3d(-1px, 0, 0);
@@ -5868,6 +5726,7 @@ watch(
 }
 
 @keyframes pulse-red {
+
   0%,
   100% {
     opacity: 1;
@@ -6401,5 +6260,60 @@ watch(
   border-radius: 3px;
   letter-spacing: 0.1em;
   transform: rotate(-15deg);
+}
+
+/* Floating upload notification (appears above upload area) */
+.upload-notification-wrap {
+  position: fixed;
+  top: 72px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(1100px, calc(100% - 4rem));
+  z-index: 1200;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.upload-notification {
+  pointer-events: auto;
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  background: #fff1f2;
+  border: 1px solid #fecaca;
+  color: #9f1239;
+  font-size: 0.94rem;
+  padding: 0.85rem 1rem;
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.06);
+  max-width: 100%;
+  opacity: 0;
+  transform: translateY(-8px) scale(0.995);
+  transition: all 260ms cubic-bezier(.2, .9, .25, 1);
+}
+
+.upload-notification.show {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.upload-notification .notif-body p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: rgba(159, 18, 57, 0.95)
+}
+
+.upload-notification .notif-body strong {
+  display: block;
+  margin-bottom: 0.25rem
+}
+
+.notif-close {
+  background: transparent;
+  border: none;
+  margin-left: auto;
+  color: inherit;
+  cursor: pointer
 }
 </style>

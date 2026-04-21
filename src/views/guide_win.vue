@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Search, ClipboardList, Upload, Sparkle } from 'lucide-vue-next'
+import { Search, Upload, Sparkle } from 'lucide-vue-next'
 </script>
 
 <template>
@@ -20,7 +20,7 @@ import { Search, ClipboardList, Upload, Sparkle } from 'lucide-vue-next'
             <ul>
               <li><a href="#getting-started">Getting Started</a></li>
               <li><a href="#upload-guide">Upload Guide</a></li>
-              <li><a href="#testing-reproduction">Testing & Reproduction</a></li>
+              <!-- <li><a href="#testing-reproduction">Testing & Reproduction</a></li> -->
               <li><a href="#searching">Searching & Exploring</a></li>
             </ul>
           </div>
@@ -83,7 +83,7 @@ import { Search, ClipboardList, Upload, Sparkle } from 'lucide-vue-next'
             </ol>
           </section>
 
-          <!-- Testing & Reproduction Content -->
+          <!-- Testing & Reproduction Content
           <section id="testing-reproduction" class="card-section highlight-card">
             <div class="section-title">
               <ClipboardList class="text-green" :size="24" />
@@ -116,6 +116,7 @@ import { Search, ClipboardList, Upload, Sparkle } from 'lucide-vue-next'
               </li>
             </ol>
           </section>
+          -->
 
           <section id="searching" class="card-section">
             <div class="section-title">
@@ -139,7 +140,6 @@ import { Search, ClipboardList, Upload, Sparkle } from 'lucide-vue-next'
 </template>
 
 <style scoped>
-
 .guide-wrapper {
   min-height: calc(100vh - 64px);
   background: #f5f5f2;

@@ -4,9 +4,9 @@ import { useRouter, useRoute, RouterLink } from 'vue-router'
 import {
   Search, BookOpen, ArrowRight, LogOut, Settings,
   ChevronDown, Home, Compass, UserCircle, X, Menu, HelpCircle,
-  BookUp
+  BookUp, Bookmark, Loader2, ArrowUpRight
 } from 'lucide-vue-next'
-import { api } from '../services/api'
+import { api, type Paper } from '../services/api'
 import { useAuth } from '../composables/useAuth'
 import { historyService } from '../services/history'
 
@@ -21,6 +21,9 @@ const isLoggedIn = ref(false)
 const showMobileMenu = ref(false)
 const showMobileSearch = ref(false)
 const showProfileMenu = ref(false)
+const showBookmarkModal = ref(false)
+const bookmarks = ref<Paper[]>([])
+const bookmarkLoading = ref(false)
 
 const { isStaff, isStudent, username, fullName, userRole } = useAuth()
 
@@ -94,6 +97,24 @@ const logout = () => {
   showProfileMenu.value = false
   router.push({ name: 'home' })
 }
+
+const openBookmarkModal = async () => {
+  showProfileMenu.value = false
+  showBookmarkModal.value = true
+  bookmarkLoading.value = true
+  try {
+    bookmarks.value = await api.getUserBookmarks()
+  } catch (e) {
+    console.error(e)
+    bookmarks.value = []
+  } finally {
+    bookmarkLoading.value = false
+  }
+}
+
+const closeBookmarkModal = () => {
+  showBookmarkModal.value = false
+}
 </script>
 
 <template>
@@ -109,32 +130,35 @@ const logout = () => {
       </RouterLink>
 
       <!-- Center: Search Bar (Desktop) -->
-        <div v-if="!['home', 'management', 'login', 'register', 'about', 'profile', 'upload'].includes(route.name as string)"
-          class="nav-search-wrap">
-          <div class="nav-search" ref="historyRef">
-            <Search :size="14" class="search-icon" />
-            <input v-model="searchQuery" type="text" placeholder="Search the repository..." @keyup.enter="handleSearch"
-              @focus="showHistory = true" spellcheck="false" autocomplete="off" />
-            <div class="search-hint">⏎</div>
+      <div
+        v-if="!['home', 'management', 'login', 'register', 'about', 'profile', 'upload'].includes(route.name as string)"
+        class="nav-search-wrap">
+        <div class="nav-search" ref="historyRef">
+          <Search :size="14" class="search-icon" />
+          <input v-model="searchQuery" type="text" placeholder="Search the repository..." @keyup.enter="handleSearch"
+            @focus="showHistory = true" spellcheck="false" autocomplete="off" />
+          <div class="search-hint">⏎</div>
 
-            <!-- Search History Popup (Desktop) -->
-            <div v-if="showHistory && searchHistory.length > 0" class="history-popup">
-              <div class="history-head">
-                <span>Recent Searches</span>
-                <button @click.stop="historyService.clearHistory(); searchHistory = []">Clear All</button>
-              </div>
-              <div class="history-list">
-                <div v-for="h in searchHistory" :key="h" class="history-item" @click.stop="searchQuery = h; handleSearch()">
-                  <Search :size="12" />
-                  <span>{{ h }}</span>
-                  <button class="h-remove" @click.stop="historyService.removeQuery(h); searchHistory = historyService.getHistory()">
-                    <X :size="10" />
-                  </button>
-                </div>
+          <!-- Search History Popup (Desktop) -->
+          <div v-if="showHistory && searchHistory.length > 0" class="history-popup">
+            <div class="history-head">
+              <span>Recent Searches</span>
+              <button @click.stop="historyService.clearHistory(); searchHistory = []">Clear All</button>
+            </div>
+            <div class="history-list">
+              <div v-for="h in searchHistory" :key="h" class="history-item"
+                @click.stop="searchQuery = h; handleSearch()">
+                <Search :size="12" />
+                <span>{{ h }}</span>
+                <button class="h-remove"
+                  @click.stop="historyService.removeQuery(h); searchHistory = historyService.getHistory()">
+                  <X :size="10" />
+                </button>
               </div>
             </div>
           </div>
         </div>
+      </div>
 
       <!-- Right: Desktop Actions & Profile -->
       <div class="nav-actions-desktop">
@@ -169,8 +193,11 @@ const logout = () => {
               <div v-if="showProfileMenu" class="nav-dropdown">
                 <div class="dropdown-header">Account</div>
                 <RouterLink :to="{ name: 'profile' }" class="dropdown-item">
-                  <UserCircle :size="16" /> My Profile
+                  <UserCircle :size="16" /> My Account
                 </RouterLink>
+                <a href="#" @click.prevent="openBookmarkModal" class="dropdown-item">
+                  <Bookmark :size="16" /> Bookmarks
+                </a>
                 <div class="dropdown-divider"></div>
                 <button @click="logout" class="dropdown-item logout-btn">
                   <LogOut :size="16" /> Sign Out
@@ -291,14 +318,74 @@ const logout = () => {
                 <button @click.stop="historyService.clearHistory(); searchHistory = []">Clear All</button>
               </div>
               <div class="history-list">
-                <div v-for="h in searchHistory" :key="h" class="history-item" @click.stop="searchQuery = h; handleSearch()">
+                <div v-for="h in searchHistory" :key="h" class="history-item"
+                  @click.stop="searchQuery = h; handleSearch()">
                   <Search :size="12" />
                   <span>{{ h }}</span>
-                  <button class="h-remove" @click.stop="historyService.removeQuery(h); searchHistory = historyService.getHistory()">
+                  <button class="h-remove"
+                    @click.stop="historyService.removeQuery(h); searchHistory = historyService.getHistory()">
                     <X :size="10" />
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      </transition>
+
+      <!-- Bookmarks Modal -->
+      <transition name="fade">
+        <div v-if="showBookmarkModal" class="bookmark-modal-overlay" @click="closeBookmarkModal"></div>
+      </transition>
+
+      <transition name="modal-slide">
+        <div v-if="showBookmarkModal" class="bookmark-modal">
+          <!-- Modal Header -->
+          <div class="modal-header">
+            <div class="modal-title-section">
+              <Bookmark :size="20" class="modal-title-icon" />
+              <h2 class="modal-title">My Bookmarks</h2>
+            </div>
+            <button class="modal-close-btn" @click="closeBookmarkModal">
+              <X :size="20" />
+            </button>
+          </div>
+
+          <!-- Modal Content -->
+          <div class="modal-content">
+            <!-- Loading State -->
+            <div v-if="bookmarkLoading" class="modal-loading">
+              <Loader2 :size="20" class="spin" />
+              <span>Loading your bookmarks…</span>
+            </div>
+
+            <!-- Bookmarks List -->
+            <div v-else-if="bookmarks.length > 0" class="bookmarks-list">
+              <RouterLink v-for="(paper, idx) in bookmarks" :key="paper.id"
+                :to="{ name: 'detail', params: { id: paper.id } }" class="bookmark-item">
+                <div class="bookmark-item-num">{{ String(idx + 1).padStart(2, '0') }}</div>
+                <div class="bookmark-item-body">
+                  <span class="bookmark-item-title">{{ paper.title }}</span>
+                  <span class="bookmark-item-meta">
+                    {{ paper.author }}
+                    <span v-if="paper.year" class="bookmark-item-dot">·</span>
+                    {{ paper.year }}
+                  </span>
+                </div>
+                <ArrowUpRight :size="14" class="bookmark-item-arrow" />
+              </RouterLink>
+            </div>
+
+            <!-- Empty State -->
+            <div v-else class="modal-empty-state">
+              <div class="empty-icon">
+                <Bookmark :size="32" />
+              </div>
+              <p class="empty-title">No bookmarks yet</p>
+              <p class="empty-message">Papers you bookmark will appear here for quick access.</p>
+              <RouterLink :to="{ name: 'home' }" class="empty-cta" @click="closeBookmarkModal">
+                Browse Repository
+              </RouterLink>
             </div>
           </div>
         </div>
@@ -309,7 +396,6 @@ const logout = () => {
 </template>
 
 <style scoped>
-
 .global-navbar {
   position: fixed;
   top: 0;
@@ -705,6 +791,7 @@ const logout = () => {
   gap: 10px;
   padding: 10px 12px;
   text-decoration: none;
+  font-family: 'Source Sans 3', sans-serif;
   font-size: 0.85rem;
   font-weight: 500;
   color: #181c18;
@@ -1005,5 +1092,268 @@ const logout = () => {
 .get-started-btn:hover {
   background: #007d3d;
   transform: translateY(-1px);
+}
+
+/* ── Bookmarks Modal ─────────────────────────────────────────── */
+.bookmark-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(2px);
+  z-index: 1050;
+}
+
+.bookmark-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 90%;
+  max-width: 600px;
+  max-height: 80vh;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  z-index: 1051;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid #dfe0db;
+}
+
+.modal-title-section {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.modal-title-icon {
+  color: #00a651;
+}
+
+.modal-title {
+  font-family: 'Lora', serif;
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: #181c18;
+  margin: 0;
+}
+
+.modal-close-btn {
+  background: none;
+  border: none;
+  color: #7a7f75;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: background 0.2s, color 0.2s;
+}
+
+.modal-close-btn:hover {
+  background: #f5f5f2;
+  color: #181c18;
+}
+
+.modal-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.modal-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 300px;
+  color: #7a7f75;
+  font-size: 0.95rem;
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.bookmarks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bookmark-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px;
+  background: #f5f5f2;
+  border-radius: 8px;
+  text-decoration: none;
+  transition: background 0.2s, box-shadow 0.2s;
+  border: 1px solid #dfe0db;
+}
+
+.bookmark-item:hover {
+  background: #ffffff;
+  border-color: #00a651;
+  box-shadow: 0 2px 8px rgba(0, 166, 81, 0.1);
+}
+
+.bookmark-item-num {
+  font-family: 'Lora', serif;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #dfe0db;
+  flex-shrink: 0;
+  min-width: 24px;
+  transition: color 0.2s;
+}
+
+.bookmark-item:hover .bookmark-item-num {
+  color: #00a651;
+}
+
+.bookmark-item-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.bookmark-item-title {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #181c18;
+  line-height: 1.3;
+  margin-bottom: 4px;
+  overflow: hidden;
+  display: -webkit-box;
+  line-clamp: 2;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.bookmark-item-meta {
+  display: block;
+  font-size: 0.75rem;
+  color: #7a7f75;
+}
+
+.bookmark-item-dot {
+  margin: 0 0.25rem;
+}
+
+.bookmark-item-arrow {
+  color: #dfe0db;
+  flex-shrink: 0;
+  margin-top: 2px;
+  transition: color 0.2s, transform 0.2s;
+}
+
+.bookmark-item:hover .bookmark-item-arrow {
+  color: #00a651;
+  transform: translate(2px, -2px);
+}
+
+.modal-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 300px;
+  text-align: center;
+  padding: 24px;
+}
+
+.empty-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #f5f5f2;
+  color: #dfe0db;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.empty-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #181c18;
+  margin: 0;
+}
+
+.empty-message {
+  font-size: 0.85rem;
+  color: #7a7f75;
+  max-width: 280px;
+  margin: 0;
+  line-height: 1.5;
+}
+
+.empty-cta {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 8px;
+  background: #00a651;
+  color: #fff;
+  border-radius: 6px;
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 0.2s;
+}
+
+.empty-cta:hover {
+  background: #007d3d;
+}
+
+/* ── Transitions ─────────────────────────────────────────────── */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+.modal-slide-enter-active,
+.modal-slide-leave-active {
+  transition: all 0.3s cubic-bezier(0.165, 0.84, 0.44, 1);
+}
+
+.modal-slide-enter-from,
+.modal-slide-leave-to {
+  opacity: 0;
+  transform: translate(-50%, -48%);
+}
+
+.dropdown-slide-enter-active,
+.dropdown-slide-leave-active {
+  transition: all 0.2s ease;
+}
+
+.dropdown-slide-enter-from,
+.dropdown-slide-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
 }
 </style>

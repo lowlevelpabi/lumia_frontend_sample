@@ -18,6 +18,40 @@ const step = ref(1) // 1: Upload, 2: Review, 3: Done
 const processingDoc = ref(false)
 const uploadingPaper = ref(false)
 const uploadError = ref('')
+const showUploadMessage = ref(false)
+const uploadNotification = ref('')
+let uploadMsgTimer: number | null = null
+
+const formatUploadMessage = (msg: string) => {
+  if (!msg) return ''
+  const low = msg.toLowerCase()
+  if (low.includes('duplicate') || low.includes('already exists')) return 'Duplicate entry detected. Document already exists in the repository.'
+  if (low.includes('missing') && low.includes('imrad')) return `Missing IMRAD sections detected.`
+  if (low.includes('empty') || low.includes('no pages') || low.includes('no content')) return 'Empty document or no readable pages detected.'
+  return msg
+}
+
+watch(uploadError, (val) => {
+  if (val) {
+    uploadNotification.value = formatUploadMessage(val)
+    showUploadMessage.value = true
+    if (uploadMsgTimer) clearTimeout(uploadMsgTimer)
+    uploadMsgTimer = window.setTimeout(() => {
+      showUploadMessage.value = false
+      uploadMsgTimer = null
+    }, 10000)
+  }
+})
+
+
+
+const closeUploadMessage = () => {
+  showUploadMessage.value = false
+  if (uploadMsgTimer) {
+    clearTimeout(uploadMsgTimer)
+    uploadMsgTimer = null
+  }
+}
 
 // Reactive mobile breakpoint check
 const isMobile = ref(window.innerWidth <= 768)
@@ -175,6 +209,19 @@ const isDragging = ref(false)
 const missingSections = computed(() => {
   const present = Object.keys(uploadMetadata.section_pages || {})
   return REQUIRED_SECTIONS.filter((s) => !present.includes(SECTION_KEY_MAP[s]))
+})
+
+// Show missingSections via floating notification
+watch(missingSections, (list) => {
+  if (list && list.length > 0) {
+    uploadNotification.value = `Missing IMRAD sections: ${list.join(', ')}`
+    showUploadMessage.value = true
+    if (uploadMsgTimer) clearTimeout(uploadMsgTimer)
+    uploadMsgTimer = window.setTimeout(() => {
+      showUploadMessage.value = false
+      uploadMsgTimer = null
+    }, 5000)
+  }
 })
 
 // ── Zoom modal ───────────────────────────────────────────────────────
@@ -504,6 +551,23 @@ onMounted(loadSampleDocs)
 
     <!-- ── Content ─────────────────────────────────────────── -->
     <main class="up-content">
+      <!-- Floating upload notification (appears above upload area) -->
+      <div class="upload-notification-wrap">
+        <div class="upload-notification" :class="{ show: showUploadMessage }">
+          <div class="notif-ico">
+            <ShieldAlert v-if="uploadNotification.includes('Upload Terminated')" :size="18" />
+            <AlertCircle v-else :size="16" />
+          </div>
+          <div class="notif-body">
+            <strong>{{ uploadNotification.includes('Upload Terminated') ? 'Upload Rejected' : 'Error Detected'
+            }}</strong>
+            <p>{{ uploadNotification }}</p>
+          </div>
+          <button class="notif-close" @click="closeUploadMessage">
+            <X :size="16" />
+          </button>
+        </div>
+      </div>
       <!-- Step 1 & 3: Centered card -->
       <div v-if="step !== 2" class="upload-center">
 
@@ -521,16 +585,21 @@ onMounted(loadSampleDocs)
             <h1 class="upload-card-title">Upload Your Research</h1>
             <p>Upload a PDF to index your thesis or capstone into the repository.</p>
           </div>
-
-          <div v-if="uploadError" class="error-banner"
-            :class="{ 'terminal-error': uploadError.includes('Upload Terminated') }">
-            <ShieldAlert v-if="uploadError.includes('Upload Terminated')" :size="24" />
-            <AlertCircle v-else :size="16" />
-            <div class="error-content">
-              <strong>{{ uploadError.includes('Upload Terminated') ? 'Upload Rejected' : 'Error Detected' }}</strong>
-              <p>{{ uploadError }}</p>
+          <div class="notice-banner amber" style="margin-bottom: 1rem">
+            <div class="notice-icon">
+              <AlertTriangle :size="18" color="#f59e0b" />
+            </div>
+            <div class="notice-body">
+              <p class="notice-title">Upload Guidance</p>
+              <p class="notice-desc">
+                Scanned PDFs with heavy visual noise (handwritten marks, low contrast, skewed or blurry
+                pages, curves) may fail extraction. For best results, upload clear, well-scanned pages or
+                a born-PDF document.
+              </p>
             </div>
           </div>
+
+          <!-- Inline upload error banner removed — using floating notification instead -->
 
           <div class="drop-zone" @click="!processingDoc && fileInput?.click()"
             :class="{ processing: processingDoc, dragging: isDragging }">
@@ -636,22 +705,7 @@ onMounted(loadSampleDocs)
         </div>
 
         <!-- Missing sections notice -->
-        <div v-if="missingSections.length > 0" class="notice-banner amber">
-          <div class="notice-icon">
-            <AlertTriangle :size="18" color="#f59e0b" />
-          </div>
-          <div class="notice-body">
-            <p class="notice-title">Document uploaded has incomplete IMRAD structure.</p>
-            <p class="notice-desc">The following sections could not be found. Search accuracy may be reduced.</p>
-            <div class="missing-list">
-              <span v-for="s in missingSections" :key="s" class="missing-badge"><span class="missing-dot" />{{ s
-                }}</span>
-            </div>
-          </div>
-          <div class="notice-actions">
-            <button @click="cancelUpload" class="notice-btn ghost">Cancel Indexing</button>
-          </div>
-        </div>
+        <!-- Inline missing sections banner removed — missing sections are shown via floating notification -->
 
         <!-- Error banner in review -->
         <div v-if="uploadError" class="error-banner"
@@ -699,8 +753,8 @@ onMounted(loadSampleDocs)
                 </select>
               </div>
             </div>
-            <div class="fg"><label>Abstract</label><textarea v-model="uploadMetadata.abstract" class="abstract-area"
-                placeholder="Enter abstract…" /></div>
+            <!-- Abstract moved to IMRAD panel to keep metadata compact -->
+            <!-- Abstract removed from meta-panel -->
             <div class="fg">
               <label>Department</label>
               <select v-model="uploadMetadata.department">
@@ -740,6 +794,11 @@ onMounted(loadSampleDocs)
 
               <div v-if="uploadMetadata.detected_subheadings && uploadMetadata.detected_subheadings.length > 0"
                 class="subheadings-preview">
+                <!-- Abstract moved here from Verify Metadata -->
+                <div class="fg" style="margin-bottom:0.85rem">
+                  <label>Abstract</label>
+                  <textarea v-model="uploadMetadata.abstract" class="abstract-area" placeholder="Enter abstract…" />
+                </div>
                 <template
                   v-if="uploadMetadata.detected_subheadings.some(s => METHODOLOGY_SUBHEADING_LABELS.includes(s))">
                   <label class="fg-label">Detected Methodology Components:</label>
@@ -836,7 +895,7 @@ onMounted(loadSampleDocs)
                     <div class="thumb-num">{{ p.label || 'P' + p.page_num }}</div>
                     <div class="thumb-sec-badges" v-if="getSectionsForPage(p.page_num).length > 0">
                       <span v-for="sec in getSectionsForPage(p.page_num)" :key="sec" class="sec-badge" :class="sec">{{
-                        sec.substring(0, 4) }}</span>
+                        sec === 'references' ? 'Ref.' : sec.substring(0, 4) }}</span>
                     </div>
                     <div class="thumb-hover-hint">
                       <Eye :size="14" />
@@ -1073,9 +1132,9 @@ onMounted(loadSampleDocs)
 /* ── Main content ────────────────────────────────────────────── */
 .up-content {
   flex: 1;
-  padding: 2rem 2.5rem 5rem;
-  max-width: 1440px;
-  width: 100%;
+  padding: 1.5rem 2rem 4rem; /* reduce gutter to fit more content */
+  max-width: 1600px; /* allow wider review content */
+  width: calc(100% - 4rem);
   margin: 0 auto;
   box-sizing: border-box;
 }
@@ -1094,7 +1153,7 @@ onMounted(loadSampleDocs)
   border-radius: 10px;
   padding: 2.5rem;
   width: 100%;
-  max-width: 520px;
+  max-width: 520px; /* keep upload card compact for step 1 */
 }
 
 .upload-card-head {
@@ -1587,7 +1646,7 @@ onMounted(loadSampleDocs)
 /* ── Review grid ─────────────────────────────────────────────── */
 .review-grid {
   display: grid;
-  grid-template-columns: 380px 1fr;
+  grid-template-columns: 480px 1fr; /* increase left column to maximize content area */
   gap: 1.25rem;
   align-items: start;
 }
@@ -2162,6 +2221,10 @@ onMounted(loadSampleDocs)
   background: #be185d;
 }
 
+.sec-badge.references {
+  background: #065f46;
+}
+
 .thumb-hover-hint {
   position: absolute;
   top: 50%;
@@ -2362,5 +2425,60 @@ onMounted(loadSampleDocs)
   .page-panel {
     padding: 1rem;
   }
+}
+
+/* Floating upload notification (appears above upload area) */
+.upload-notification-wrap {
+  position: fixed;
+  top: 72px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(1100px, calc(100% - 4rem));
+  z-index: 1200;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.upload-notification {
+  pointer-events: auto;
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  background: #fff1f2;
+  border: 1px solid #fecaca;
+  color: #9f1239;
+  font-size: 0.94rem;
+  padding: 0.85rem 1rem;
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.06);
+  max-width: 100%;
+  opacity: 0;
+  transform: translateY(-8px) scale(0.995);
+  transition: all 260ms cubic-bezier(.2, .9, .25, 1);
+}
+
+.upload-notification.show {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.upload-notification .notif-body p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: rgba(159, 18, 57, 0.95)
+}
+
+.upload-notification .notif-body strong {
+  display: block;
+  margin-bottom: 0.25rem
+}
+
+.notif-close {
+  background: transparent;
+  border: none;
+  margin-left: auto;
+  color: inherit;
+  cursor: pointer
 }
 </style>
