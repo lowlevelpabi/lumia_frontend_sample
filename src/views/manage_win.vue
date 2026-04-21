@@ -1077,7 +1077,7 @@ const startInitialExtraction = async (autoExtract: boolean = true) => {
     }
 
     sectionPages.value = preview.section_pages || {}
-    isManuscript.value = preview.is_manuscript || false
+    isManuscript.value = preview.metadata.is_manuscript || false
 
     // Set active tab to the first section that actually has content
     const firstAvailable = ALL_IMRAD_TABS.find((t) => imradSections[t])
