@@ -39,7 +39,7 @@ watch(uploadError, (val) => {
     uploadMsgTimer = window.setTimeout(() => {
       showUploadMessage.value = false
       uploadMsgTimer = null
-    }, 10000)
+    }, 20000)
   }
 })
 
@@ -135,8 +135,9 @@ const availableImradTabs = computed<ImradKey[]>(() => {
   const hasResults = all.includes('results')
   const hasDiscussion = all.includes('discussion')
   if (hasResults || hasDiscussion) {
-    const merged: ImradKey[] = all.filter(t => t !== 'results' && t !== 'discussion')
+    const merged: ImradKey[] = all.filter(t => t !== 'results' && t !== 'discussion' && t !== 'references')
     merged.push('results')
+    if (all.includes('references')) merged.push('references')
     return merged
   }
   return all

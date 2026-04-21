@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch, onUnmounted } from 'vue'
+import { ref, onMounted, watch, onUnmounted, computed } from 'vue'
 import { useRouter, useRoute, RouterLink } from 'vue-router'
 import {
   Search, BookOpen, ArrowRight, LogOut, Settings,
@@ -24,8 +24,25 @@ const showProfileMenu = ref(false)
 const showBookmarkModal = ref(false)
 const bookmarks = ref<Paper[]>([])
 const bookmarkLoading = ref(false)
+const showLogoutModal = ref(false)
 
-const { isStaff, isStudent, username, fullName, userRole } = useAuth()
+const { isStaff, isStudent, fullName, userRole } = useAuth()
+
+const isGreetingPhase = ref(true)
+
+const greetingText = computed(() => {
+  if (!fullName.value) {
+    return 'Welcome to Lumia!'
+  }
+
+  const hour = new Date().getHours()
+  let timeGreeting = 'Welcome'
+  if (hour < 12) timeGreeting = 'Good morning'
+  else if (hour < 18) timeGreeting = 'Good afternoon'
+  else timeGreeting = 'Good evening'
+
+  return `${timeGreeting}, ${fullName.value.split(' ')[0]}!`
+})
 
 const checkAuth = () => {
   isLoggedIn.value = !!localStorage.getItem('token')
@@ -50,6 +67,11 @@ onMounted(() => {
       showHistory.value = false
     }
   })
+
+  // Animation sequence: Start greeting, then transition to logo
+  setTimeout(() => {
+    isGreetingPhase.value = false
+  }, 7000)
 })
 
 onUnmounted(() => {
@@ -91,11 +113,15 @@ const handleSearch = () => {
 }
 
 const logout = () => {
-  if (!confirm('Are you sure you want to sign out?')) return
+  showProfileMenu.value = false
+  showMobileMenu.value = false
+  showLogoutModal.value = true
+}
+
+const confirmLogout = () => {
   api.logout()
   isLoggedIn.value = false
-  showProfileMenu.value = false
-  router.push({ name: 'home' })
+  window.location.href = '/login'
 }
 
 const openBookmarkModal = async () => {
@@ -123,15 +149,24 @@ const closeBookmarkModal = () => {
 
       <!-- Left: Logo (Institutional Branding) -->
       <RouterLink :to="{ name: 'home' }" class="nav-logo">
-        <img src="/lumia_logo.ico" style="width: 32px; height: 32px;" />
-        <div class="logo-text">
-          UMIA <span class="logo-text--sub">Retrieval</span>
+        <div class="animation-stage">
+          <transition name="greeting-slide" appear>
+            <span v-if="isGreetingPhase" class="greeting-msg">{{ greetingText }}</span>
+          </transition>
+          <transition name="logo-appear">
+            <div v-if="!isGreetingPhase" class="logo-inner">
+              <img src="/lumia_logo.ico" style="width: 32px; height: 32px;" />
+              <div class="logo-text">
+                UMIA <span class="logo-text--sub">Retrieval</span>
+              </div>
+            </div>
+          </transition>
         </div>
       </RouterLink>
 
       <!-- Center: Search Bar (Desktop) -->
       <div
-        v-if="!['home', 'management', 'login', 'register', 'about', 'profile', 'upload'].includes(route.name as string)"
+        v-if="!['home', 'management', 'login', 'register', 'about', 'profile', 'upload', 'guide'].includes(route.name as string)"
         class="nav-search-wrap">
         <div class="nav-search" ref="historyRef">
           <Search :size="14" class="search-icon" />
@@ -166,7 +201,8 @@ const closeBookmarkModal = () => {
         <!-- <RouterLink :to="{ name: 'about' }" class="nav-item">About</RouterLink> -->
         <RouterLink :to="{ name: 'explore' }" class="nav-item">Explore</RouterLink>
         <RouterLink :to="{ name: 'guide' }" class="nav-item">User Guide</RouterLink>
-        <RouterLink v-if="isLoggedIn && isStaff" :to="{ name: 'management' }" class="nav-item nav-item--active">
+        <RouterLink v-if="isLoggedIn && isStaff" :to="{ name: 'management' }"
+          class="nav-item nav-item--active nav-item--mgmt">
           Management
         </RouterLink>
 
@@ -219,7 +255,7 @@ const closeBookmarkModal = () => {
       <!-- Mobile UI Controls -->
       <div class="mobile-controls">
         <button
-          v-if="!['home', 'management', 'login', 'register', 'about', 'profile', 'explore', 'upload'].includes(route.name as string)"
+          v-if="!['home', 'management', 'login', 'register', 'about', 'profile', 'explore', 'upload', 'guide'].includes(route.name as string)"
           class="mobile-control-btn" @click="toggleMobileSearch">
           <Search :size="20" />
         </button>
@@ -245,7 +281,7 @@ const closeBookmarkModal = () => {
                 <img src="/avatar.png" alt="User Avatar" />
               </div>
               <div class="drawer-text">
-                <span class="drawer-name">{{ username || 'Academic User' }}</span>
+                <span class="drawer-name">{{ fullName || 'Academic User' }}</span>
                 <span class="drawer-role">{{ userRole }}</span>
               </div>
             </div>
@@ -280,7 +316,7 @@ const closeBookmarkModal = () => {
               <RouterLink :to="{ name: 'profile' }" class="drawer-item">
                 <UserCircle :size="18" /> My Profile
               </RouterLink>
-              <RouterLink v-if="isStaff" :to="{ name: 'management' }" class="drawer-item">
+              <RouterLink v-if="isStaff" :to="{ name: 'management' }" class="drawer-item drawer-item--mgmt">
                 <Settings :size="18" />
                 Management
               </RouterLink>
@@ -386,6 +422,30 @@ const closeBookmarkModal = () => {
               <RouterLink :to="{ name: 'home' }" class="empty-cta" @click="closeBookmarkModal">
                 Browse Repository
               </RouterLink>
+            </div>
+          </div>
+        </div>
+      </transition>
+
+      <!-- Logout Confirmation Modal -->
+      <transition name="fade">
+        <div v-if="showLogoutModal" class="bookmark-modal-overlay" @click="showLogoutModal = false"></div>
+      </transition>
+
+      <transition name="modal-slide">
+        <div v-if="showLogoutModal" class="bookmark-modal logout-modal-sm">
+          <div class="modal-header">
+            <div class="modal-title-section">
+              <LogOut :size="20" class="modal-title-icon" />
+              <h2 class="modal-title">Sign Out</h2>
+            </div>
+          </div>
+
+          <div class="modal-content logout-modal-body">
+            <p class="logout-text">Are you sure you want to sign out?</p>
+            <div class="logout-button-group">
+              <button class="btn-confirm" @click="confirmLogout">Sign Out</button>
+              <button class="btn-cancel" @click="showLogoutModal = false">Cancel</button>
             </div>
           </div>
         </div>
@@ -673,6 +733,33 @@ const closeBookmarkModal = () => {
 
 .nav-item.nav-item--active {
   color: #000000;
+}
+
+.nav-item--mgmt {
+  color: #3b82f6 !important;
+}
+
+.nav-item--mgmt.router-link-active {
+  color: #00a651 !important;
+  background: rgba(0, 166, 81, 0.08) !important;
+}
+
+.nav-item--mgmt:hover:not(.router-link-active) {
+  color: #2563eb !important;
+  background: rgba(59, 130, 246, 0.08) !important;
+}
+
+.drawer-item--mgmt {
+  color: #3b82f6 !important;
+}
+
+.drawer-item--mgmt.router-link-active {
+  color: #00a651 !important;
+  background: rgba(0, 166, 81, 0.08) !important;
+}
+
+.drawer-item--mgmt:hover:not(.router-link-active) {
+  background: rgba(59, 130, 246, 0.08) !important;
 }
 
 /* Upload Button */
@@ -1355,5 +1442,112 @@ const closeBookmarkModal = () => {
 .dropdown-slide-leave-to {
   opacity: 0;
   transform: translateY(-8px);
+}
+
+/* ── Greeting & Logo Animation ── */
+.animation-stage {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+  min-width: 180px;
+}
+
+.greeting-msg {
+  position: absolute;
+  left: 0;
+  white-space: nowrap;
+  font-family: 'Lora', serif;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #00a651;
+  letter-spacing: -0.01em;
+  text-shadow: 0 0 20px rgba(0, 166, 81, 0.1);
+}
+
+.logo-inner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Greeting slide: Fade in from Right, Fade out to Left */
+.greeting-slide-enter-active {
+  transition: all 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.greeting-slide-leave-active {
+  transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.greeting-slide-enter-from {
+  opacity: 0;
+  transform: translateX(30px);
+}
+.greeting-slide-leave-to {
+  opacity: 0;
+  transform: translateX(-30px);
+}
+
+/* Logo: Smooth fade in during greeting fade out */
+.logo-appear-enter-active {
+  transition: all 1.2s cubic-bezier(0.16, 1, 0.3, 1) 0.3s;
+}
+.logo-appear-enter-from {
+  opacity: 0;
+  transform: translateY(4px) scale(0.98);
+}
+
+/* ── Logout Modal Specifics ── */
+.logout-modal-sm {
+  max-width: 420px;
+  max-height: fit-content;
+}
+
+.logout-modal-body {
+  padding: 32px 24px;
+}
+
+.logout-text {
+  font-size: 0.95rem;
+  color: #3d4239;
+  line-height: 1.6;
+  margin-bottom: 28px;
+  text-align: left;
+}
+
+.logout-button-group {
+  display: flex;
+  gap: 12px;
+}
+
+.logout-button-group button {
+  flex: 1;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-confirm {
+  background: #00a651;
+  color: white;
+  border: none;
+}
+
+.btn-confirm:hover {
+  background: #007d3d;
+}
+
+.btn-cancel {
+  background: #f5f5f2;
+  color: #7a7f75;
+  border: 1px solid #dfe0db;
+}
+
+.btn-cancel:hover {
+  background: #ffffff;
+  border-color: #7a7f75;
+  color: #3d4239;
 }
 </style>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch, computed } from 'vue'
+import { ref, onMounted, watch, computed, nextTick } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { useAuth } from '../composables/useAuth'
 import { Eye, Award, CheckCircle, Loader2, ChevronRight, Copy, Check, X, FileDown, Bookmark } from 'lucide-vue-next'
@@ -18,6 +18,9 @@ const router = useRouter()
 const paper = ref<Paper | null>(null)
 const recommendations = ref<SearchResult[]>([])
 const loading = ref(true)
+const activeView = ref<'paper' | 'authors'>('paper')
+const activeSection = ref('abstract-section')
+let observer: IntersectionObserver | null = null
 
 // Engagement state
 const viewCount = ref(0)
@@ -184,11 +187,58 @@ const loadPaperData = async (id: string) => {
 }
 
 
-onMounted(() => { loadPaperData(String(route.params.id)) })
+const initScrollObserver = () => {
+  if (observer) observer.disconnect()
+
+  observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        activeSection.value = entry.target.id
+      }
+    })
+  }, {
+    // Threshold and margin to detect the section currently near the top
+    rootMargin: '-80px 0px -70% 0px',
+    threshold: 0
+  })
+
+  // Observe all section headers or main section divs
+  const sections = document.querySelectorAll('#abstract-section, .journal-section-heading, #references-section')
+  sections.forEach(s => observer?.observe(s))
+}
+
+onMounted(() => {
+  loadPaperData(String(route.params.id))
+  initScrollObserver()
+})
+
+// Re-init observer if paper data changes or view switches back to paper
+watch(paper, () => {
+  setTimeout(initScrollObserver, 500)
+})
+
+watch(activeView, (newView) => {
+  if (newView === 'paper') {
+    nextTick(initScrollObserver)
+  }
+})
+
 watch(() => route.params.id, (newId) => { if (newId) loadPaperData(String(newId)) })
 
 const goBack = () => router.back()
 const viewDetail = (id: string) => router.push({ name: 'detail', params: { id } })
+
+const switchToPaper = (sectionId: string) => {
+  activeView.value = 'paper'
+  activeSection.value = sectionId
+  // Small delay to ensure the DOM is visible if using v-show or v-if
+  nextTick(() => {
+    const el = document.getElementById(sectionId)
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth' })
+    }
+  })
+}
 
 const handleCite = async () => {
   if (!isLoggedIn.value || citeLoading.value || !paper.value) return
@@ -416,19 +466,7 @@ const formatReferenceEntry = (raw: string): string => {
 <template>
   <div class="detail-page" v-if="!loading && paper">
 
-    <!-- ══ TOP NAV BAR ════════════════════════════════════════════ -->
-    <div class="journal-topbar">
-      <div class="journal-topbar-inner">
-        <nav class="breadcrumb">
-          <RouterLink :to="{ name: 'home' }" class="bc-link">Home</RouterLink>
-          <ChevronRight :size="12" class="bc-sep" />
-          <button @click="goBack" class="bc-link">Results</button>
-          <ChevronRight :size="12" class="bc-sep" />
-          <span class="bc-active">{{ paper.title.length > 55 ? paper.title.substring(0, 55) + '…' : paper.title
-            }}</span>
-        </nav>
-      </div>
-    </div>
+
 
     <!-- ══ PAGE LAYOUT ════════════════════════════════════════════ -->
     <div class="journal-page-layout">
@@ -438,26 +476,49 @@ const formatReferenceEntry = (raw: string): string => {
         <div class="toc-inner">
           <p class="toc-label">Available Sections</p>
           <nav class="toc-list">
-            <a href="#abstract-section" class="toc-item">
+            <a href="#abstract-section" class="toc-item" :class="{ active: activeView === 'paper' && activeSection === 'abstract-section' }"
+              @click.prevent="switchToPaper('abstract-section')">
               <span class="toc-bullet"></span>
               Abstract
             </a>
-            <a v-for="cfg in IMRAD_SECTION_CONFIGS" :key="cfg.key" :href="'#' + cfg.key + '-section'" class="toc-item">
+            <a v-for="cfg in IMRAD_SECTION_CONFIGS" :key="cfg.key" :href="'#' + cfg.key + '-section'" class="toc-item"
+              :class="{ active: activeView === 'paper' && activeSection === cfg.key + '-section' }"
+              @click.prevent="switchToPaper(cfg.key + '-section')">
               <span class="toc-bullet"></span>
               {{ cfg.label }}
             </a>
-            <a v-if="parsedReferences.length > 0" href="#references-section" class="toc-item">
+            <a v-if="parsedReferences.length > 0" href="#references-section" class="toc-item"
+              :class="{ active: activeView === 'paper' && activeSection === 'references-section' }"
+              @click.prevent="switchToPaper('references-section')">
               <span class="toc-bullet"></span>
               References
             </a>
-          </nav>
 
+            <!-- Authors Toggle -->
+            <div class="toc-divider"></div>
+            <button class="toc-item" :class="{ active: activeView === 'authors' }" @click="activeView = 'authors'">
+              <span class="toc-bullet"></span>
+              Authors
+            </button>
+          </nav>
         </div>
       </aside>
 
-      <!-- ── Main Journal Paper ── -->
-      <div class="journal-paper-wrap">
-        <article class="imrad-journal-page">
+      <div class="journal-main-col">
+        <transition name="view-fade" mode="out-in">
+        <!-- ── Main Journal Paper ── -->
+        <div v-if="activeView === 'paper'" class="journal-paper-wrap" key="paper">
+          <!-- Breadcrumb relocated from topbar -->
+          <nav class="breadcrumb detail-breadcrumb">
+            <RouterLink :to="{ name: 'home' }" class="bc-link">Home</RouterLink>
+            <ChevronRight :size="12" class="bc-sep" />
+            <button @click="goBack" class="bc-link">Results</button>
+            <ChevronRight :size="12" class="bc-sep" />
+            <span class="bc-active">{{ paper.title.length > 55 ? paper.title.substring(0, 55) + '…' : paper.title
+              }}</span>
+          </nav>
+
+          <article class="imrad-journal-page">
 
           <!-- ── Journal Header (Title / Authors / Abstract) ── -->
           <header class="journal-header">
@@ -581,6 +642,39 @@ const formatReferenceEntry = (raw: string): string => {
           </section>
 
         </article>
+        </div>
+
+        <!-- ── Authors List View ── -->
+        <div v-else-if="activeView === 'authors'" class="authors-view-wrap" key="authors">
+          <div class="authors-card-page">
+            <header class="authors-header">
+              <h2 class="authors-view-title">Contributing Authors</h2>
+              <p class="authors-view-sub">Information about the researchers behind this study</p>
+            </header>
+
+            <div class="authors-grid">
+              <div v-for="(name, idx) in authorList" :key="idx" class="author-row-card">
+                <div class="author-avatar">
+                  {{ name.charAt(0).toUpperCase() }}
+                </div>
+                <div class="author-info">
+                  <h3 class="author-card-name">{{ name }}</h3>
+                  <p class="author-card-role">Author</p>
+                  <div class="author-meta">
+                    <span class="auth-dept">{{ paper.department }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="authors-footer">
+              <button class="return-btn" @click="activeView = 'paper'">
+                Return to Paper View
+              </button>
+            </div>
+          </div>
+        </div>
+        </transition>
       </div>
 
       <!-- ── Related Studies Sidebar ── -->
@@ -737,71 +831,48 @@ const formatReferenceEntry = (raw: string): string => {
 
   background: var(--surface);
   min-height: 100vh;
+  padding-top: 64px; /* Height of the nav */
   font-family: 'Source Sans 3', sans-serif;
   color: var(--ink);
-  /* Prevent any child (grid/columns) from creating horizontal scroll */
-  overflow-x: hidden;
+  /* Prevent horizontal scroll without breaking sticky */
   width: 100%;
 }
 
-/* ══ TOP NAV BAR ══════════════════════════════════════════ */
-.journal-topbar {
-  background: var(--hero-bg);
-  border-bottom: 3px solid var(--green);
-  position: sticky;
-  top: 0;
-  z-index: 100;
-}
-
-.journal-topbar::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
-  background-size: 28px 28px;
-  pointer-events: none;
-}
-
-.journal-topbar-inner {
-  max-width: 1600px;
-  margin: 0 auto;
-  padding: 0.7rem 2rem;
-  position: relative;
-}
-
-/* Breadcrumb */
-.breadcrumb {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  margin: 0;
+/* Breadcrumb - Improved visibility */
+.detail-breadcrumb {
+  margin-top: 0.5rem;
+  margin-bottom: 1rem;
+  padding-left: 0.25rem;
 }
 
 .bc-link {
-  font-size: 0.73rem;
+  font-size: 0.8rem;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.35);
+  color: var(--ink-2);
   background: none;
   border: none;
   cursor: pointer;
   padding: 0;
   text-decoration: none;
-  transition: color 0.14s;
+  transition: all 0.2s ease;
   font-family: 'Source Sans 3', sans-serif;
+  opacity: 0.7;
 }
 
 .bc-link:hover {
-  color: rgba(255, 255, 255, 0.75);
+  color: var(--green);
+  opacity: 1;
 }
 
 .bc-sep {
-  color: rgba(255, 255, 255, 0.18);
+  color: var(--rule);
+  margin: 0 4px;
 }
 
 .bc-active {
-  font-size: 0.73rem;
+  font-size: 0.8rem;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.55);
+  color: var(--ink);
 }
 
 /* ══ PAGE LAYOUT ══════════════════════════════════════════ */
@@ -816,8 +887,8 @@ const formatReferenceEntry = (raw: string): string => {
 .journal-sidebar {
   width: 260px;
   flex-shrink: 0;
-  position: sticky;
-  top: 60px;
+  position: relative;
+  align-self: stretch;
 }
 
 .sidebar-inner {
@@ -878,65 +949,7 @@ const formatReferenceEntry = (raw: string): string => {
 }
 
 
-/* ══ HEADER ══════════════════════════════════════════════ */
-.paper-header-wrap {
-  background: var(--hero-bg);
-  border-bottom: 3px solid var(--green);
-  padding: 2rem 2rem 2.5rem;
-  position: relative;
-}
 
-/* dot-grid texture — same as hero/footer */
-.paper-header-wrap::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.045) 1px, transparent 1px);
-  background-size: 28px 28px;
-  pointer-events: none;
-}
-
-.header-inner {
-  max-width: 1600px;
-  margin: 0 auto;
-  position: relative;
-  z-index: 1;
-}
-
-/* Breadcrumb */
-.breadcrumb {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  margin-bottom: 1.5rem;
-}
-
-.bc-link {
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.35);
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0;
-  text-decoration: none;
-  transition: color 0.14s;
-  font-family: 'Source Sans 3', sans-serif;
-}
-
-.bc-link:hover {
-  color: rgba(255, 255, 255, 0.75);
-}
-
-.bc-sep {
-  color: rgba(255, 255, 255, 0.18);
-}
-
-.bc-active {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.55);
-}
 
 /* ══ CITATION MODAL ══════════════════════════════════════════ */
 .modal-overlay {
@@ -2692,31 +2705,183 @@ const formatReferenceEntry = (raw: string): string => {
 
 /* ══ PAGE LAYOUT ════════════════════════════════════════════ */
 .journal-page-layout {
-  max-width: 1540px;
+  max-width: 1580px;
   margin: 0 auto;
   width: 100%;
   display: grid;
   /* 3-Column: Navigation | Paper | Recommendations */
-  grid-template-columns: 200px 1fr 300px;
-  gap: 3rem;
-  padding: 2.5rem 2rem 5rem;
-  align-items: start;
+  grid-template-columns: 220px 1fr 320px;
+  gap: 2rem;
+  padding: 0 1.5rem 5rem;
   box-sizing: border-box;
 }
 
-/* ── Left Sidebar: Study Navigation ── */
 .journal-toc {
-  position: sticky;
-  top: 2rem;
-  align-self: flex-start;
-  padding-top: 1rem;
+  position: relative;
+  z-index: 10;
+  align-self: stretch;
 }
 
 .toc-inner {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  position: sticky;
+  top: 84px;
 }
+
+.toc-divider {
+  height: 1px;
+  background: var(--rule);
+  margin: 0.5rem 0;
+  opacity: 0.5;
+}
+
+.toc-item.active {
+  color: var(--green-dk);
+  background: var(--green-dim);
+  font-weight: 600;
+}
+
+.toc-item.active .toc-bullet {
+  background: var(--green);
+  transform: scale(1.2);
+}
+
+.journal-main-col {
+  min-width: 0;
+  width: 100%;
+}
+
+/* ── View Transitions ── */
+.view-fade-enter-active,
+.view-fade-leave-active {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.view-fade-enter-from {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.view-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-10px);
+}
+
+/* ── Authors View Styles ── */
+.authors-view-wrap {
+  width: 100%;
+  min-height: 600px;
+}
+
+.authors-card-page {
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+  padding: 3rem;
+  border: 1px solid var(--rule);
+}
+
+.authors-header {
+  text-align: center;
+  margin-bottom: 3rem;
+}
+
+.authors-view-title {
+  font-family: 'Lora', serif;
+  font-size: 2rem;
+  color: var(--ink);
+  margin-bottom: 0.5rem;
+}
+
+.authors-view-sub {
+  color: var(--ink-3);
+  font-size: 0.95rem;
+}
+
+.authors-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.5rem;
+  margin-bottom: 3rem;
+}
+
+.author-row-card {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  padding: 1.5rem;
+  background: #fafafa;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  transition: transform 0.2s;
+}
+
+.author-row-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--green);
+}
+
+.author-avatar {
+  width: 54px;
+  height: 54px;
+  background: var(--hero-bg);
+  color: #fff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  font-weight: 700;
+  font-family: 'Lora', serif;
+  border: 2px solid var(--green);
+}
+
+.author-card-name {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 0.2rem;
+}
+
+.author-card-role {
+  font-size: 0.8rem;
+  color: var(--green-dk);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.4rem;
+}
+
+.auth-dept {
+  font-size: 0.85rem;
+  color: var(--ink-3);
+}
+
+.authors-footer {
+  display: flex;
+  justify-content: center;
+  border-top: 1px solid var(--rule);
+  padding-top: 2rem;
+}
+
+.return-btn {
+  background: var(--green);
+  color: #fff;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.return-btn:hover {
+  background: var(--green-dk);
+}
+
+
 
 .toc-label {
   font-family: 'Source Sans 3', sans-serif;
@@ -2748,6 +2913,11 @@ const formatReferenceEntry = (raw: string): string => {
   color: var(--ink-2);
   border-radius: 4px;
   transition: all 0.15s ease;
+  border: none;
+  background: none;
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
 }
 
 .toc-bullet {
@@ -2903,7 +3073,7 @@ const formatReferenceEntry = (raw: string): string => {
     /* Both sidebars hidden → single column, centered */
     grid-template-columns: 1fr;
     gap: 0;
-    padding: 1.5rem 1.5rem 4rem;
+    padding: 0.75rem 1.5rem 4rem;
   }
 }
 
@@ -2916,7 +3086,7 @@ const formatReferenceEntry = (raw: string): string => {
 @media (max-width: 768px) {
   .journal-page-layout {
     grid-template-columns: 1fr;
-    padding: 1.25rem 1rem 3rem;
+    padding: 0.5rem 1rem 3rem;
   }
 
   .journal-body {

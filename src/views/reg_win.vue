@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter, RouterLink } from 'vue-router'
-import { UserPlus, Eye, EyeOff, BookOpen } from 'lucide-vue-next'
+import { UserPlus, Eye, EyeOff, BookOpen, ArrowLeft } from 'lucide-vue-next'
 import { api } from '../services/api'
 import { useFormValidation } from '../composables/useformValidation'
 import FormError from '../components/formError.vue'
@@ -118,6 +118,12 @@ const handleRegister = async () => {
         Already have an account?
         <RouterLink :to="{ name: 'login' }">Sign in</RouterLink>
       </p>
+
+      <div class="auth-footer">
+        <RouterLink :to="{ name: 'home' }" class="home-link">
+          <ArrowLeft :size="14" /> Back to Home
+        </RouterLink>
+      </div>
 
     </div>
   </div>
@@ -341,6 +347,29 @@ const handleRegister = async () => {
 
 .switch-link a:hover {
   color: var(--green);
+}
+
+.auth-footer {
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--rule);
+  display: flex;
+  justify-content: center;
+}
+
+.home-link {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ink-3);
+  text-decoration: none;
+  transition: color 0.15s;
+}
+
+.home-link:hover {
+  color: var(--green-dk);
 }
 
 @media (max-width: 480px) {
