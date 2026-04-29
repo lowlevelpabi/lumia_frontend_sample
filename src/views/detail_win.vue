@@ -488,7 +488,8 @@ const formatReferenceEntry = (raw: string): string => {
         <div class="toc-inner">
           <p class="toc-label">Available Sections</p>
           <nav class="toc-list">
-            <a href="#abstract-section" class="toc-item" :class="{ active: activeView === 'paper' && activeSection === 'abstract-section' }"
+            <a href="#abstract-section" class="toc-item"
+              :class="{ active: activeView === 'paper' && activeSection === 'abstract-section' }"
               @click.prevent="switchToPaper('abstract-section')">
               <span class="toc-bullet"></span>
               Abstract
@@ -518,174 +519,177 @@ const formatReferenceEntry = (raw: string): string => {
 
       <div class="journal-main-col">
         <transition name="view-fade" mode="out-in">
-        <!-- ── Main Journal Paper ── -->
-        <div v-if="activeView === 'paper'" class="journal-paper-wrap" key="paper">
-          <!-- Breadcrumb relocated from topbar -->
-          <nav class="breadcrumb detail-breadcrumb">
-            <RouterLink :to="{ name: 'home' }" class="bc-link">Home</RouterLink>
-            <ChevronRight :size="12" class="bc-sep" />
-            <button @click="goBack" class="bc-link">Results</button>
-            <ChevronRight :size="12" class="bc-sep" />
-            <span class="bc-active">{{ paper.title.length > 55 ? paper.title.substring(0, 55) + '…' : paper.title
+          <!-- ── Main Journal Paper ── -->
+          <div v-if="activeView === 'paper'" class="journal-paper-wrap" key="paper">
+            <!-- Breadcrumb relocated from topbar -->
+            <nav class="breadcrumb detail-breadcrumb">
+              <RouterLink :to="{ name: 'home' }" class="bc-link">Home</RouterLink>
+              <ChevronRight :size="12" class="bc-sep" />
+              <button @click="goBack" class="bc-link">Results</button>
+              <ChevronRight :size="12" class="bc-sep" />
+              <span class="bc-active">{{ paper.title.length > 55 ? paper.title.substring(0, 55) + '…' : paper.title
               }}</span>
-          </nav>
+            </nav>
 
-          <article class="imrad-journal-page">
+            <article class="imrad-journal-page">
 
-          <!-- ── Journal Header (Title / Authors / Abstract) ── -->
-          <header class="journal-header">
+              <!-- ── Journal Header (Title / Authors / Abstract) ── -->
+              <header class="journal-header">
 
-            <div class="journal-meta-top">
-              <span class="journal-badge">{{ paper.department }}</span>
-              <span class="journal-badge journal-badge-type">{{ paper.project_type }}</span>
-              <span v-if="paper.degree_program !== 'N/A'" class="journal-badge journal-badge-degree">{{
-                paper.degree_program }}</span>
-            </div>
+                <div class="journal-meta-top">
+                  <span class="journal-badge">{{ paper.department }}</span>
+                  <span class="journal-badge journal-badge-type">{{ paper.project_type }}</span>
+                  <span v-if="paper.degree_program !== 'N/A'" class="journal-badge journal-badge-degree">{{
+                    paper.degree_program }}</span>
+                </div>
 
-            <h1 class="journal-title">{{ paper.title }}</h1>
+                <h1 class="journal-title">{{ paper.title }}</h1>
 
-            <div class="journal-authors">
-              <span v-for="(author, idx) in authorList" :key="idx" class="journal-author">
-                {{ author }}<span class="author-sep"> · </span>
-              </span>
-              <span class="journal-author">Year: {{ paper.year }}</span>
-            </div>
+                <div class="journal-authors">
+                  <span v-for="(author, idx) in authorList" :key="idx" class="journal-author">
+                    {{ author }}<span class="author-sep"> · </span>
+                  </span>
+                  <span class="journal-author">Year: {{ paper.year }}</span>
+                </div>
 
-            <div class="journal-stats">
-              <span class="j-stat">
-                <Eye :size="12" /> {{ viewCount.toLocaleString() }} views
-              </span>
-              <span class="j-stat">
-                <Award :size="12" /> {{ citationCount.toLocaleString() }} citations
-              </span>
+                <div class="journal-stats">
+                  <span class="j-stat">
+                    <Eye :size="12" /> {{ viewCount.toLocaleString() }} views
+                  </span>
+                  <span class="j-stat">
+                    <Award :size="12" /> {{ citationCount.toLocaleString() }} citations
+                  </span>
 
-              <button v-if="isLoggedIn" class="j-cite-btn" :class="{ cited: hasCited }" :disabled="citeLoading"
-                @click="handleCite">
-                <CheckCircle v-if="hasCited" :size="13" />
-                <Award v-else :size="13" />
-                {{ hasCited ? 'Cited (Get Ref)' : citeLoading ? 'Citing…' : 'Cite this study' }}
-              </button>
-              <span v-else class="j-login-hint">Sign in to cite this study</span>
+                  <button v-if="isLoggedIn" class="j-cite-btn" :class="{ cited: hasCited }" :disabled="citeLoading"
+                    @click="handleCite">
+                    <CheckCircle v-if="hasCited" :size="13" />
+                    <Award v-else :size="13" />
+                    {{ hasCited ? 'Cited (Get Ref)' : citeLoading ? 'Citing…' : 'Cite this study' }}
+                  </button>
+                  <span v-else class="j-login-hint">Sign in to cite this study</span>
 
-              <button v-if="isLoggedIn" class="j-bookmark-btn" :class="{ bookmarked: isBookmarked }" :disabled="bookmarkLoading"
-                @click="handleBookmark">
-                <Loader2 v-if="bookmarkLoading" :size="13" class="spin" />
-                <Bookmark v-else :size="13" :fill="isBookmarked ? 'currentColor' : 'none'" />
-                {{ isBookmarked ? 'Bookmarked' : 'Bookmark' }}
-              </button>
+                  <button v-if="isLoggedIn" class="j-bookmark-btn" :class="{ bookmarked: isBookmarked }"
+                    :disabled="bookmarkLoading" @click="handleBookmark">
+                    <Loader2 v-if="bookmarkLoading" :size="13" class="spin" />
+                    <Bookmark v-else :size="13" :fill="isBookmarked ? 'currentColor' : 'none'" />
+                    {{ isBookmarked ? 'Bookmarked' : 'Bookmark' }}
+                  </button>
 
-              <button class="j-download-btn" :disabled="exportLoading" @click="handleDownloadPDF">
-                <Loader2 v-if="exportLoading" :size="13" class="spin" />
-                <FileDown v-else :size="13" />
-                {{ exportLoading ? 'Generating PDF…' : 'Download PDF' }}
-              </button>
-            </div>
+                  <button class="j-download-btn" :disabled="exportLoading" @click="handleDownloadPDF">
+                    <Loader2 v-if="exportLoading" :size="13" class="spin" />
+                    <FileDown v-else :size="13" />
+                    {{ exportLoading ? 'Generating PDF…' : 'Download PDF' }}
+                  </button>
+                </div>
 
-            <!-- Plain Abstract -->
-            <div id="abstract-section" class="journal-abstract-plain">
-              <span class="journal-abstract-label">Abstract</span>
-              <p class="journal-abstract-text">{{ paper.abstract }}</p>
-              <div v-if="paper.keywords" class="journal-keywords">
-                <strong>Keywords: </strong>
-                <span>{{ paper.keywords }}</span>
-              </div>
-            </div>
-
-            <hr class="journal-divider" />
-          </header>
-
-          <!-- ── 2-Column IMRAD Body ── -->
-          <div class="journal-body">
-            <template v-for="cfg in IMRAD_SECTION_CONFIGS" :key="cfg.key">
-              <div :id="cfg.key + '-section'" class="journal-section-heading">
-                <span>{{ cfg.label }}</span>
-              </div>
-
-              <!-- Section Wrapper to reset CSS counter -->
-              <div class="journal-section-content">
-                <!-- Introduction → AI summary blocks -->
-                <template v-if="cfg.key === 'introduction'">
-                  <template v-if="paper.introduction_summary">
-                    <div v-for="(block, idx) in parseSummaryBlocks(paper.introduction_summary as string)" :key="idx">
-                      <p v-if="block.heading" class="journal-subheading">{{ block.heading }}</p>
-                      <p class="journal-para">{{ block.body }}</p>
-                    </div>
-                  </template>
-                  <div v-else-if="paper.introduction">
-                    <p class="journal-para">{{ stripMarkers(paper.introduction) }}</p>
+                <!-- Plain Abstract -->
+                <div id="abstract-section" class="journal-abstract-plain">
+                  <span class="journal-abstract-label">Abstract</span>
+                  <p class="journal-abstract-text">{{ paper.abstract }}</p>
+                  <div v-if="paper.keywords" class="journal-keywords">
+                    <strong>Keywords: </strong>
+                    <span>{{ paper.keywords }}</span>
                   </div>
-                  <p v-else class="journal-para journal-no-content">No introduction available.</p>
-                </template>
+                </div>
 
-                <!-- Methods / Results / Discussion → structured blocks -->
-                <template v-else>
-                  <div v-if="hasStructured(cfg.key)">
-                    <template v-for="(block, i) in getStructuredBlocks(cfg.key)" :key="i">
-                      <div v-if="block.type === 'subheading'" class="journal-subheading">{{ block.text }}</div>
-                      <div v-else-if="block.type === 'table-image'" class="journal-figure">
-                        <img :src="block.text" :alt="block.id" class="journal-figure-img"
-                          @click="openZoomModal(block.text)" />
+                <hr class="journal-divider" />
+              </header>
+
+              <!-- ── 2-Column IMRAD Body ── -->
+              <div class="journal-body">
+                <template v-for="cfg in IMRAD_SECTION_CONFIGS" :key="cfg.key">
+                  <div :id="cfg.key + '-section'" class="journal-section-heading">
+                    <span>{{ cfg.label }}</span>
+                  </div>
+
+                  <!-- Section Wrapper to reset CSS counter -->
+                  <div class="journal-section-content">
+                    <!-- Introduction → AI summary blocks -->
+                    <template v-if="cfg.key === 'introduction'">
+                      <template v-if="paper.introduction_summary">
+                        <div v-for="(block, idx) in parseSummaryBlocks(paper.introduction_summary as string)"
+                          :key="idx">
+                          <p v-if="block.heading" class="journal-subheading">{{ block.heading }}</p>
+                          <p class="journal-para">{{ block.body }}</p>
+                        </div>
+                      </template>
+                      <div v-else-if="paper.introduction">
+                        <p class="journal-para">{{ stripMarkers(paper.introduction) }}</p>
                       </div>
-                      <p v-else-if="block.type === 'table-label'" class="journal-figure-caption">{{ block.text }}</p>
-                      <p v-else class="journal-para">{{ block.text }}</p>
+                      <p v-else class="journal-para journal-no-content">No introduction available.</p>
+                    </template>
+
+                    <!-- Methods / Results / Discussion → structured blocks -->
+                    <template v-else>
+                      <div v-if="hasStructured(cfg.key)">
+                        <template v-for="(block, i) in getStructuredBlocks(cfg.key)" :key="i">
+                          <div v-if="block.type === 'subheading'" class="journal-subheading">{{ block.text }}</div>
+                          <div v-else-if="block.type === 'table-image'" class="journal-figure">
+                            <img :src="block.text" :alt="block.id" class="journal-figure-img"
+                              @click="openZoomModal(block.text)" />
+                          </div>
+                          <p v-else-if="block.type === 'table-label'" class="journal-figure-caption">{{ block.text }}
+                          </p>
+                          <p v-else class="journal-para">{{ block.text }}</p>
+                        </template>
+                      </div>
+                      <div v-else-if="paper[resolveKey(cfg.key)]">
+                        <p class="journal-para">{{ stripMarkers(paper[resolveKey(cfg.key)] as string) }}</p>
+                        <template v-if="cfg.key === 'rad' && paper.discussion && !isRadCombined">
+                          <p class="journal-para">{{ stripMarkers(paper.discussion as string) }}</p>
+                        </template>
+                      </div>
+                      <p v-else class="journal-para journal-no-content">No extracted text available for this section.
+                      </p>
                     </template>
                   </div>
-                  <div v-else-if="paper[resolveKey(cfg.key)]">
-                    <p class="journal-para">{{ stripMarkers(paper[resolveKey(cfg.key)] as string) }}</p>
-                    <template v-if="cfg.key === 'rad' && paper.discussion && !isRadCombined">
-                      <p class="journal-para">{{ stripMarkers(paper.discussion as string) }}</p>
-                    </template>
-                  </div>
-                  <p v-else class="journal-para journal-no-content">No extracted text available for this section.</p>
                 </template>
               </div>
-            </template>
+
+              <!-- ── References — full-width below the 2-column body ── -->
+              <section v-if="parsedReferences.length > 0" id="references-section" class="journal-references-section">
+                <div class="journal-references-heading">
+                  <span>References</span>
+                </div>
+                <ol class="journal-references-list">
+                  <li v-for="(entry, idx) in parsedReferences" :key="idx" class="journal-reference-entry"
+                    v-html="formatReferenceEntry(entry)" />
+                </ol>
+              </section>
+
+            </article>
           </div>
 
-          <!-- ── References — full-width below the 2-column body ── -->
-          <section v-if="parsedReferences.length > 0" id="references-section" class="journal-references-section">
-            <div class="journal-references-heading">
-              <span>References</span>
-            </div>
-            <ol class="journal-references-list">
-              <li v-for="(entry, idx) in parsedReferences" :key="idx" class="journal-reference-entry"
-                v-html="formatReferenceEntry(entry)" />
-            </ol>
-          </section>
+          <!-- ── Authors List View ── -->
+          <div v-else-if="activeView === 'authors'" class="authors-view-wrap" key="authors">
+            <div class="authors-card-page">
+              <header class="authors-header">
+                <h2 class="authors-view-title">Contributing Authors</h2>
+                <p class="authors-view-sub">Information about the researchers behind this study</p>
+              </header>
 
-        </article>
-        </div>
-
-        <!-- ── Authors List View ── -->
-        <div v-else-if="activeView === 'authors'" class="authors-view-wrap" key="authors">
-          <div class="authors-card-page">
-            <header class="authors-header">
-              <h2 class="authors-view-title">Contributing Authors</h2>
-              <p class="authors-view-sub">Information about the researchers behind this study</p>
-            </header>
-
-            <div class="authors-grid">
-              <div v-for="(name, idx) in authorList" :key="idx" class="author-row-card">
-                <div class="author-avatar">
-                  {{ name.charAt(0).toUpperCase() }}
-                </div>
-                <div class="author-info">
-                  <h3 class="author-card-name">{{ name }}</h3>
-                  <p class="author-card-role">Author</p>
-                  <div class="author-meta">
-                    <span class="auth-dept">{{ paper.department }}</span>
+              <div class="authors-grid">
+                <div v-for="(name, idx) in authorList" :key="idx" class="author-row-card">
+                  <div class="author-avatar">
+                    {{ name.charAt(0).toUpperCase() }}
+                  </div>
+                  <div class="author-info">
+                    <h3 class="author-card-name">{{ name }}</h3>
+                    <p class="author-card-role">Author</p>
+                    <div class="author-meta">
+                      <span class="auth-dept">{{ paper.department }}</span>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            <div class="authors-footer">
-              <button class="return-btn" @click="activeView = 'paper'">
-                Return to Paper View
-              </button>
+              <div class="authors-footer">
+                <button class="return-btn" @click="activeView = 'paper'">
+                  Return to Paper View
+                </button>
+              </div>
             </div>
           </div>
-        </div>
         </transition>
       </div>
 
@@ -700,7 +704,8 @@ const formatReferenceEntry = (raw: string): string => {
               <!-- Left: Main Card Content -->
               <div class="rec-card-main">
                 <div class="rec-card-header">
-                  <div class="rec-match-score" :class="getConfidence(rec.score).cls" :title="getConfidence(rec.score).desc">
+                  <div class="rec-match-score" :class="getConfidence(rec.score).cls"
+                    :title="getConfidence(rec.score).desc">
                     <Sparkles :size="11" />
                     <span>{{ (rec.score * 100).toFixed(0) }}% Semantic Match</span>
                   </div>
@@ -712,11 +717,11 @@ const formatReferenceEntry = (raw: string): string => {
                 <h4 class="rec-card-title">{{ rec.payload?.title }}</h4>
 
                 <div class="rec-card-meta">
-                  <span class="rec-author">{{ (rec.payload?.author || '').split('|').map(a => a.split(',')[0].trim()).join(', ') }}</span>
+                  <span class="rec-author">{{ rec.payload?.author ? rec.payload.author.split('|').map(a => (a.split(',')[0] || '').trim()).join(', ') : '' }}</span>
                   <span class="rec-dot"></span>
                   <span class="rec-year">{{ rec.payload?.year }}</span>
                 </div>
-                
+
                 <!-- Teaser pill (visible before hover) -->
                 <div v-if="rec.recommendation_reason" class="rec-insight-teaser">
                   <Info :size="10" />
@@ -736,7 +741,30 @@ const formatReferenceEntry = (raw: string): string => {
 
           <div v-else class="rec-empty">
             <img src="/book_empty.ico" alt="Empty" class="rec-empty-icon" />
-            <p>No related studies found.</p>
+            <p class="rec-empty-title">No related studies found</p>
+            <div class="rec-empty-insight">
+              <div class="insight-head">
+                <Info :size="12" /> <span>Possible Reasons</span>
+              </div>
+              <ul class="insight-list">
+                <li>
+                  <span class="insight-marker">1</span>
+                  <span><strong>Limited Repository:</strong> The database may not have sufficient records yet to
+                    establish
+                    semantic links.</span>
+                </li>
+                <li>
+                  <span class="insight-marker">2</span>
+                  <span><strong>Low Similarity:</strong> No other papers share close conceptual keywords or research
+                    themes.</span>
+                </li>
+                <li>
+                  <span class="insight-marker">3</span>
+                  <span><strong>Highly Niche Topic:</strong> This study covers a unique academic area without matching
+                    methodologies.</span>
+                </li>
+              </ul>
+            </div>
           </div>
         </div>
       </aside>
@@ -758,7 +786,7 @@ const formatReferenceEntry = (raw: string): string => {
       <div class="skeleton-authors"></div>
       <div class="skeleton-stats"></div>
     </div>
-    
+
     <!-- Body Skeleton -->
     <div class="detail-layout">
       <!-- Left sidebar -->
@@ -769,7 +797,7 @@ const formatReferenceEntry = (raw: string): string => {
         <div class="skeleton-nav-item"></div>
         <div class="skeleton-nav-item"></div>
       </aside>
-      
+
       <!-- Main Content -->
       <div class="paper-main">
         <div class="skeleton-tab-bar">
@@ -781,13 +809,13 @@ const formatReferenceEntry = (raw: string): string => {
         <div class="skeleton-text-block"></div>
         <div class="skeleton-text-block"></div>
         <div class="skeleton-text-block short"></div>
-        
+
         <div class="skeleton-section-title mt-4"></div>
         <div class="skeleton-text-block"></div>
         <div class="skeleton-text-block"></div>
         <div class="skeleton-text-block short"></div>
       </div>
-      
+
       <!-- Right Sidebar (Recommendations) -->
       <aside class="journal-sidebar">
         <div class="sidebar-inner">
@@ -877,11 +905,12 @@ const formatReferenceEntry = (raw: string): string => {
 
             <!-- Footer -->
             <div class="modal-footer">
-              <button v-if="hasCited" class="m-uncite-btn" :disabled="citeLoading" @click="handleToggleCitation(); showCiteModal = false">
+              <button v-if="hasCited" class="m-uncite-btn" :disabled="citeLoading"
+                @click="handleToggleCitation(); showCiteModal = false">
                 <X :size="12" />
                 Remove Citation
               </button>
-              
+
               <div style="flex: 1"></div>
 
               <button class="m-copy-btn" :class="{ copied: copyStatus[apaVariation] }" @click="copyToClipboard(
@@ -918,7 +947,6 @@ const formatReferenceEntry = (raw: string): string => {
 
 
 <style scoped>
-
 /* ── Tokens ──────────────────────────────────────────────── */
 .detail-page {
   --ink: #181c18;
@@ -934,7 +962,8 @@ const formatReferenceEntry = (raw: string): string => {
 
   background: var(--surface);
   min-height: 100vh;
-  padding-top: 64px; /* Height of the nav */
+  padding-top: 64px;
+  /* Height of the nav */
   font-family: 'Source Sans 3', sans-serif;
   color: var(--ink);
   /* Prevent horizontal scroll without breaking sticky */
@@ -2107,82 +2136,169 @@ const formatReferenceEntry = (raw: string): string => {
 }
 
 @keyframes pulse-bg {
-  0% { opacity: 0.6; }
-  50% { opacity: 1; }
-  100% { opacity: 0.6; }
+  0% {
+    opacity: 0.6;
+  }
+
+  50% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0.6;
+  }
 }
 
 .skeleton-badge {
-  width: 60px; height: 18px; background: #e2e8f0; border-radius: 3px;
+  width: 60px;
+  height: 18px;
+  background: #e2e8f0;
+  border-radius: 3px;
 }
+
 .skeleton-title {
-  width: 70%; height: 34px; background: #cbd5e1; margin: 0 auto 0.6rem; border-radius: 6px;
+  width: 70%;
+  height: 34px;
+  background: #cbd5e1;
+  margin: 0 auto 0.6rem;
+  border-radius: 6px;
 }
+
 .skeleton-title.short {
-  width: 45%; margin-bottom: 1.25rem;
+  width: 45%;
+  margin-bottom: 1.25rem;
 }
+
 .skeleton-authors {
-  width: 40%; height: 16px; background: #e2e8f0; margin: 0 auto 1.5rem; border-radius: 4px;
+  width: 40%;
+  height: 16px;
+  background: #e2e8f0;
+  margin: 0 auto 1.5rem;
+  border-radius: 4px;
 }
+
 .skeleton-stats {
-  width: 30%; height: 32px; background: #e2e8f0; margin: 0 auto; border-radius: 6px;
+  width: 30%;
+  height: 32px;
+  background: #e2e8f0;
+  margin: 0 auto;
+  border-radius: 6px;
 }
 
 /* Nav Skeleton */
 .skeleton-nav-label {
-  width: 80%; height: 12px; background: #e2e8f0; margin-bottom: 1rem; border-radius: 4px;
+  width: 80%;
+  height: 12px;
+  background: #e2e8f0;
+  margin-bottom: 1rem;
+  border-radius: 4px;
 }
+
 .skeleton-nav-item {
-  width: 100%; height: 28px; background: #f1f5f9; margin-bottom: 0.4rem; border-radius: 4px;
+  width: 100%;
+  height: 28px;
+  background: #f1f5f9;
+  margin-bottom: 0.4rem;
+  border-radius: 4px;
 }
 
 /* Main Content Skeleton */
 .skeleton-tab-bar {
-  display: flex; gap: 1.5rem; border-bottom: 2px solid var(--rule); margin-bottom: 2rem; padding-bottom: 0.5rem;
+  display: flex;
+  gap: 1.5rem;
+  border-bottom: 2px solid var(--rule);
+  margin-bottom: 2rem;
+  padding-bottom: 0.5rem;
 }
+
 .skeleton-tab {
-  width: 80px; height: 20px; background: #e2e8f0; border-radius: 4px;
+  width: 80px;
+  height: 20px;
+  background: #e2e8f0;
+  border-radius: 4px;
 }
+
 .skeleton-section-title {
-  width: 150px; height: 16px; background: #cbd5e1; margin-bottom: 1rem; border-radius: 4px;
+  width: 150px;
+  height: 16px;
+  background: #cbd5e1;
+  margin-bottom: 1rem;
+  border-radius: 4px;
 }
+
 .skeleton-section-title.mt-4 {
   margin-top: 2.5rem;
 }
+
 .skeleton-text-block {
-  width: 100%; height: 14px; background: #f1f5f9; margin-bottom: 0.6rem; border-radius: 4px;
+  width: 100%;
+  height: 14px;
+  background: #f1f5f9;
+  margin-bottom: 0.6rem;
+  border-radius: 4px;
 }
+
 .skeleton-text-block.short {
-  width: 85%; margin-bottom: 1.5rem;
+  width: 85%;
+  margin-bottom: 1.5rem;
 }
 
 /* Sidebar Skeleton */
 .skeleton-sidebar-title {
-  width: 140px; height: 14px; background: #cbd5e1; margin-bottom: 0.5rem; border-radius: 4px;
+  width: 140px;
+  height: 14px;
+  background: #cbd5e1;
+  margin-bottom: 0.5rem;
+  border-radius: 4px;
 }
+
 .skeleton-sidebar-sub {
-  width: 180px; height: 12px; background: #e2e8f0; margin-bottom: 1.5rem; border-radius: 4px;
+  width: 180px;
+  height: 12px;
+  background: #e2e8f0;
+  margin-bottom: 1.5rem;
+  border-radius: 4px;
 }
+
 .skeleton-card {
   height: 130px;
-  display: flex; flex-direction: column; gap: 0.75rem; padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1.25rem;
   box-shadow: none;
   cursor: default;
 }
+
 .skeleton-card:hover {
   transform: none;
-  width: 260px; /* Prevent expansion */
+  width: 260px;
+  /* Prevent expansion */
   box-shadow: none;
   border-color: var(--rule);
 }
+
 .skeleton-card-header {
-  width: 100%; height: 22px; background: #f1f5f9; border-radius: 20px; margin-bottom: 0.2rem;
+  width: 100%;
+  height: 22px;
+  background: #f1f5f9;
+  border-radius: 20px;
+  margin-bottom: 0.2rem;
 }
+
 .skeleton-card-title {
-  width: 100%; height: 14px; background: #e2e8f0; border-radius: 4px;
+  width: 100%;
+  height: 14px;
+  background: #e2e8f0;
+  border-radius: 4px;
 }
+
 .skeleton-card-meta {
-  width: 60%; height: 12px; background: #f1f5f9; border-radius: 4px; margin-top: auto;
+  width: 60%;
+  height: 12px;
+  background: #f1f5f9;
+  border-radius: 4px;
+  margin-top: auto;
 }
 
 /* ── Responsive ────────────────────────────────────────── */
@@ -2927,7 +3043,8 @@ const formatReferenceEntry = (raw: string): string => {
   background: transparent;
   border: 1px solid var(--rule);
   border-radius: 4px;
-  color: #c53030; /* Red color for removal */
+  color: #c53030;
+  /* Red color for removal */
   font-size: 0.75rem;
   font-weight: 600;
   cursor: pointer;
@@ -3170,13 +3287,14 @@ const formatReferenceEntry = (raw: string): string => {
 .rec-card {
   position: relative;
   display: flex;
-  width: 260px; /* Base width matching sidebar */
+  width: 260px;
+  /* Base width matching sidebar */
   background: white;
   border: 1px solid var(--rule);
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-  box-shadow: 0 2px 6px rgba(0,0,0,0.02);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02);
   overflow: hidden;
   animation: slide-up-fade 0.6s ease-out backwards;
 }
@@ -3184,7 +3302,9 @@ const formatReferenceEntry = (raw: string): string => {
 .rec-card::before {
   content: '';
   position: absolute;
-  top: 0; left: 0; right: 0;
+  top: 0;
+  left: 0;
+  right: 0;
   height: 3px;
   background: var(--green);
   opacity: 0;
@@ -3193,8 +3313,9 @@ const formatReferenceEntry = (raw: string): string => {
 }
 
 .rec-card:hover {
-  width: 480px; /* Fully accommodate both the 260px main card and the 220px insight panel */
-  transform: translateY(-5px); 
+  width: 480px;
+  /* Fully accommodate both the 260px main card and the 220px insight panel */
+  transform: translateY(-5px);
   border-color: var(--green-dim);
   box-shadow: 0 12px 24px rgba(0, 166, 81, 0.12);
   z-index: 100;
@@ -3274,7 +3395,8 @@ const formatReferenceEntry = (raw: string): string => {
   display: flex;
   align-items: center;
   gap: 0.6rem;
-  margin-bottom: 0.5rem; /* Reduced to make room for teaser */
+  margin-bottom: 0.5rem;
+  /* Reduced to make room for teaser */
 }
 
 .rec-author {
@@ -3284,7 +3406,8 @@ const formatReferenceEntry = (raw: string): string => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 140px; /* Prevent long author lists from pushing the year off-screen */
+  max-width: 140px;
+  /* Prevent long author lists from pushing the year off-screen */
 }
 
 .rec-dot {
@@ -3316,7 +3439,8 @@ const formatReferenceEntry = (raw: string): string => {
 }
 
 .rec-card:hover .rec-insight-teaser {
-  opacity: 0; /* Hide teaser when expanded */
+  opacity: 0;
+  /* Hide teaser when expanded */
   pointer-events: none;
 }
 
@@ -3332,7 +3456,8 @@ const formatReferenceEntry = (raw: string): string => {
   justify-content: center;
   opacity: 0;
   transform: translateX(10px);
-  transition: all 0.4s ease 0.1s; /* Delayed fade in */
+  transition: all 0.4s ease 0.1s;
+  /* Delayed fade in */
 }
 
 .rec-card:hover .rec-insight-side {
@@ -3362,25 +3487,89 @@ const formatReferenceEntry = (raw: string): string => {
 }
 
 .rec-empty {
-  padding: 2rem 1rem;
+  padding: 2.5rem 1rem;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0.75rem;
   text-align: center;
+  background: rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(8px);
+  border-radius: 12px;
+  border: 1px dashed rgba(0, 0, 0, 0.08);
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .rec-empty-icon {
-  width: 36px;
-  height: 36px;
-  opacity: 0.35;
+  width: 40px;
+  height: 40px;
+  opacity: 0.25;
   filter: grayscale(1);
+  margin-bottom: 0.25rem;
 }
 
-.rec-empty p {
-  font-size: 0.78rem;
-  color: var(--ink-3);
+.rec-empty-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--ink-2);
+  margin: 0 0 0.5rem;
+}
+
+.rec-empty-insight {
+  background: #f8fafc;
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 8px;
+  padding: 1rem;
+  text-align: left;
+  width: 100%;
+  max-width: 260px;
+  box-sizing: border-box;
+}
+
+.rec-empty-insight .insight-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.75rem;
+}
+
+.rec-empty-insight .insight-list {
+  list-style: none;
+  padding: 0;
   margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.rec-empty-insight .insight-list li {
+  font-size: 0.72rem;
+  line-height: 1.5;
+  color: #475569;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.rec-empty-insight .insight-marker {
+  background: rgba(100, 116, 139, 0.1);
+  color: #64748b;
+  font-size: 0.65rem;
+  font-weight: 700;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
 }
 
 .j-login-hint {

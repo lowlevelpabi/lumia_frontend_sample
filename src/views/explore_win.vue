@@ -38,8 +38,17 @@ const totalPages = computed(() => Math.ceil(totalResults.value / pageSize.value)
 
 // Filters
 const threshold = ref(0.2)
-const minYear = ref<number | undefined>(undefined)
-const maxYear = ref<number | undefined>(undefined)
+const currentYear = new Date().getFullYear()
+const availableYears = computed(() => {
+  const years = []
+  for (let i = 0; i < 5; i++) {
+    years.push(currentYear - i)
+  }
+  return years
+})
+const minYear = ref<number | undefined>(currentYear - 4)
+const maxYear = ref<number | undefined>(currentYear)
+
 const selectedProjectType = ref('')
 const selectedDegree = ref('')
 const selectedSection = ref('')
@@ -129,6 +138,18 @@ watch(
     load()
   }
 )
+
+watch(minYear, (newMin) => {
+  if (newMin && maxYear.value && newMin > maxYear.value) {
+    maxYear.value = newMin
+  }
+})
+
+watch(maxYear, (newMax) => {
+  if (newMax && minYear.value && newMax < minYear.value) {
+    minYear.value = newMax
+  }
+})
 
 watch(
   [threshold, minYear, maxYear, selectedProjectType, selectedDegree, selectedSection, sortBy],
@@ -295,13 +316,11 @@ const openMobileSearch = () => {
             </div>
             <div class="year-range">
               <select v-model="minYear" class="year-select">
-                <option :value="undefined">From</option>
-                <option v-for="y in [2025, 2024, 2023, 2022, 2021]" :key="y" :value="y">{{ y }}</option>
+                <option v-for="y in availableYears" :key="y" :value="y">{{ y }}</option>
               </select>
               <span class="year-to">—</span>
               <select v-model="maxYear" class="year-select">
-                <option :value="undefined">To</option>
-                <option v-for="y in [2025, 2024, 2023, 2022, 2021]" :key="y" :value="y">{{ y }}</option>
+                <option v-for="y in availableYears" :key="y" :value="y">{{ y }}</option>
               </select>
             </div>
           </div>
