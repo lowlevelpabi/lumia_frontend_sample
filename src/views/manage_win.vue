@@ -13,8 +13,6 @@ import { useRouter } from 'vue-router'
 import {
   Library,
   Trash2,
-  Edit3,
-  Search,
   Plus,
   FolderOpen,
   Loader2,
@@ -22,7 +20,6 @@ import {
   Users,
   Calendar,
   ChevronRight,
-  Save,
   UserCheck,
   Menu,
   X,
@@ -42,6 +39,16 @@ import {
   UserPlus,
   ArchiveRestore,
   GripVertical,
+  Search,
+  Edit3,
+  Save,
+  User,
+  Building2,
+  GraduationCap,
+  Hash,
+  History,
+  ArrowRight,
+  Bookmark,
 } from 'lucide-vue-next'
 import {
   api,
@@ -62,6 +69,20 @@ const canEdit = computed(() => isAdmin.value || isFaculty.value)
 // ── Sidebar collapse ────────────────────────────────────────────
 const sidebarCollapsed = ref(false)
 const mobileSidebarOpen = ref(false)
+const showApproveModal = ref(false)
+const showDetailsModal = ref(false)
+const approveTarget = ref<Paper | null>(null)
+const detailsTarget = ref<Paper | null>(null)
+const showEditModal = ref(false)
+const editTarget = ref<Paper | null>(null)
+const editForm = reactive({
+  title: '',
+  authors: [] as string[],
+  department: '',
+  project_type: '',
+  degree_program: '',
+  keywords: ''
+})
 
 const toggleSidebar = () => {
   if (window.innerWidth <= 768) {
@@ -119,7 +140,7 @@ const formattedTime = computed(() => {
 })
 
 // ── Sidebar ─────────────────────────────────────────────────────
-type Section = 'repository' | 'users' | 'upload' | 'logs' | 'trash'
+type Section = 'repository' | 'users' | 'upload' | 'logs' | 'trash' | 'pending'
 const activeSection = ref<Section>('repository')
 
 const baseNavItems: { id: Section; label: string; icon: Component; description: string }[] = [
@@ -136,6 +157,12 @@ const adminNavItems: { id: Section; label: string; icon: Component; description:
   { id: 'logs', label: 'Activity Log', icon: Clock, description: 'Track System Logs' },
 ]
 const canEditNavItems: { id: Section; label: string; icon: Component; description: string }[] = [
+  {
+    id: 'pending',
+    label: 'Pending Requests',
+    icon: Clock,
+    description: 'Accept uploads',
+  },
   { id: 'trash', label: 'Trash', icon: Trash2, description: 'Erase Document' },
 ]
 const navItems = computed(() => {
@@ -163,13 +190,22 @@ const setSection = (s: Section) => {
   if (s === 'users' && !isAdmin.value) return
 
   // Reset navigation-blocking states
-  showEditModal.value = false
   showCreateUserModal.value = false
   showPurgeModal.value = false
+  showApproveModal.value = false
+  showDetailsModal.value = false
   roleTarget.value = null
+  approveTarget.value = null
+  detailsTarget.value = null
   if (s !== 'upload') step.value = 1
-
   activeSection.value = s
+  if (s === 'pending') {
+    activeFilter.value = 'all'
+    searchQuery.value = ''
+  } else if (s === 'repository') {
+    activeFilter.value = 'all'
+    searchQuery.value = ''
+  }
   router.push({ query: { ...router.currentRoute.value.query, tab: s } })
   mobileSidebarOpen.value = false
   if (window.innerWidth < 1024 && window.innerWidth > 768) sidebarCollapsed.value = true
@@ -194,14 +230,23 @@ watch(
 const papers = ref<Paper[]>([])
 const loading = ref(true)
 const searchQuery = ref('')
-const activeFilter = ref<'all' | 'Thesis' | 'Capstone Project'>('all')
+const activeFilter = ref<'all' | 'Thesis' | 'Capstone Project' | 'Pending'>('all')
 const repoStats = ref<RepositoryStats | null>(null)
 const statsLoading = ref(false)
 
 const statsPercentages = computed(() => {
-  if (!repoStats.value || repoStats.value.total_papers === 0) return { thesis: 50, capstone: 50 }
-  const total = repoStats.value.total_papers
-  const t = ((repoStats.value.by_project_type['Thesis'] || 0) / total) * 100
+  const approved = papers.value.filter(p => p.status !== 'Pending')
+  const total = approved.length
+  if (total === 0) return { thesis: 50, capstone: 50 }
+
+  const tCount = approved.filter(p => p.project_type?.toLowerCase().includes('thesis')).length
+
+  // If we have other types, we normalize to only show Thesis vs Capstone relative to each other
+  // or relative to the total if those are the only two types.
+  const t = (tCount / total) * 100
+
+  // If they don't add up to 100 (due to other types), we can either show a 3rd color
+  // or just stick to the 100-t for simplicity as requested by the UI design.
   return { thesis: t, capstone: 100 - t }
 })
 
@@ -230,8 +275,11 @@ const fetchPapers = async () => {
 onMounted(fetchPapers)
 
 const filteredPapers = computed(() => {
-  let list = papers.value
-  if (activeFilter.value !== 'all') list = list.filter((p) => p.project_type === activeFilter.value)
+  let list = papers.value.filter(p => p.status !== 'Pending')
+  if (activeFilter.value !== 'all') {
+    list = list.filter((p) => p.project_type === activeFilter.value)
+  }
+
   const q = searchQuery.value.trim().toLowerCase()
   if (!q) return list
   return list.filter(
@@ -242,12 +290,15 @@ const filteredPapers = computed(() => {
   )
 })
 
-const totalPapers = computed(() => papers.value.length)
-const thesisCount = computed(() => papers.value.filter((p) => p.project_type === 'Thesis').length)
-const capstoneCount = computed(
-  () => papers.value.filter((p) => p.project_type === 'Capstone Project').length,
-)
-const yearSpan = computed(() => new Set(papers.value.map((p) => p.year)).size)
+const pendingPapers = computed(() => papers.value.filter((p) => p.status === 'Pending'))
+const totalPapers = computed(() => papers.value.filter(p => p.status !== 'Pending').length)
+const pendingCount = computed(() => pendingPapers.value.length)
+const thesisCount = computed(() => papers.value.filter((p) => p.status !== 'Pending' && p.project_type?.toLowerCase().includes('thesis')).length)
+const capstoneCount = computed(() => papers.value.filter((p) => p.status !== 'Pending' && p.project_type?.toLowerCase().includes('capstone')).length)
+const yearSpan = computed(() => {
+  const approvedYears = papers.value.filter(p => p.status !== 'Pending').map(p => p.year)
+  return new Set(approvedYears).size
+})
 
 // ── Helpers ───────────────────────────────────────────────────────
 const initials = (title: string) =>
@@ -260,61 +311,23 @@ const initials = (title: string) =>
 
 const typeColor = (type: string) => (type === 'Thesis' ? 'blue' : 'orange')
 
-// Metadata Edit State
-const showEditModal = ref(false)
-const editingPaper = ref<Partial<Paper>>({})
-const editAuthors = ref<string[]>([''])
-const updating = ref(false)
+const formatRelativeTime = (dateStr?: string) => {
+  if (!dateStr) return '—'
+  const date = new Date(dateStr)
+  const now = new Date()
+  const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000)
 
-const openEditModal = (paper: Paper) => {
-  editingPaper.value = { ...paper }
-  // Split joined author string into array for editing
-  if (paper.author) {
-    const split = paper.author
-      .split(/\s*\|\s*/)
-      .map((a) => a.trim())
-      .filter((a) => a.length > 0)
-    editAuthors.value = split.length > 0 ? split : ['']
-  } else {
-    editAuthors.value = ['']
-  }
-  showEditModal.value = true
+  if (diffInSeconds < 60) return 'just now'
+  if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`
+  if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`
+  if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)}d ago`
+
+  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-const closeEditModal = () => {
-  showEditModal.value = false
-  editingPaper.value = {}
-  editAuthors.value = ['']
-}
-
-const addEditAuthor = () => {
-  editAuthors.value.push('')
-}
-const removeEditAuthor = (index: number) => {
-  if (editAuthors.value.length > 1) editAuthors.value.splice(index, 1)
-  else editAuthors.value[0] = ''
-}
-
-const handleUpdate = async () => {
-  if (!editingPaper.value.id) return
-  updating.value = true
-  try {
-    const { id, ...updates } = editingPaper.value as Paper
-    // Join authors back with pipe separator
-    updates.author = editAuthors.value
-      .map((a) => a.trim())
-      .filter((a) => a.length > 0)
-      .join(' | ')
-
-    await api.updatePaper(id, updates)
-    await fetchPapers()
-    closeEditModal()
-  } catch (err) {
-    console.error('Update failed:', err)
-    alert('Failed to update paper details.')
-  } finally {
-    updating.value = false
-  }
+const viewDetails = (paper: Paper) => {
+  detailsTarget.value = paper
+  showDetailsModal.value = true
 }
 
 // ── Actions ───────────────────────────────────────────────────────
@@ -325,6 +338,72 @@ const handleDelete = async (id: string) => {
     await fetchPapers()
   } catch {
     alert('Failed to delete. Are you logged in as admin?')
+  }
+}
+
+const handleApprove = (paper: Paper) => {
+  approveTarget.value = paper
+  showApproveModal.value = true
+}
+
+const confirmApprove = async () => {
+  if (!approveTarget.value) return
+  try {
+    await api.updatePaper(approveTarget.value.id, { status: 'Approved' })
+    showApproveModal.value = false
+    approveTarget.value = null
+    await fetchPapers()
+  } catch {
+    alert('Failed to approve paper.')
+  }
+}
+
+const handleEdit = (paper: Paper) => {
+  editTarget.value = paper
+  editForm.title = paper.title
+  
+  // Split authors by pipe and trim
+  const authorStr = paper.author || ''
+  editForm.authors = authorStr.split('|').map(a => a.trim()).filter(a => a !== '')
+  if (editForm.authors.length === 0) editForm.authors = [''] // Ensure at least one input
+  
+  editForm.department = paper.department || ''
+  editForm.project_type = paper.project_type || ''
+  editForm.degree_program = paper.degree_program || ''
+  editForm.keywords = paper.keywords || ''
+  showEditModal.value = true
+}
+
+const addEditAuthor = () => {
+  editForm.authors.push('')
+}
+
+const removeEditAuthor = (index: number) => {
+  if (editForm.authors.length > 1) {
+    editForm.authors.splice(index, 1)
+  } else {
+    editForm.authors[0] = ''
+  }
+}
+
+const confirmEdit = async () => {
+  if (!editTarget.value) return
+  try {
+    // Join authors back with pipe
+    const authorString = editForm.authors
+      .map(a => a.trim())
+      .filter(a => a !== '')
+      .join(' | ')
+
+    await api.updatePaper(editTarget.value.id, { 
+      ...editForm,
+      author: authorString
+    })
+    showEditModal.value = false
+    editTarget.value = null
+    await fetchPapers()
+  } catch {
+    alert('Failed to update paper metadata.')
   }
 }
 
@@ -1223,6 +1302,9 @@ watch(
           @click="setSection(item.id)" :title="sidebarCollapsed ? item.label : undefined">
           <div class="sb-icon" :class="{ active: activeSection === item.id }">
             <component :is="item.icon" :size="16" stroke-width="2.2" />
+            <div v-if="item.id === 'pending' && pendingCount > 0" class="sb-badge">
+              {{ pendingCount }}
+            </div>
           </div>
           <div class="sb-item-body">
             <span class="sb-item-label">{{ item.label }}</span>
@@ -1532,8 +1614,6 @@ watch(
                       <option>N/A</option>
                       <option>BSCS</option>
                       <option>BSIT</option>
-                      <option>BSIS</option>
-                      <option>BSCpE</option>
                     </select>
                   </div>
                   <div class="fg">
@@ -1738,6 +1818,14 @@ watch(
                 <span class="stat-val">{{ yearSpan }}</span><span class="stat-lbl">Year Span</span>
               </div>
             </div>
+            <div class="stat-card" @click="setSection('pending')" style="cursor: pointer;">
+              <div class="stat-ico amber">
+                <Clock :size="15" />
+              </div>
+              <div>
+                <span class="stat-val">{{ pendingCount }}</span><span class="stat-lbl">Pending Request</span>
+              </div>
+            </div>
           </div>
 
           <!-- Creative Analytics Section -->
@@ -1752,8 +1840,8 @@ watch(
                   background: `conic-gradient(var(--blue) 0% ${statsPercentages.thesis}%, var(--orange) ${statsPercentages.thesis}% 100%)`,
                 }">
                   <div class="pie-center">
-                    <span class="pie-total">{{ repoStats.total_papers }}</span>
-                    <span class="pie-label">Indexed</span>
+                    <span class="pie-total">{{ totalPapers }}</span>
+                    <span class="pie-label">Approved</span>
                   </div>
                 </div>
                 <div class="pie-legend">
@@ -1820,13 +1908,13 @@ watch(
               <table class="tbl">
                 <thead>
                   <tr>
-                    <th>Research Paper</th>
-                    <th>Year</th>
-                    <th>Department</th>
-                    <th>Type</th>
-                    <th>Uploaded By</th>
-                    <th>Role</th>
-                    <th class="th-r">Actions</th>
+                    <th style="width: 50%">Research Paper</th>
+                    <th style="width: 80px">Status</th>
+                    <th style="width: 15%">Department</th>
+                    <th style="width: 80px">Type</th>
+                    <th style="width: 120px">Uploaded By</th>
+                    <th style="width: 80px">Upload Date</th>
+                    <th style="width: 110px; text-align: center;">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1841,29 +1929,16 @@ watch(
                           </div>
                         </div>
                       </td>
-                      <td>
-                        <div class="skel skel-chip" />
-                      </td>
-                      <td>
-                        <div class="skel skel-chip" />
-                      </td>
-                      <td>
-                        <div class="skel skel-dept" />
-                      </td>
-                      <td>
-                        <div class="skel skel-type" />
-                      </td>
-                      <td>
-                        <div class="skel skel-dept" />
-                      </td>
-                      <td>
-                        <div class="skel skel-chip" />
-                      </td>
+                      <td><div class="skel skel-chip" /></td>
+                      <td><div class="skel skel-dept" /></td>
+                      <td><div class="skel skel-type" /></td>
+                      <td><div class="skel skel-dept" /></td>
+                      <td><div class="skel skel-chip" /></td>
                       <td />
                     </tr>
                   </template>
                   <tr v-else-if="filteredPapers.length === 0">
-                    <td colspan="7">
+                    <td colspan="8">
                       <div class="tbl-empty">
                         <FolderOpen :size="40" />
                         <h3>No papers found</h3>
@@ -1881,20 +1956,22 @@ watch(
                       </div>
                     </td>
                   </tr>
-                  <tr v-for="paper in filteredPapers" :key="paper.id" class="tbl-row">
+                   <tr v-for="paper in filteredPapers" :key="paper.id" class="tbl-row">
                     <td class="td-paper">
                       <div class="paper-cell">
                         <div class="paper-av" :data-t="typeColor(paper.project_type)">
                           {{ initials(paper.title) }}
                         </div>
                         <div class="paper-info">
-                          <span class="paper-name">{{ paper.title }}</span><span class="paper-author">{{ paper.author
-                          }}</span>
+                          <span class="paper-name clickable" @click="viewDetails(paper)" :title="paper.title">{{ paper.title }}</span>
+                          <span class="paper-author">{{ (paper.author || '').replace(/\|/g, ', ') }}</span>
                         </div>
                       </div>
                     </td>
                     <td>
-                      <span class="year-chip">{{ paper.year }}</span>
+                      <span class="type-badge" :class="paper.status === 'Approved' ? 'green' : 'amber'">
+                        {{ paper.status ?? 'Approved' }}
+                      </span>
                     </td>
                     <td>
                       <span class="dept-chip">{{ paper.department }}</span>
@@ -1905,26 +1982,133 @@ watch(
                       }}</span>
                     </td>
                     <td>
-                      <span class="uploader-chip">{{ paper.uploaded_by ?? '—' }}</span>
+                      <div class="uploader-cell">
+                        <span class="uploader-name">{{ paper.uploaded_by ?? '—' }}</span>
+                        <span class="uploader-role-tag" :class="paper.uploader_role?.toLowerCase()">{{ paper.uploader_role }}</span>
+                      </div>
                     </td>
                     <td>
-                      <span class="type-badge" :class="paper.uploader_role === 'Admin'
-                        ? 'purple'
-                        : paper.uploader_role === 'Faculty'
-                          ? 'green'
-                          : 'blue'
-                        ">
-                        {{ paper.uploader_role ?? '—' }}
-                      </span>
+                      <span class="upload-time-mini">{{ formatRelativeTime(paper.created_at) }}</span>
                     </td>
-                    <td class="td-r">
-                      <button v-if="canEdit" @click="openEditModal(paper)" class="row-btn" title="Edit">
-                        <Edit3 :size="13" />
-                      </button>
-                      <button v-if="isAdmin || isFaculty" @click="handleDelete(paper.id)" class="row-btn danger"
-                        title="Delete">
-                        <Trash2 :size="13" />
-                      </button>
+                    <td style="text-align: center;">
+                      <div class="action-group">
+                        <button @click="handleEdit(paper)" class="row-btn" title="Edit Metadata">
+                          <Edit3 :size="13" />
+                        </button>
+                        <button v-if="isAdmin || isFaculty" @click="handleDelete(paper.id)" class="row-btn danger" title="Delete">
+                          <Trash2 :size="13" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </template>
+
+        <!-- ══ PENDING APPROVALS ═════════════════════════════════ -->
+        <template v-else-if="activeSection === 'pending'">
+          <div class="page-head">
+            <h1 class="page-title">Pending Requests</h1>
+            <p class="page-sub">Verify and approve new thesis submissions before they become public.</p>
+          </div>
+
+          <div class="stats-row">
+            <div class="stat-card">
+              <div class="stat-ico amber">
+                <Clock :size="15" />
+              </div>
+              <div>
+                <span class="stat-val">{{ pendingCount }}</span><span class="stat-lbl">Waiting for Review</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="toolbar">
+            <div class="search-box">
+              <Search :size="13" class="search-ico" />
+              <input v-model="searchQuery" type="text" placeholder="Filter pending by title or author…" />
+            </div>
+          </div>
+
+          <div class="tbl-card">
+            <div class="tbl-card-head">
+              <span class="tbl-count">Queue: {{ pendingPapers.length }} paper{{
+                pendingPapers.length !== 1 ? 's' : ''
+                }} awaiting approval</span>
+            </div>
+            <div class="tbl-scroll">
+              <table class="tbl">
+                <thead>
+                  <tr>
+                    <th style="width: 50%">Research Paper</th>
+                    <th style="width: 80px">Status</th>
+                    <th style="width: 15%">Department</th>
+                    <th style="width: 80px">Type</th>
+                    <th style="width: 120px">Uploaded By</th>
+                    <th style="width: 80px">Upload Date</th>
+                    <th style="width: 180px; text-align: center;">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <template v-if="loading">
+                    <tr v-for="i in 3" :key="'psk' + i" class="skel-row">
+                      <td colspan="6"><div class="skel skel-t1" /></td>
+                    </tr>
+                  </template>
+                   <tr v-else-if="pendingPapers.length === 0">
+                    <td colspan="7">
+                      <div class="tbl-empty">
+                        <CheckCircle :size="40" />
+                        <h3>All caught up!</h3>
+                        <p>No papers currently awaiting approval.</p>
+                      </div>
+                    </td>
+                  </tr>
+                  <tr v-for="paper in pendingPapers" :key="paper.id" class="tbl-row pending-row">
+                    <td class="td-paper">
+                      <div class="paper-cell">
+                        <div class="paper-av" :data-t="typeColor(paper.project_type)">
+                          {{ initials(paper.title) }}
+                        </div>
+                        <div class="paper-info">
+                          <span class="paper-name clickable" @click="viewDetails(paper)" :title="paper.title">{{ paper.title }}</span>
+                          <span class="paper-author">{{ (paper.author || '').replace(/\|/g, ', ') }}</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td>
+                      <span class="type-badge amber">Pending</span>
+                    </td>
+                    <td>
+                      <span class="dept-text">{{ paper.department }}</span>
+                    </td>
+                    <td>
+                      <span class="type-badge" :class="typeColor(paper.project_type)">{{
+                        paper.project_type
+                      }}</span>
+                    </td>
+                    <td>
+                      <div class="uploader-cell">
+                        <span class="uploader-name">{{ paper.uploaded_by ?? '—' }}</span>
+                        <span class="uploader-role-tag" :class="paper.uploader_role?.toLowerCase()">{{ paper.uploader_role }}</span>
+                      </div>
+                    </td>
+                    <td>
+                      <span class="upload-time-mini">{{ formatRelativeTime(paper.created_at) }}</span>
+                    </td>
+                    <td style="text-align: center;">
+                      <div class="action-group">
+                        <button @click="handleApprove(paper)" class="approve-pill" title="Approve submission">
+                          <Check :size="14" />
+                          <span>Approve</span>
+                        </button>
+                        <div class="action-sep" />
+                        <button v-if="isAdmin || isFaculty" @click="handleDelete(paper.id)" class="icon-action-btn danger" title="Reject/Delete">
+                          <Trash2 :size="14" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 </tbody>
@@ -2110,7 +2294,7 @@ watch(
                     </tr>
                   </template>
                   <tr v-else-if="logs.length === 0">
-                    <td colspan="5">
+                    <td colspan="6">
                       <div class="tbl-empty">
                         <Clock :size="40" />
                         <h3>No activity yet</h3>
@@ -2191,12 +2375,12 @@ watch(
               <table class="tbl">
                 <thead>
                   <tr>
-                    <th>Research Paper</th>
-                    <th>Year</th>
-                    <th>Type</th>
-                    <th>Deleted By</th>
-                    <th>Days Remaining</th>
-                    <th class="th-r">Actions</th>
+                    <th style="width: 50%">Research Paper</th>
+                    <th style="width: 15%">Department</th>
+                    <th style="width: 80px">Type</th>
+                    <th style="width: 120px">Deleted By</th>
+                    <th style="width: 80px">Days Remaining</th>
+                    <th style="width: 110px; text-align: center;">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2242,12 +2426,12 @@ watch(
                         </div>
                         <div class="paper-info">
                           <span class="paper-name">{{ paper.title }}</span>
-                          <span class="paper-author">{{ paper.author }}</span>
+                          <span class="paper-author">{{ (paper.author || '').replace(/\|/g, ', ') }}</span>
                         </div>
                       </div>
                     </td>
                     <td>
-                      <span class="year-chip">{{ paper.year }}</span>
+                      <span class="dept-text">{{ paper.department }}</span>
                     </td>
                     <td>
                       <span class="type-badge" :class="typeColor(paper.project_type)">{{
@@ -2262,14 +2446,16 @@ watch(
                         {{ daysRemaining(paper.deleted_at!) }}d left
                       </span>
                     </td>
-                    <td class="td-r">
-                      <button @click="handleRestore(paper)" class="row-btn restore-btn" title="Restore">
-                        <ArchiveRestore :size="13" />
-                      </button>
-                      <button v-if="isAdmin" @click="openPurgeModal(paper)" class="row-btn danger"
-                        title="Delete permanently">
-                        <Trash2 :size="13" />
-                      </button>
+                    <td style="text-align: center;">
+                      <div class="action-group">
+                        <button @click="handleRestore(paper)" class="row-btn restore-btn" title="Restore paper">
+                          <ArchiveRestore :size="13" />
+                        </button>
+                        <div class="action-sep" />
+                        <button @click="openPurgeModal(paper)" class="row-btn danger" title="Purge permanently">
+                          <Trash2 :size="13" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 </tbody>
@@ -2483,90 +2669,232 @@ watch(
           </div>
         </Teleport>
       </div>
-      <!-- ══ EDIT MODAL (Simplified) ════════════════════════════ -->
+
+      <!-- ══ APPROVE MODAL (Minimal) ════════════════════════════ -->
       <Teleport to="body">
-        <div v-if="showEditModal" class="modal-overlay" @click.self="closeEditModal">
-          <div class="modal-card edit-modal-card">
+        <div v-if="showApproveModal && approveTarget" class="modal-overlay" @click.self="showApproveModal = false">
+          <div class="modal-card mini">
             <div class="modal-head">
-              <div class="modal-head-icon">
-                <Edit3 :size="18" />
-              </div>
               <div>
-                <h3>Edit Metadata</h3>
-                <p>
-                  Update metadata for <strong>THESIS ID #{{ editingPaper.id }}</strong>
-                </p>
+                <h3>Confirm Approval</h3>
+                <p>Make this research public?</p>
               </div>
+              <button @click="showApproveModal = false" class="modal-close">
+                <X :size="18" />
+              </button>
             </div>
-
             <div class="modal-body">
-              <div class="edit-form-minimal">
-                <div class="fg">
-                  <label>Research Title</label>
-                  <textarea v-model="editingPaper.title" rows="3" placeholder="Full Title..." />
-                </div>
-
-                <div class="fg">
-                  <label>Authors</label>
-                  <div class="authors-stack">
-                    <div v-for="(author, index) in editAuthors" :key="index" class="author-row">
-                      <input v-model="editAuthors[index]" type="text" placeholder="Author Name" />
-                      <button @click="removeEditAuthor(index)" class="icon-btn red">
-                        <Trash2 :size="14" />
-                      </button>
-                    </div>
-                    <button @click="addEditAuthor" class="add-btn">
-                      <Plus :size="12" /> Add Author
-                    </button>
-                  </div>
-                </div>
-
-                <div class="fg-row">
-                  <div class="fg">
-                    <label>Publication Year</label>
-                    <input v-model="editingPaper.year" type="text" placeholder="Year" />
-                  </div>
-                  <div class="fg">
-                    <label>Project Type</label>
-                    <select v-model="editingPaper.project_type">
-                      <option value="Thesis">Thesis</option>
-                      <option value="Capstone Project">Capstone Project</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div class="fg">
-                  <label>Department</label>
-                  <select v-model="editingPaper.department">
-                    <option>N/A</option>
-                    <option>Department of Computer Science</option>
-                    <option>Department of Information Technology</option>
-                  </select>
-                </div>
-
-                <div class="fg">
-                  <label>Keywords</label>
-                  <input v-model="editingPaper.keywords" type="text" placeholder="AI, NLP, BERT..." />
-                </div>
-
-                <div class="fg">
-                  <label>Abstract</label>
-                  <textarea v-model="editingPaper.abstract" rows="8" placeholder="Paper Abstract..." />
-                </div>
+              <h4 class="approve-q">Do you want to approve this research?</h4>
+              <div class="approve-title-card">
+                {{ approveTarget.title }}
               </div>
+              <p class="approve-final-msg">
+                Once confirmed, it will become searchable by all users in the system.
+              </p>
             </div>
-
             <div class="modal-foot">
-              <button @click="closeEditModal" class="ghost-btn">Cancel</button>
-              <button @click="handleUpdate" :disabled="updating" class="save-btn">
-                <Loader2 v-if="updating" :size="13" class="spin" />
-                <Save v-else :size="13" />
-                {{ updating ? 'Saving...' : 'Update Metadata' }}
+              <button @click="showApproveModal = false" class="ghost-btn">Cancel</button>
+              <button @click="confirmApprove" class="save-btn success">
+                <Check :size="14" />
+                <span>Confirm</span>
               </button>
             </div>
           </div>
         </div>
       </Teleport>
+
+      <!-- ══ EDIT METADATA MODAL ══════════════════════════════════ -->
+      <Teleport to="body">
+        <div v-if="showEditModal && editTarget" class="modal-overlay" @click.self="showEditModal = false">
+          <div class="modal-card edit-modal">
+            <div class="modal-head">
+              <div class="modal-head-icon green">
+                <Edit3 :size="20" />
+              </div>
+              <div>
+                <h3>Edit Metadata</h3>
+                <p>Update research details</p>
+              </div>
+              <button @click="showEditModal = false" class="modal-close">
+                <X :size="18" />
+              </button>
+            </div>
+            <div class="modal-body">
+              <div class="edit-form-grid">
+                <div class="input-field full">
+                  <label>Research Title</label>
+                  <textarea v-model="editForm.title" rows="3" placeholder="Enter full title..."></textarea>
+                </div>
+                <div class="input-field full">
+                  <label>Authors & Contributors</label>
+                  <div class="authors-list">
+                    <div v-for="(author, index) in editForm.authors" :key="index" class="author-input-row">
+                      <div class="row-index">{{ index + 1 }}</div>
+                      <input v-model="editForm.authors[index]" type="text" placeholder="Full Name" />
+                      <button @click="removeEditAuthor(index)" class="remove-author-btn" title="Remove Author">
+                        <Trash2 :size="14" />
+                      </button>
+                    </div>
+                  </div>
+                  <button @click="addEditAuthor" class="add-author-btn">
+                    <Plus :size="13" />
+                    <span>Add Another Author</span>
+                  </button>
+                </div>
+                <div class="input-field">
+                  <label>Department</label>
+                  <input v-model="editForm.department" type="text" />
+                </div>
+                <div class="input-field">
+                  <label>Degree Program</label>
+                  <input v-model="editForm.degree_program" type="text" />
+                </div>
+                <div class="input-field">
+                  <label>Project Type</label>
+                  <select v-model="editForm.project_type">
+                    <option value="Thesis">Thesis</option>
+                    <option value="Capstone Project">Capstone Project</option>
+                  </select>
+                </div>
+                <div class="input-field">
+                  <label>Keywords (Comma separated)</label>
+                  <input v-model="editForm.keywords" type="text" />
+                </div>
+              </div>
+            </div>
+            <div class="modal-foot">
+              <button @click="showEditModal = false" class="ghost-btn">Discard</button>
+              <button @click="confirmEdit" class="save-btn green">
+                <Save :size="14" />
+                <span>Save Changes</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </Teleport>
+
+      <!-- ══ DETAILS MODAL (Premium Redesign) ════════════════════════ -->
+      <Teleport to="body">
+        <div v-if="showDetailsModal && detailsTarget" class="modal-overlay" @click.self="showDetailsModal = false">
+          <div class="modal-card details-modal-v2">
+            <div class="modal-head">
+              <div class="modal-head-icon blue">
+                <FileText :size="22" />
+              </div>
+              <div class="modal-head-txt">
+                <h3>Research Insight</h3>
+                <p>Advanced Metadata Overview</p>
+              </div>
+              <button @click="showDetailsModal = false" class="modal-close">
+                <X :size="18" />
+              </button>
+            </div>
+
+            <div class="modal-body p-0">
+              <!-- Hero Header -->
+              <div class="details-hero">
+                <div class="hero-label">Research Title</div>
+                <h2 class="hero-title">{{ detailsTarget.title }}</h2>
+                <div class="hero-authors">
+                  <User :size="14" />
+                  <span>{{ (detailsTarget.author || '').replace(/\|/g, ', ') }}</span>
+                </div>
+              </div>
+
+              <div class="details-content-wrap">
+                <!-- Status Row -->
+                <div class="status-ribbon">
+                   <div class="ribbon-item">
+                     <label>Verification Status</label>
+                     <span class="type-badge" :class="detailsTarget.status === 'Approved' ? 'green' : 'amber'">
+                       <CheckCircle v-if="detailsTarget.status === 'Approved'" :size="12" />
+                       <Clock v-else :size="12" />
+                       {{ detailsTarget.status }}
+                     </span>
+                   </div>
+                   <div class="ribbon-item">
+                     <label>Project Classification</label>
+                     <span class="type-badge" :class="typeColor(detailsTarget.project_type)">
+                       <Bookmark :size="12" />
+                       {{ detailsTarget.project_type }}
+                     </span>
+                   </div>
+                </div>
+
+                <!-- Main Info Grid -->
+                <div class="info-grid-v2">
+                  <div class="info-card">
+                    <div class="ic-head"><Building2 :size="14" /><span>Department</span></div>
+                    <div class="ic-body">{{ detailsTarget.department }}</div>
+                  </div>
+                  <div class="info-card">
+                    <div class="ic-head"><GraduationCap :size="14" /><span>Program</span></div>
+                    <div class="ic-body">{{ detailsTarget.degree_program || '—' }}</div>
+                  </div>
+                  <div class="info-card">
+                    <div class="ic-head"><Hash :size="14" /><span>Keywords</span></div>
+                    <div class="ic-body">
+                      <div v-if="detailsTarget.keywords" class="kw-flex">
+                        <span v-for="kw in detailsTarget.keywords.split(',')" :key="kw" class="kw-pill-v2">{{ kw.trim() }}</span>
+                      </div>
+                      <span v-else class="val-empty">No keywords defined</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Audit Trail Section -->
+                <div class="audit-trail-v2">
+                  <div class="audit-head">
+                    <History :size="14" />
+                    <span>Audit Trail & Lifecycle</span>
+                  </div>
+                  <div class="audit-grid">
+                    <div class="audit-node">
+                      <div class="node-label">Uploaded By</div>
+                      <div class="node-card">
+                        <div class="node-avatar">{{ initials(detailsTarget.uploaded_by || '') }}</div>
+                        <div class="node-info">
+                          <span class="node-name">{{ detailsTarget.uploaded_by }}</span>
+                          <span class="node-role" :class="detailsTarget.uploader_role?.toLowerCase()">{{ detailsTarget.uploader_role }}</span>
+                        </div>
+                      </div>
+                      <div class="node-time">{{ formatLogDate(detailsTarget.created_at || '') }}</div>
+                    </div>
+
+                    <div class="audit-sep">
+                       <ArrowRight :size="16" />
+                    </div>
+
+                    <div class="audit-node">
+                      <div class="node-label">Approved By</div>
+                      <div v-if="detailsTarget.approved_by" class="node-card success">
+                        <div class="node-avatar">{{ initials(detailsTarget.approved_by) }}</div>
+                        <div class="node-info">
+                          <span class="node-name">{{ detailsTarget.approved_by }}</span>
+                          <span class="node-role admin">Approver</span>
+                        </div>
+                      </div>
+                      <div v-else class="node-card empty">
+                        <span class="node-placeholder">Auto-approved / System</span>
+                      </div>
+                      <div class="node-time" v-if="detailsTarget.approved_at">{{ formatLogDate(detailsTarget.approved_at) }}</div>
+                      <div class="node-time" v-else>—</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="modal-foot">
+              <button @click="showDetailsModal = false" class="btn-pri-v2">
+                <span>Dismiss Overview</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </Teleport>
+      <!-- ══ EDIT MODAL (Simplified) ════════════════════════════ -->
+      <!-- ══ EDIT MODAL REMOVED ════════════════════════════ -->
     </div>
     <!-- Close mgmt-main -->
   </div>
@@ -2587,7 +2915,7 @@ watch(
   --green-deep: #06402b;
   --green-dim: #e6f4ed;
   --hero: #0d1f12;
-  --sb-w: 220px;
+  --sb-w: 240px;
   --blue: #2563eb;
   --orange: #c2410c;
   --purple: #7c3aed;
@@ -2701,7 +3029,7 @@ watch(
 .sb-item {
   display: flex;
   align-items: center;
-  gap: 0.8rem;
+  gap: 0.65rem;
   width: 100%;
   background: transparent;
   border: none;
@@ -2792,6 +3120,56 @@ watch(
   z-index: 1;
 }
 
+.sb-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  background: #ef4444; /* Vibrant red */
+  color: white;
+  font-size: 0.62rem;
+  font-weight: 800;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 2px;
+  border: 2px solid var(--sb-bg);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  z-index: 10;
+  animation: badge-pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes badge-pop {
+  0% { transform: scale(0); }
+  100% { transform: scale(1); }
+}
+
+.uploader-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  line-height: 1;
+  margin-top: 2px;
+}
+
+.meta-dot {
+  font-size: 0.8rem;
+  color: var(--ink-3);
+  opacity: 0.5;
+  display: inline-flex;
+  align-items: center;
+  height: 10px;
+}
+
+.upload-time-mini {
+  font-size: 0.64rem;
+  color: var(--ink-3);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
 .sidebar.collapsed .sb-icon {
   background: transparent;
 }
@@ -2809,14 +3187,14 @@ watch(
 
 .sb-item-label {
   display: block;
-  font-size: 0.84rem;
+  font-size: 0.82rem;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.85);
 }
 
 .sb-item-desc {
   display: block;
-  font-size: 0.68rem;
+  font-size: 0.64rem;
   color: rgba(255, 255, 255, 0.3);
   white-space: nowrap;
   overflow: hidden;
@@ -3334,7 +3712,8 @@ watch(
 .tbl {
   width: 100%;
   border-collapse: collapse;
-  min-width: 580px;
+  min-width: 800px;
+  table-layout: fixed;
 }
 
 .tbl thead th {
@@ -3457,28 +3836,30 @@ watch(
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  padding: 0.2rem 0.5rem;
-  border-radius: 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 
 .type-badge.blue {
-  background: #eff6ff;
   color: #2563eb;
 }
 
 .type-badge.orange {
-  background: #fff7ed;
   color: #c2410c;
 }
 
 .type-badge.green {
-  background: var(--green-dim);
   color: var(--green-dk);
 }
 
 .type-badge.purple {
-  background: #f5f3ff;
   color: #7c3aed;
+}
+
+.type-badge.amber {
+  color: #b45309;
 }
 
 .row-btn {
@@ -3498,6 +3879,128 @@ watch(
   border-color: var(--green);
   color: var(--green-dk);
   background: var(--green-dim);
+}
+
+/* ── Pending Table Refinements ────────────────────────── */
+.pending-row {
+  transition: background 0.2s ease;
+}
+
+.pending-row:hover {
+  background: var(--surface) !important;
+}
+
+.pending-row .paper-name {
+  text-transform: uppercase; /* Keeping it bold but clean */
+  font-size: 0.88rem;
+  letter-spacing: 0.01em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.4;
+}
+
+.pending-row .paper-author {
+  font-size: 0.72rem;
+  color: var(--ink-3);
+  font-weight: 500;
+  margin-top: 2px;
+}
+
+.dept-text {
+  font-size: 0.75rem;
+  color: var(--ink-2);
+  font-weight: 500;
+}
+
+.uploader-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.uploader-name {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.uploader-role-tag {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-3);
+}
+
+.uploader-role-tag.admin { color: var(--purple); }
+.uploader-role-tag.faculty { color: var(--green-dk); }
+.uploader-role-tag.student { color: var(--blue); }
+
+.action-group {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface);
+  padding: 0.25rem;
+  border-radius: 10px;
+  border: 1px solid var(--rule);
+  width: max-content;
+  margin: 0 auto;
+}
+
+.approve-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.8rem;
+  background: #fff;
+  border: 1px solid var(--green);
+  border-radius: 8px;
+  color: var(--green-dk);
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.approve-pill:hover {
+  background: var(--green);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(0, 166, 81, 0.15);
+}
+
+.action-sep {
+  width: 1px;
+  height: 16px;
+  background: var(--rule);
+}
+
+.icon-action-btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.icon-action-btn:hover {
+  background: #fff;
+  color: var(--ink);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+}
+
+.icon-action-btn.danger:hover {
+  background: #fef2f2;
+  color: #ef4444;
 }
 
 .row-btn.danger:hover {
@@ -4050,6 +4553,138 @@ watch(
 
 .sample-doc-row:hover .sample-doc-grip {
   opacity: 0.7;
+}
+
+/* ── DYNAMIC AUTHORS LIST ─────────────────────────────────────── */
+.authors-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.author-input-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.row-index {
+  width: 24px;
+  height: 24px;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.65rem;
+  font-weight: 800;
+  color: var(--ink-3);
+}
+
+.remove-author-btn {
+  background: #fef2f2;
+  color: #ef4444;
+  border: 1px solid #fee2e2;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.remove-author-btn:hover {
+  background: #fee2e2;
+  transform: scale(1.05);
+}
+
+.add-author-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: #f0fdf4;
+  color: var(--green);
+  border: 1px solid #d1fae5;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.add-author-btn:hover {
+  background: #d1fae5;
+  transform: translateY(-1px);
+}
+
+.edit-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+}
+
+.input-field.full {
+  grid-column: span 2;
+}
+
+.input-field label {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 0.5rem;
+}
+
+.input-field input,
+.input-field textarea,
+.input-field select {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 0.9rem;
+  font-family: inherit;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.input-field textarea {
+  resize: vertical;
+}
+
+.input-field input:focus,
+.input-field textarea:focus,
+.input-field select:focus {
+  outline: none;
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px rgba(0, 166, 81, 0.1);
+}
+
+.save-btn.green {
+  background: var(--green);
+  color: #fff;
+}
+
+.save-btn.green:hover {
+  background: var(--green-dk);
+}
+
+.modal-head-icon.green {
+  background: #ecfdf5;
+  color: var(--green);
+}
+
+.action-group {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
 }
 
 .sample-doc-actions {
@@ -6316,5 +6951,361 @@ watch(
   margin-left: auto;
   color: inherit;
   cursor: pointer
+}
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 1.5rem;
+}
+
+.modal-card.mini {
+  max-width: 400px;
+}
+
+.confirm-content {
+  padding: 0.5rem 0;
+}
+
+.confirm-text {
+  font-size: 0.9rem;
+  color: var(--ink-2);
+  line-height: 1.5;
+  margin-bottom: 1rem;
+}
+
+.confirm-note {
+  font-size: 0.8rem;
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  color: var(--ink-3);
+  border-left: 3px solid var(--green);
+}
+
+.approve-q {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 0 0 0.75rem 0;
+}
+
+.approve-title-card {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: 1rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--ink-2);
+  line-height: 1.5;
+  margin-bottom: 1rem;
+}
+
+.approve-final-msg {
+  font-size: 0.82rem;
+  color: var(--ink-3);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.save-btn.success {
+  background: var(--green);
+  border-color: var(--green);
+  color: #fff;
+}
+
+.save-btn.success:hover {
+  background: var(--green-dk);
+}
+.paper-name.clickable {
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.paper-name.clickable:hover {
+  color: var(--green);
+  text-decoration: underline;
+}
+
+/* ── DETAILS MODAL V2 (Compact Branded) ─────────────────────────── */
+.details-modal-v2 {
+  max-width: 700px;
+  width: 95%;
+  overflow: hidden;
+  border: none;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.25);
+  border-radius: 12px;
+}
+
+.details-hero {
+  background: linear-gradient(135deg, var(--green-dk) 0%, var(--green) 100%);
+  color: #fff;
+  padding: 1.25rem 1.5rem;
+  position: relative;
+}
+
+.hero-label {
+  font-size: 0.6rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: rgba(255, 255, 255, 0.6);
+  margin-bottom: 0.4rem;
+}
+
+.hero-title {
+  font-size: 1.25rem;
+  font-weight: 800;
+  line-height: 1.2;
+  margin: 0 0 0.75rem 0;
+  color: #fff;
+}
+
+.hero-authors {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: #fff;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.15);
+  padding: 0.25rem 0.6rem;
+  border-radius: 4px;
+  width: fit-content;
+  backdrop-filter: blur(4px);
+}
+
+.details-content-wrap {
+  padding: 1.25rem 1.5rem;
+  background: #fff;
+}
+
+.status-ribbon {
+  display: flex;
+  gap: 1.5rem;
+  margin-bottom: 1.25rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.ribbon-item label {
+  display: block;
+  font-size: 0.6rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 0.4rem;
+}
+
+.info-grid-v2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.info-card {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  padding: 1rem;
+}
+
+.info-card:hover {
+  border-color: var(--green);
+}
+
+.ic-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.62rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--green-dk);
+  margin-bottom: 0.5rem;
+}
+
+.ic-body {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1.3;
+}
+
+.kw-flex {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.kw-pill-v2 {
+  font-size: 0.6rem;
+  background: #fff;
+  border: 1px solid var(--rule);
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  color: var(--ink-2);
+  font-weight: 700;
+}
+
+.audit-trail-v2 {
+  background: #f8faf8;
+  border: 1px solid #e2ece2;
+  border-radius: 12px;
+  padding: 1.25rem;
+}
+
+.audit-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--green-dk);
+  margin-bottom: 1rem;
+}
+
+.audit-grid {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.audit-node {
+  flex: 1;
+}
+
+.node-label {
+  font-size: 0.6rem;
+  font-weight: 800;
+  color: var(--ink-3);
+  margin-bottom: 0.4rem;
+  text-transform: uppercase;
+}
+
+.node-card {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: #fff;
+  border: 1px solid var(--rule);
+  padding: 0.6rem 0.75rem;
+  border-radius: 8px;
+  margin-bottom: 0.4rem;
+}
+
+.node-card.success {
+  border-color: var(--green);
+  background: #f0fdf4;
+}
+
+.node-card.empty {
+  background: #fafafa;
+  border-style: dashed;
+  height: 40px;
+  justify-content: center;
+}
+
+.node-avatar {
+  width: 28px;
+  height: 28px;
+  background: var(--ink-3);
+  color: #fff;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.node-card.success .node-avatar {
+  background: var(--green);
+}
+
+.node-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.node-name {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.node-role {
+  font-size: 0.62rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.node-role.admin { color: #7c3aed; }
+.node-role.faculty { color: #059669; }
+.node-role.student { color: #2563eb; }
+
+.node-placeholder {
+  font-size: 0.75rem;
+  font-style: italic;
+  color: var(--ink-3);
+}
+
+.node-time {
+  font-size: 0.7rem;
+  color: var(--ink-3);
+  font-weight: 600;
+}
+
+.audit-sep {
+  padding-top: 2rem;
+  color: var(--green);
+  opacity: 0.3;
+}
+
+.btn-pri-v2 {
+  width: 100%;
+  background: var(--green);
+  color: #fff;
+  border: none;
+  padding: 0.85rem;
+  border-radius: 8px;
+  font-weight: 800;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-pri-v2:hover {
+  background: var(--green-dk);
+  transform: translateY(-1px);
+}
+
+.val-empty {
+  font-size: 0.78rem;
+  color: var(--ink-3);
+  font-style: italic;
+}
+
+.type-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 6px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
 }
 </style>

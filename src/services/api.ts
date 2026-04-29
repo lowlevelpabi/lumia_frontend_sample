@@ -49,6 +49,10 @@ export interface Paper {
   // Soft-delete / Recycle Bin
   deleted_at?: string | null
   deleted_by?: string | null
+  status?: string
+  created_at?: string
+  approved_by?: string
+  approved_at?: string
 }
 
 export type PaperMetadata = Omit<Paper, 'id' | 'view_count' | 'citation_count'>
@@ -57,6 +61,7 @@ export type PartialPaperMetadata = Partial<PaperMetadata>
 export interface SearchResult {
   id: string
   score: number
+  recommendation_reason?: string
   payload: {
     title: string
     author: string
@@ -69,6 +74,7 @@ export interface SearchResult {
     created_at?: string
     uploaded_by?: string
     uploader_role?: string
+    status?: string
   }
 }
 
@@ -133,6 +139,7 @@ export interface PaperUpdate {
   section_pages?: Record<string, number[]>
   detected_subheadings?: string[]
   references?: string
+  status?: string
 }
 
 export interface UserData {

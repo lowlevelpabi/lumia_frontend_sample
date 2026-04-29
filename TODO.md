@@ -45,8 +45,6 @@
 
 - [x] **Downloadable PDF Bug** - The downloadable pdf imrad format of the study producing a bug where the text is being gray out (used gray font color) and some part is still bright black color. (Give at least 1-3 sample image of the bug). Also the page number in the downloadable pdf is like doubled or duplicated or something? (Give at least 1-3 image of the problem with the page number).
 
-## Next Agenda
-
 - [x] **User Guide in UI** - At least have a structural guide or manual how to use the system or how to conduct the evaluation for online evaluation and not meetup setup.
 
 - [x] **Bookmark** - Should have at least a bookmark for user aside from citate.
@@ -55,43 +53,28 @@
 
 - [x] **Credibility/Access** - Give credibility to student to upload their own study. If the student name from the uploaded thesis or capstone is the same as the user's name, then in that user's profile, there should be a tab for "My Uploads" and in that tab, the user can see the list of thesis and capstone that they uploaded. For example: If author 1 uploaded their study, when author 2 and 3 create its account or already created an account, they can see the list of thesis and capstone that author 1 uploaded in their profile.
 
----
+## Next Agenda
 
-### Possible Approaches for Citation
+- [x] **Recommendation Issue** - Fix the issue with recommendation algorithm or logic to don't recommend anything related studies if the current research paper that the user viewing or browsing is not related or the context of the study is not related to the recommended studies. (During presentation, the system recommend system that is not related to the study or it is only recommending by Title. The recommendation module should be context aware also, similar to the search query logic)
 
-- [ ] **Option A — Citation Context**
-      When a user clicks "Cite this study", instead of just incrementing a counter, show a small optional prompt:
+- [x] **Comprehensive IMRaD** - Improve the IMRaD extraction to be "comprehensive" (no cut-offs, proper sub-heading detection, and better structural flow).
 
-  > _"What paper are you writing this for?"_ `[ Title of your paper ]` — a free-text field, optional
+- [x] **Abstract Extraction** - Fix the issue where Abstract content is being cut off. Implement logic to flag exactly where it starts and ends to ensure full capture.
 
-  **Store this as a citation_context on the existing UserCitation record. Now we have:**
-  - Who cited it (the user, already tracked)
-  - What paper they claim to be writing (self-reported, unverified)
-  - When they cited it
+- [x] **Author Extraction Accuracy** - Refine the author capture logic to work accurately across different document formats.
 
-- [ ] **Option B — Internal Citation Gaph**
-      Add a cited_paper_id foreign key to UserCitation. When a student clicks Cite on Paper A, optionally ask:
+- [x] **UI Refinement (Year/Title)** - Move the publication year (e.g., 2024) next to the Title in the detail view for better visual clarity.
 
-  > _"Are you citing this in one of the papers already in our repository?"_ `[ Search our repository ]`
+- [x] **Advanced Citation Logic** -
+  - Implement citation triggers for _both_ the Cite button and PDF Download (as per panel feedback).
+  - Add "Removable Citations": Allow users to toggle their citation on/off.
 
-  If they pick Paper B from the repository, you now have a real A → B edge in a citation graph. This only works for papers already indexed, but that's still meaningful for your department's internal research lineage.
+- [ ] **Enhanced Bookmark Management** - Add "Select All", "Unselect All", and individual deletion/checkboxes within the bookmark modal for easier management.
 
-- [ ] **Option C — Self-Declaration Upload**
-      Let students upload a draft or manuscript of their own paper (not for indexing, just for citation verification). The backend runs `_postprocess_references()` on the references section and checks if any extracted entries fuzzy-match papers already in the repository. Matches create verified citation links automatically.
+- [ ] **PDF Export Styling** - Adjust the fonts and layout in the downloadable PDF IMRaD document for better readability. Make it justified both sides since it is using 2 columns.
 
-  This is essentially what Semantic Scholar does, just scoped to your repository. It reuses your entire existing IMRAD extraction pipeline.
+- [ ] **Student Upload Approval Workflow** -
+  - Implement a "Pending/Approval" state in the management view.
+  - Student uploads are cached in the database and must be approved by Admin/Faculty before becoming public.
 
 ---
-
-## Testing & Reproduction Checklist
-
-- [ ] **1. Create student account**
-- [ ] **2. Upload document**
-- [ ] **3. Review extracted metadata** by the NLP model then index
-- [ ] **4. Go to Explore or Home page**
-- [ ] **5. Select the uploaded article**
-- [ ] **6. Review the comprehensive IMRaD format** the system provides in the UI
-- [ ] **7. Citate** (test citation functionality)
-- [ ] **8. Test PDF Download** and review the IMRaD structure of the manuscript
-- [ ] **9. Others (Management)** (test trash, edit, user roles)
-- [ ] **10. Answer the evaluation form**

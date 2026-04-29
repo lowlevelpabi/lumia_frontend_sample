@@ -23,7 +23,9 @@ const showMobileSearch = ref(false)
 const showProfileMenu = ref(false)
 const showBookmarkModal = ref(false)
 const bookmarks = ref<Paper[]>([])
+const selectedBookmarks = ref<string[]>([])
 const bookmarkLoading = ref(false)
+const removeLoading = ref(false)
 const showLogoutModal = ref(false)
 
 const { isStaff, isStudent, fullName, userRole } = useAuth()
@@ -140,6 +142,34 @@ const openBookmarkModal = async () => {
 
 const closeBookmarkModal = () => {
   showBookmarkModal.value = false
+  selectedBookmarks.value = []
+}
+
+const toggleSelectAll = () => {
+  if (selectedBookmarks.value.length === bookmarks.value.length) {
+    selectedBookmarks.value = []
+  } else {
+    selectedBookmarks.value = bookmarks.value.map(b => b.id)
+  }
+}
+
+const removeSelected = async () => {
+  if (selectedBookmarks.value.length === 0 || removeLoading.value) return
+  
+  removeLoading.value = true
+  try {
+    // We toggle bookmarks for each selected ID. Since they are in the list, 
+    // toggling will remove them.
+    await Promise.all(selectedBookmarks.value.map(id => api.bookmarkPaper(id)))
+    
+    // Refresh list
+    bookmarks.value = await api.getUserBookmarks()
+    selectedBookmarks.value = []
+  } catch (e) {
+    console.error('Bulk removal failed:', e)
+  } finally {
+    removeLoading.value = false
+  }
 }
 </script>
 
@@ -396,20 +426,46 @@ const closeBookmarkModal = () => {
             </div>
 
             <!-- Bookmarks List -->
-            <div v-else-if="bookmarks.length > 0" class="bookmarks-list">
-              <RouterLink v-for="(paper, idx) in bookmarks" :key="paper.id"
-                :to="{ name: 'detail', params: { id: paper.id } }" class="bookmark-item">
-                <div class="bookmark-item-num">{{ String(idx + 1).padStart(2, '0') }}</div>
-                <div class="bookmark-item-body">
-                  <span class="bookmark-item-title">{{ paper.title }}</span>
-                  <span class="bookmark-item-meta">
-                    {{ paper.author }}
-                    <span v-if="paper.year" class="bookmark-item-dot">·</span>
-                    {{ paper.year }}
+            <div v-else-if="bookmarks.length > 0" class="bookmarks-list-wrap">
+              <!-- Bulk Actions Bar -->
+              <div class="modal-bulk-actions">
+                <div class="bulk-stats">
+                  <button class="bulk-toggle-btn" @click="toggleSelectAll">
+                    {{ selectedBookmarks.length === bookmarks.length ? 'Unselect All' : 'Select All' }}
+                  </button>
+                  <span class="selection-count" v-if="selectedBookmarks.length > 0">
+                    {{ selectedBookmarks.length }} selected
                   </span>
                 </div>
-                <ArrowUpRight :size="14" class="bookmark-item-arrow" />
-              </RouterLink>
+                <button v-if="selectedBookmarks.length > 0" 
+                  class="bulk-remove-btn" 
+                  :disabled="removeLoading"
+                  @click="removeSelected">
+                  <X :size="14" />
+                  {{ removeLoading ? 'Removing...' : 'Remove Selected' }}
+                </button>
+              </div>
+
+              <div class="bookmarks-list">
+                <div v-for="(paper, idx) in bookmarks" :key="paper.id" class="bookmark-row">
+                  <label class="bookmark-check">
+                    <input type="checkbox" :value="paper.id" v-model="selectedBookmarks" />
+                    <span class="check-custom"></span>
+                  </label>
+                  <RouterLink :to="{ name: 'detail', params: { id: paper.id } }" class="bookmark-item">
+                    <div class="bookmark-item-num">{{ String(idx + 1).padStart(2, '0') }}</div>
+                    <div class="bookmark-item-body">
+                      <span class="bookmark-item-title">{{ paper.title }}</span>
+                      <span class="bookmark-item-meta">
+                        {{ paper.author }}
+                        <span v-if="paper.year" class="bookmark-item-dot">·</span>
+                        {{ paper.year }}
+                      </span>
+                    </div>
+                    <ArrowUpRight :size="14" class="bookmark-item-arrow" />
+                  </RouterLink>
+                </div>
+              </div>
             </div>
 
             <!-- Empty State -->
@@ -1283,23 +1339,7 @@ const closeBookmarkModal = () => {
   gap: 8px;
 }
 
-.bookmark-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 12px;
-  background: #f5f5f2;
-  border-radius: 8px;
-  text-decoration: none;
-  transition: background 0.2s, box-shadow 0.2s;
-  border: 1px solid #dfe0db;
-}
 
-.bookmark-item:hover {
-  background: #ffffff;
-  border-color: #00a651;
-  box-shadow: 0 2px 8px rgba(0, 166, 81, 0.1);
-}
 
 .bookmark-item-num {
   font-family: 'Lora', serif;
@@ -1409,6 +1449,128 @@ const closeBookmarkModal = () => {
 
 .empty-cta:hover {
   background: #007d3d;
+}
+
+/* ── Bulk Actions ── */
+.modal-bulk-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1.5rem;
+  background: #f8f9f8;
+  border-bottom: 1px solid #dfe0db;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.bulk-stats {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.bulk-toggle-btn {
+  background: none;
+  border: none;
+  color: #00a651;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+
+.selection-count {
+  font-size: 0.75rem;
+  color: #7a7f75;
+  background: #dfe0db;
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+
+.bulk-remove-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #fee2e2;
+  color: #ef4444;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.bulk-remove-btn:hover:not(:disabled) {
+  background: #fecaca;
+}
+
+.bulk-remove-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Bookmark Row with Checkbox ── */
+.bookmark-row {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.bookmark-row:hover {
+  background: #fcfcfc;
+}
+
+.bookmark-check {
+  padding-left: 1.25rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  height: 100%;
+}
+
+.bookmark-check input {
+  display: none;
+}
+
+.check-custom {
+  width: 18px;
+  height: 18px;
+  border: 2px solid #dfe0db;
+  border-radius: 4px;
+  display: inline-block;
+  position: relative;
+  transition: all 0.2s;
+}
+
+.bookmark-check input:checked + .check-custom {
+  background: #00a651;
+  border-color: #00a651;
+}
+
+.bookmark-check input:checked + .check-custom::after {
+  content: '✓';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: white;
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.bookmark-item {
+  flex: 1;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  padding: 1.25rem 1.5rem;
+  gap: 1.25rem;
+  transition: background 0.2s;
+  border-bottom: none !important; /* Managed by row */
 }
 
 /* ── Transitions ─────────────────────────────────────────────── */

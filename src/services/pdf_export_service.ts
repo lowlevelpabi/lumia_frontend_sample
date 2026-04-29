@@ -46,11 +46,17 @@ function stripMarkers(text: string): string {
 // A4 Dimensions in points (72 DPI)
 const A4_WIDTH = 595.28;
 const A4_HEIGHT = 841.89;
-const MARGIN = 40; // Reduced margin slightly to expand column width
-const CONTENT_WIDTH = A4_WIDTH - MARGIN * 2;
+
+// Official Thesis Margins (Inches to Points: 1" = 72pt)
+const MARGIN_LEFT = 108;   // 1.5"
+const MARGIN_RIGHT = 72;  // 1.0"
+const MARGIN_TOP = 72;    // 1.0"
+const MARGIN_BOTTOM = 72; // 1.0"
+
+const CONTENT_WIDTH = A4_WIDTH - MARGIN_LEFT - MARGIN_RIGHT;
 
 // Column configuration
-const COLUMN_GAP = 15; // Slightly reduced gap
+const COLUMN_GAP = 20;
 const COLUMN_WIDTH = (CONTENT_WIDTH - COLUMN_GAP) / 2;
 
 // Fonts
@@ -70,11 +76,11 @@ export const pdfExportService = {
       format: "a4",
     });
 
-    let y = MARGIN;
+    let y = MARGIN_TOP;
     let currentColumn = 0; // 0 for left, 1 for right
-    let columnTopY = MARGIN; // Where the 2-column section starts on the current page
+    let columnTopY = MARGIN_TOP; // Where the 2-column section starts on the current page
 
-    // --- Helper: Add Text with Wraps, Pagination, Column Support, Indent & Justify ---
+    // --- Helper: Add Text with Wraps, Pagination, Column Support, Indent & Manual Justify ---
     const addText = (
       text: string,
       fontSize: number,
@@ -86,76 +92,83 @@ export const pdfExportService = {
     ) => {
       if (!text) return;
 
-      doc.setTextColor(0, 0, 0); // Ensure text is black (prevents footer color bleed)
+      doc.setTextColor(0, 0, 0);
       doc.setFont(FONT_SERIF, fontStyle);
       doc.setFontSize(fontSize);
 
       const targetWidth = useColumns ? COLUMN_WIDTH : CONTENT_WIDTH;
       y += marginTop;
 
-      // Determine whether to apply first-line indent (approx. 1.5rem ≈ 18pt)
-      const FIRST_LINE_INDENT = 18;
-      const shouldIndent = fontStyle === FONT_NORMAL && fontSize <= 11 && align === "justify";
+      // Determine whether to apply first-line indent
+      const FIRST_LINE_INDENT = 24;
+      const shouldIndent = fontStyle === FONT_NORMAL && fontSize <= 12 && align === "justify";
       const indent = shouldIndent ? FIRST_LINE_INDENT : 0;
 
-      // If indent is required, build first line separately then wrap remaining text
       let lines: string[] = [];
       if (indent > 0) {
-        const firstLineCandidatesRaw = doc.splitTextToSize(text, targetWidth - indent);
-        const firstLineCandidates = Array.isArray(firstLineCandidatesRaw)
-          ? firstLineCandidatesRaw
-          : [firstLineCandidatesRaw];
+        const res = doc.splitTextToSize(text, targetWidth - indent);
+        const firstLineCandidates = Array.isArray(res) ? res : [res];
         const firstLine = firstLineCandidates.length > 0 ? String(firstLineCandidates[0]) : "";
         const restStart = text.indexOf(firstLine) + firstLine.length;
         const restText = text.slice(restStart).trimStart();
-        const restLinesRaw = restText ? doc.splitTextToSize(restText, targetWidth) : [];
-        const restLines = Array.isArray(restLinesRaw)
-          ? restLinesRaw
-          : restLinesRaw
-            ? [restLinesRaw]
-            : [];
+        const restLinesRes = restText ? doc.splitTextToSize(restText, targetWidth) : [];
+        const restLines = Array.isArray(restLinesRes) ? restLinesRes : [restLinesRes];
         lines = [firstLine, ...restLines];
       } else {
-        const wrappedRaw = doc.splitTextToSize(text, targetWidth);
-        lines = Array.isArray(wrappedRaw) ? wrappedRaw : wrappedRaw ? [wrappedRaw] : [];
+        const res = doc.splitTextToSize(text, targetWidth);
+        lines = Array.isArray(res) ? res : [res];
       }
 
       for (let i = 0; i < lines.length; i++) {
-        // Check if we need to switch columns or pages
-        if (y + fontSize > A4_HEIGHT - MARGIN) {
+        if (y + fontSize > A4_HEIGHT - MARGIN_BOTTOM) {
           if (useColumns && currentColumn === 0) {
-            // Switch to second column
             currentColumn = 1;
             y = columnTopY;
           } else {
-            // New page
             doc.addPage();
-            pdfExportService.addFooter(doc, paper);
-            y = MARGIN;
-            columnTopY = MARGIN;
+            y = MARGIN_TOP;
+            columnTopY = MARGIN_TOP;
             currentColumn = 0;
           }
-          // Re-apply font settings after page/column switch
           doc.setFont(FONT_SERIF, fontStyle);
           doc.setFontSize(fontSize);
         }
 
-        const line = (lines[i] ?? "") as string;
-        const currentX = useColumns ? MARGIN + currentColumn * (COLUMN_WIDTH + COLUMN_GAP) : MARGIN;
+        const line = (lines[i] || "").trim();
+        const currentX = useColumns
+          ? MARGIN_LEFT + currentColumn * (COLUMN_WIDTH + COLUMN_GAP)
+          : MARGIN_LEFT;
 
-        // Apply indent only to the very first rendered line
         const xForLine = i === 0 && indent > 0 ? currentX + indent : currentX;
-        const maxWidthForLine = i === 0 && indent > 0 ? targetWidth - indent : targetWidth;
+        const widthForLine = i === 0 && indent > 0 ? targetWidth - indent : targetWidth;
 
         if (align === "center") {
-          doc.text(line, A4_WIDTH / 2, y, { align: "center" });
-        } else if (align === "justify" && i < lines.length - 1) {
-          doc.text(line, xForLine, y, { maxWidth: maxWidthForLine, align: "justify" });
+          const pageCenter = (MARGIN_LEFT + (A4_WIDTH - MARGIN_RIGHT)) / 2;
+          doc.text(line, pageCenter, y, { align: "center" });
+        } else if (align === "justify" && i < lines.length - 1 && line.includes(" ")) {
+          // MANUAL JUSTIFICATION
+          const words = line.split(/\s+/);
+          if (words.length > 1) {
+            const totalWordsWidth = words.reduce((acc, w) => acc + doc.getTextWidth(w), 0);
+            const totalSpace = widthForLine - totalWordsWidth;
+            const spaceWidth = totalSpace / (words.length - 1);
+
+            let wordX = xForLine;
+            words.forEach((word, index) => {
+              doc.text(word, wordX, y);
+              wordX += doc.getTextWidth(word);
+              if (index < words.length - 1) {
+                wordX += spaceWidth;
+              }
+            });
+          } else {
+            doc.text(line, xForLine, y);
+          }
         } else {
           doc.text(line, xForLine, y);
         }
 
-        y += fontSize * 1.2; // standard line spacing
+        y += fontSize * 1.5; // Formal spacing
       }
 
       y += marginBottom;
@@ -177,7 +190,7 @@ export const pdfExportService = {
 
     // Abstract (cleaned)
     addText("Abstract", 12, FONT_BOLD, "left", 10, 5, false);
-    addText(paper.abstract ?? "", 11, FONT_NORMAL, "justify", 0, 10, false);
+    addText(paper.abstract ?? "", 12, FONT_NORMAL, "justify", 0, 10, false);
 
     if (paper.keywords) {
       addText(`Keywords: ${paper.keywords}`, 10, FONT_BOLD, "left", 0, 15, false);
@@ -185,7 +198,7 @@ export const pdfExportService = {
 
     // Divider
     doc.setDrawColor(200, 200, 200);
-    doc.line(MARGIN, y, A4_WIDTH - MARGIN, y);
+    doc.line(MARGIN_LEFT, y, A4_WIDTH - MARGIN_RIGHT, y);
     y += 20;
 
     // Set Column start point
@@ -251,13 +264,13 @@ export const pdfExportService = {
             if (block.heading) {
               subheadingIndex += 1;
               const prefix = String.fromCharCode(64 + subheadingIndex) + ". ";
-              addText(prefix + block.heading, 11, FONT_BOLD, "left", 6, 3, true);
+              addText(prefix + block.heading, 12, FONT_BOLD, "left", 6, 3, true);
             }
-            addText(block.body, 11, FONT_NORMAL, "justify", 0, 6, true);
+            addText(block.body, 12, FONT_NORMAL, "justify", 0, 6, true);
           }
         } else if (paper.introduction) {
           // Fallback: strip markers from raw text (summary not yet generated)
-          addText(stripMarkers(paper.introduction), 11, FONT_NORMAL, "justify", 0, 7, true);
+          addText(stripMarkers(paper.introduction), 12, FONT_NORMAL, "justify", 0, 7, true);
         }
         continue;
       }
@@ -268,9 +281,9 @@ export const pdfExportService = {
           if (block.type === "subheading") {
             subheadingIndex += 1;
             const prefix = String.fromCharCode(64 + subheadingIndex) + ". ";
-            addText(prefix + block.text, 11, FONT_BOLD, "left", 6, 3, true);
+            addText(prefix + block.text, 12, FONT_BOLD, "left", 6, 3, true);
           } else if (block.type === "text") {
-            addText(block.text, 11, FONT_NORMAL, "justify", 0, 6, true);
+            addText(block.text, 12, FONT_NORMAL, "justify", 0, 6, true);
           } else if (block.type === "table-image") {
             try {
               const imgData = await this.getImageData(block.text);
@@ -279,20 +292,19 @@ export const pdfExportService = {
               const finalWidth = COLUMN_WIDTH;
               const finalHeight = (imgProps.height * finalWidth) / imgProps.width;
 
-              if (y + finalHeight > A4_HEIGHT - MARGIN) {
+              if (y + finalHeight > A4_HEIGHT - MARGIN_BOTTOM) {
                 if (currentColumn === 0) {
                   currentColumn = 1;
                   y = columnTopY;
                 } else {
                   doc.addPage();
-                  pdfExportService.addFooter(doc, paper);
-                  y = MARGIN;
-                  columnTopY = MARGIN;
+                  y = MARGIN_TOP;
+                  columnTopY = MARGIN_TOP;
                   currentColumn = 0;
                 }
               }
 
-              const currentX = MARGIN + currentColumn * (COLUMN_WIDTH + COLUMN_GAP);
+              const currentX = MARGIN_LEFT + currentColumn * (COLUMN_WIDTH + COLUMN_GAP);
               doc.addImage(imgData, "PNG", currentX, y, finalWidth, finalHeight);
               y += finalHeight + 8;
             } catch (e) {
@@ -305,25 +317,61 @@ export const pdfExportService = {
       } else if (hasRaw) {
         // Fallback: raw text with markers stripped
         const rawText = paper[resolvedKey as keyof Paper] as string;
-        addText(stripMarkers(rawText), 11, FONT_NORMAL, "justify", 0, 7, true);
+        addText(stripMarkers(rawText), 12, FONT_NORMAL, "justify", 0, 7, true);
         // For non-combined RAD, append discussion if separate
         if (sec.key === "rad" && paper.discussion && !isRadCombined) {
-          addText(stripMarkers(paper.discussion), 11, FONT_NORMAL, "justify", 0, 7, true);
+          addText(stripMarkers(paper.discussion), 12, FONT_NORMAL, "justify", 0, 7, true);
         }
       }
     }
 
-    // 3. --- References Section ---
+    // 3. --- References Section (APA 6th Edition) ---
     if (paper.references) {
-      addText("REFERENCES", 12, FONT_BOLD, "left", 15, 8, true);
+      doc.addPage();
+      y = MARGIN_TOP;
+      addText("References", 12, FONT_BOLD, "center", 0, 15, false);
+
       const refs = paper.references.split(/\n\n+/).filter(Boolean);
       for (const ref of refs) {
-        addText(ref, 9, FONT_NORMAL, "left", 0, 4, true);
+        // APA 6th: Hanging Indent (First line flat, subsequent lines indented 0.5" = 36pt)
+        const HANGING_INDENT = 36;
+        const targetWidth = CONTENT_WIDTH;
+
+        doc.setFont(FONT_SERIF, FONT_NORMAL);
+        doc.setFontSize(11);
+
+        const lines = doc.splitTextToSize(ref, targetWidth);
+        const linesArr = Array.isArray(lines) ? lines : [lines];
+
+        for (let i = 0; i < linesArr.length; i++) {
+          if (y + 12 > A4_HEIGHT - MARGIN_BOTTOM) {
+            doc.addPage();
+            y = MARGIN_TOP;
+            doc.setFont(FONT_SERIF, FONT_NORMAL);
+            doc.setFontSize(11);
+          }
+
+          const line = linesArr[i].trim();
+          const x = i === 0 ? MARGIN_LEFT : MARGIN_LEFT + HANGING_INDENT;
+          doc.text(line, x, y);
+          y += 11 * 1.5; // APA line spacing
+        }
+        y += 10; // Space between entries
       }
     }
 
-    // Final Footer pass
-    pdfExportService.addFooter(doc, paper);
+    // --- Final Footer Pass: Execute only once at the end ---
+    const pageCount = doc.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFont(FONT_SERIF, FONT_ITALIC);
+      doc.setFontSize(8);
+      doc.setTextColor(150, 150, 150); // Professional gray for footer
+
+      const footerY = A4_HEIGHT - MARGIN_BOTTOM / 2;
+      doc.text(`Page ${i} of ${pageCount}`, A4_WIDTH - MARGIN_RIGHT, footerY, { align: "right" });
+      doc.text(`Exported from LUMIA Retrieval Repository - DCS - CVSUIMUS · ${paper.year}`, MARGIN_LEFT, footerY);
+    }
 
     // Save
     const filename = `${paper.title
@@ -345,33 +393,15 @@ export const pdfExportService = {
         canvas.width = img.width;
         canvas.height = img.height;
         const ctx = canvas.getContext("2d");
-        ctx?.drawImage(img, 0, 0);
-        resolve(canvas.toDataURL("image/png"));
+        if (ctx) {
+          ctx.drawImage(img, 0, 0);
+          resolve(canvas.toDataURL("image/png"));
+        } else {
+          reject(new Error("Failed to get 2D context"));
+        }
       };
       img.onerror = (e) => reject(e);
       img.src = url;
     });
-  },
-
-  /**
-   * Adds consistent footer to all pages
-   */
-  addFooter(doc: jsPDF, paper: Paper) {
-    const pageCount = doc.getNumberOfPages();
-    for (let i = 1; i <= pageCount; i++) {
-      doc.setPage(i);
-      doc.setFont(FONT_SERIF, FONT_ITALIC);
-      doc.setFontSize(8);
-      doc.setTextColor(150, 150, 150);
-
-      const footerY = A4_HEIGHT - MARGIN / 2;
-      doc.text(`Page ${i} of ${pageCount}`, A4_WIDTH - MARGIN, footerY, { align: "right" });
-      doc.text(`LUMIA Smart Archival System · ${paper.year}`, MARGIN, footerY);
-    }
-    // ── CRITICAL: reset text color to solid black after writing gray footer ──
-    // jsPDF carries text color as state — any page added after addFooter()
-    // would inherit gray (150,150,150) for all subsequent addText() calls,
-    // causing the "gray text" bug visible in the PDF output.
-    doc.setTextColor(0, 0, 0);
   },
 };

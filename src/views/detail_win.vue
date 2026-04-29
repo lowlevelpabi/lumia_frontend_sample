@@ -2,15 +2,16 @@
 import { ref, onMounted, watch, computed, nextTick } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import { useAuth } from '../composables/useAuth'
-import { Eye, Award, CheckCircle, Loader2, ChevronRight, Copy, Check, X, FileDown, Bookmark } from 'lucide-vue-next'
+import { Eye, Award, CheckCircle, Loader2, ChevronRight, Copy, Check, X, FileDown, Bookmark, Sparkles, Info } from 'lucide-vue-next'
 import { api, type Paper, type SearchResult } from '../services/api'
 import { pdfExportService } from '../services/pdf_export_service'
 
 // ── Confidence badge helper ────────────────────────────────────────────────────────
-const getConfidence = (score: number): { label: string; cls: string } => {
-  if (score >= 0.60) return { label: 'Recommended Study', cls: 'badge-strong' }
-  if (score >= 0.35) return { label: 'Similar Study', cls: 'badge-good' }
-  return { label: 'Related', cls: 'badge-related' }
+const getConfidence = (score: number): { label: string; cls: string; desc: string } => {
+  if (score >= 0.75) return { label: 'Strong Semantic Match', cls: 'badge-strong', desc: 'High degree of conceptual and methodological alignment.' }
+  if (score >= 0.50) return { label: 'High Potential Match', cls: 'badge-good', desc: 'Significant overlap in research objectives and findings.' }
+  if (score >= 0.35) return { label: 'Related Context', cls: 'badge-related', desc: 'Topical alignment with complementary research themes.' }
+  return { label: 'Weak Match', cls: 'badge-related', desc: 'Low direct similarity but shares some contextual keywords.' }
 }
 
 const route = useRoute()
@@ -243,23 +244,28 @@ const switchToPaper = (sectionId: string) => {
 const handleCite = async () => {
   if (!isLoggedIn.value || citeLoading.value || !paper.value) return
 
-  // If already cited, just open the modal
+  // If already cited, just open the modal to get the reference
   if (hasCited.value) {
     openCiteModal()
     return
   }
 
+  // If not cited, cite it first then open the modal
+  await handleToggleCitation()
+  if (hasCited.value) {
+    openCiteModal()
+  }
+}
+
+const handleToggleCitation = async () => {
+  if (!isLoggedIn.value || citeLoading.value || !paper.value) return
   citeLoading.value = true
   try {
-    const res = await api.citePaper(paper.value.id)
+    const res = await api.citePaper(paper.value!.id)
     hasCited.value = res.has_cited
     citationCount.value = res.citation_count
-
-    // After successful DB increment, open the modal for the student
-    openCiteModal()
-  } catch {
-    hasCited.value = true
-    openCiteModal()
+  } catch (err) {
+    console.error('Citation toggle failed:', err)
   } finally {
     citeLoading.value = false
   }
@@ -282,6 +288,12 @@ const handleBookmark = async () => {
 
 const handleDownloadPDF = async () => {
   if (!paper.value || exportLoading.value) return
+
+  // Auto-cite on download if not already cited (as per panel recommendation)
+  if (isLoggedIn.value && !hasCited.value) {
+    handleToggleCitation()
+  }
+
   exportLoading.value = true
   try {
     await pdfExportService.downloadPaper(paper.value)
@@ -528,15 +540,15 @@ const formatReferenceEntry = (raw: string): string => {
               <span class="journal-badge journal-badge-type">{{ paper.project_type }}</span>
               <span v-if="paper.degree_program !== 'N/A'" class="journal-badge journal-badge-degree">{{
                 paper.degree_program }}</span>
-              <span class="journal-badge">{{ paper.year }}</span>
             </div>
 
             <h1 class="journal-title">{{ paper.title }}</h1>
 
             <div class="journal-authors">
               <span v-for="(author, idx) in authorList" :key="idx" class="journal-author">
-                {{ author }}<span v-if="idx < authorList.length - 1" class="author-sep"> · </span>
+                {{ author }}<span class="author-sep"> · </span>
               </span>
+              <span class="journal-author">Year: {{ paper.year }}</span>
             </div>
 
             <div class="journal-stats">
@@ -685,15 +697,39 @@ const formatReferenceEntry = (raw: string): string => {
 
           <div v-if="recommendations.length > 0" class="rec-list">
             <div v-for="rec in recommendations" :key="rec.id" class="rec-card" @click="viewDetail(rec.id)">
-              <div class="rec-card-top">
-                <span v-if="rec.payload.degree_program" class="rec-badge">{{ rec.payload.degree_program }}</span>
+              <!-- Left: Main Card Content -->
+              <div class="rec-card-main">
+                <div class="rec-card-header">
+                  <div class="rec-match-score" :class="getConfidence(rec.score).cls" :title="getConfidence(rec.score).desc">
+                    <Sparkles :size="11" />
+                    <span>{{ (rec.score * 100).toFixed(0) }}% Semantic Match</span>
+                  </div>
+                  <span v-if="rec.payload?.degree_program !== 'N/A'" class="rec-program-tag">
+                    {{ rec.payload?.degree_program }}
+                  </span>
+                </div>
+
+                <h4 class="rec-card-title">{{ rec.payload?.title }}</h4>
+
+                <div class="rec-card-meta">
+                  <span class="rec-author">{{ (rec.payload?.author || '').split('|').map(a => a.split(',')[0].trim()).join(', ') }}</span>
+                  <span class="rec-dot"></span>
+                  <span class="rec-year">{{ rec.payload?.year }}</span>
+                </div>
+                
+                <!-- Teaser pill (visible before hover) -->
+                <div v-if="rec.recommendation_reason" class="rec-insight-teaser">
+                  <Info :size="10" />
+                  <span>Hover for insight</span>
+                </div>
               </div>
-              <p class="rec-title">{{ rec.payload.title }}</p>
-              <div class="rec-score-row">
-                <span :class="['confidence-badge', getConfidence(rec.score).cls]">
-                  {{ getConfidence(rec.score).label }}
-                  <span class="badge-pct">&nbsp;·&nbsp;{{ (rec.score * 100).toFixed(0) }}%</span>
-                </span>
+
+              <!-- Right: Insight Flow Content (Reveals on Hover) -->
+              <div v-if="rec.recommendation_reason" class="rec-insight-side">
+                <div class="insight-side-head">
+                  <Info :size="12" /> AI INSIGHT
+                </div>
+                <p class="rec-insight-text">{{ rec.recommendation_reason }}</p>
               </div>
             </div>
           </div>
@@ -708,10 +744,70 @@ const formatReferenceEntry = (raw: string): string => {
     </div>
   </div>
 
-  <!-- Loading state -->
-  <div v-else-if="loading" class="loading-full">
-    <Loader2 :size="24" class="spin" />
-    <span>Loading paper…</span>
+  <!-- Skeleton Loading State -->
+  <div v-else-if="loading" class="imrad-journal-page skeleton-page">
+    <!-- Header Skeleton -->
+    <div class="journal-header">
+      <div class="journal-meta-top">
+        <div class="skeleton-badge"></div>
+        <div class="skeleton-badge"></div>
+        <div class="skeleton-badge"></div>
+      </div>
+      <div class="skeleton-title"></div>
+      <div class="skeleton-title short"></div>
+      <div class="skeleton-authors"></div>
+      <div class="skeleton-stats"></div>
+    </div>
+    
+    <!-- Body Skeleton -->
+    <div class="detail-layout">
+      <!-- Left sidebar -->
+      <aside class="doc-nav-aside">
+        <div class="skeleton-nav-label"></div>
+        <div class="skeleton-nav-item"></div>
+        <div class="skeleton-nav-item"></div>
+        <div class="skeleton-nav-item"></div>
+        <div class="skeleton-nav-item"></div>
+      </aside>
+      
+      <!-- Main Content -->
+      <div class="paper-main">
+        <div class="skeleton-tab-bar">
+          <div class="skeleton-tab"></div>
+          <div class="skeleton-tab"></div>
+          <div class="skeleton-tab"></div>
+        </div>
+        <div class="skeleton-section-title"></div>
+        <div class="skeleton-text-block"></div>
+        <div class="skeleton-text-block"></div>
+        <div class="skeleton-text-block short"></div>
+        
+        <div class="skeleton-section-title mt-4"></div>
+        <div class="skeleton-text-block"></div>
+        <div class="skeleton-text-block"></div>
+        <div class="skeleton-text-block short"></div>
+      </div>
+      
+      <!-- Right Sidebar (Recommendations) -->
+      <aside class="journal-sidebar">
+        <div class="sidebar-inner">
+          <div class="skeleton-sidebar-title"></div>
+          <div class="skeleton-sidebar-sub"></div>
+          <div class="rec-list">
+            <div class="rec-card skeleton-card">
+              <div class="skeleton-card-header"></div>
+              <div class="skeleton-card-title"></div>
+              <div class="skeleton-card-meta"></div>
+            </div>
+            <div class="rec-card skeleton-card">
+              <div class="skeleton-card-header"></div>
+              <div class="skeleton-card-title"></div>
+              <div class="skeleton-card-meta"></div>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </div>
   </div>
 
   <!-- ══ CITATION MODAL ══════════════════════════════════════════ -->
@@ -781,6 +877,13 @@ const formatReferenceEntry = (raw: string): string => {
 
             <!-- Footer -->
             <div class="modal-footer">
+              <button v-if="hasCited" class="m-uncite-btn" :disabled="citeLoading" @click="handleToggleCitation(); showCiteModal = false">
+                <X :size="12" />
+                Remove Citation
+              </button>
+              
+              <div style="flex: 1"></div>
+
               <button class="m-copy-btn" :class="{ copied: copyStatus[apaVariation] }" @click="copyToClipboard(
                 apaVariation === '6' ? formattedCitations.apa_6 : apaVariation === '7' ? formattedCitations.apa_7 : formattedCitations.apa_intext,
                 apaVariation
@@ -892,15 +995,16 @@ const formatReferenceEntry = (raw: string): string => {
 }
 
 .sidebar-inner {
-  background: #fff;
-  border-radius: 8px;
-  border: 1px solid var(--rule);
-  padding: 1.25rem;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  position: sticky;
+  top: 1.5rem;
+  background: transparent;
+  padding: 0;
+  border: none;
+  box-shadow: none;
 }
 
 .sidebar-label {
-  font-size: 0.68rem;
+  font-size: 0.72rem;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.1em;
@@ -909,9 +1013,9 @@ const formatReferenceEntry = (raw: string): string => {
 }
 
 .sidebar-sub {
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   color: var(--ink-3);
-  margin: 0 0 1.25rem;
+  margin: 0 0 1rem;
 }
 
 /* ── Confidence badges ──────────────────────────────────────────── */
@@ -1996,27 +2100,89 @@ const formatReferenceEntry = (raw: string): string => {
   margin-bottom: 0.4rem;
 }
 
-/* Loading */
-.loading-full {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.75rem;
-  height: 50vh;
-  color: var(--ink-3);
-  font-size: 0.9rem;
-  font-family: 'Source Sans 3', sans-serif;
+/* ── Skeleton Loading Styles ───────────────────────────── */
+.skeleton-page {
+  animation: pulse-bg 1.5s infinite ease-in-out;
+  pointer-events: none;
 }
 
-/* Spinner */
-.spin {
-  animation: spin 1s linear infinite;
+@keyframes pulse-bg {
+  0% { opacity: 0.6; }
+  50% { opacity: 1; }
+  100% { opacity: 0.6; }
 }
 
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+.skeleton-badge {
+  width: 60px; height: 18px; background: #e2e8f0; border-radius: 3px;
+}
+.skeleton-title {
+  width: 70%; height: 34px; background: #cbd5e1; margin: 0 auto 0.6rem; border-radius: 6px;
+}
+.skeleton-title.short {
+  width: 45%; margin-bottom: 1.25rem;
+}
+.skeleton-authors {
+  width: 40%; height: 16px; background: #e2e8f0; margin: 0 auto 1.5rem; border-radius: 4px;
+}
+.skeleton-stats {
+  width: 30%; height: 32px; background: #e2e8f0; margin: 0 auto; border-radius: 6px;
+}
+
+/* Nav Skeleton */
+.skeleton-nav-label {
+  width: 80%; height: 12px; background: #e2e8f0; margin-bottom: 1rem; border-radius: 4px;
+}
+.skeleton-nav-item {
+  width: 100%; height: 28px; background: #f1f5f9; margin-bottom: 0.4rem; border-radius: 4px;
+}
+
+/* Main Content Skeleton */
+.skeleton-tab-bar {
+  display: flex; gap: 1.5rem; border-bottom: 2px solid var(--rule); margin-bottom: 2rem; padding-bottom: 0.5rem;
+}
+.skeleton-tab {
+  width: 80px; height: 20px; background: #e2e8f0; border-radius: 4px;
+}
+.skeleton-section-title {
+  width: 150px; height: 16px; background: #cbd5e1; margin-bottom: 1rem; border-radius: 4px;
+}
+.skeleton-section-title.mt-4 {
+  margin-top: 2.5rem;
+}
+.skeleton-text-block {
+  width: 100%; height: 14px; background: #f1f5f9; margin-bottom: 0.6rem; border-radius: 4px;
+}
+.skeleton-text-block.short {
+  width: 85%; margin-bottom: 1.5rem;
+}
+
+/* Sidebar Skeleton */
+.skeleton-sidebar-title {
+  width: 140px; height: 14px; background: #cbd5e1; margin-bottom: 0.5rem; border-radius: 4px;
+}
+.skeleton-sidebar-sub {
+  width: 180px; height: 12px; background: #e2e8f0; margin-bottom: 1.5rem; border-radius: 4px;
+}
+.skeleton-card {
+  height: 130px;
+  display: flex; flex-direction: column; gap: 0.75rem; padding: 1.25rem;
+  box-shadow: none;
+  cursor: default;
+}
+.skeleton-card:hover {
+  transform: none;
+  width: 260px; /* Prevent expansion */
+  box-shadow: none;
+  border-color: var(--rule);
+}
+.skeleton-card-header {
+  width: 100%; height: 22px; background: #f1f5f9; border-radius: 20px; margin-bottom: 0.2rem;
+}
+.skeleton-card-title {
+  width: 100%; height: 14px; background: #e2e8f0; border-radius: 4px;
+}
+.skeleton-card-meta {
+  width: 60%; height: 12px; background: #f1f5f9; border-radius: 4px; margin-top: auto;
 }
 
 /* ── Responsive ────────────────────────────────────────── */
@@ -2748,6 +2914,36 @@ const formatReferenceEntry = (raw: string): string => {
   transform: scale(1.2);
 }
 
+.toc-item.active .m-copy-btn:hover {
+  background: var(--green-dk);
+  transform: translateY(-1px);
+}
+
+.m-uncite-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.75rem;
+  background: transparent;
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  color: #c53030; /* Red color for removal */
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.m-uncite-btn:hover {
+  background: #fff5f5;
+  border-color: #feb2b2;
+}
+
+.m-uncite-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .journal-main-col {
   min-width: 0;
   width: 100%;
@@ -2967,57 +3163,202 @@ const formatReferenceEntry = (raw: string): string => {
 .rec-list {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 1.25rem;
+  margin-top: 1.5rem;
 }
 
 .rec-card {
-  padding: 0.75rem;
+  position: relative;
+  display: flex;
+  width: 260px; /* Base width matching sidebar */
+  background: white;
   border: 1px solid var(--rule);
-  border-radius: 6px;
+  border-radius: 12px;
   cursor: pointer;
-  transition: border-color 0.14s, box-shadow 0.14s;
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.02);
+  overflow: hidden;
+  animation: slide-up-fade 0.6s ease-out backwards;
+}
+
+.rec-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: var(--green);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  z-index: 2;
 }
 
 .rec-card:hover {
-  border-color: var(--green);
-  box-shadow: 0 2px 8px rgba(0, 166, 81, 0.1);
+  width: 480px; /* Fully accommodate both the 260px main card and the 220px insight panel */
+  transform: translateY(-5px); 
+  border-color: var(--green-dim);
+  box-shadow: 0 12px 24px rgba(0, 166, 81, 0.12);
+  z-index: 100;
 }
 
-.rec-badge {
-  display: inline-block;
-  font-size: 0.58rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  padding: 0.15rem 0.45rem;
-  border-radius: 3px;
-  background: var(--green-dim);
-  color: var(--green-dk);
-  margin-bottom: 0.35rem;
+.rec-card:hover::before {
+  opacity: 1;
 }
 
-.rec-title {
-  font-size: 0.8rem;
-  font-weight: 600;
-  line-height: 1.4;
-  color: var(--ink);
-  margin: 0 0 0.3rem;
+/* Left Main Content */
+.rec-card-main {
+  width: 260px;
+  flex-shrink: 0;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
 }
 
-.rec-meta {
+.rec-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.85rem;
+}
+
+.rec-match-score {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
   font-size: 0.7rem;
-  color: var(--ink-3);
-  margin: 0 0 0.4rem;
+  font-weight: 700;
+  padding: 0.25rem 0.6rem;
+  border-radius: 20px;
+  letter-spacing: 0.02em;
 }
 
-.rec-score {
-  font-size: 0.65rem;
+.rec-match-score.badge-strong {
+  background: var(--green-dim);
+  color: var(--green-dk);
+}
+
+.rec-match-score.badge-good {
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.rec-program-tag {
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: var(--bg-dim);
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+}
+
+.rec-card-title {
+  font-size: 0.9rem;
   font-weight: 700;
+  line-height: 1.45;
+  color: var(--ink);
+  margin: 0 0 0.75rem;
+  display: -webkit-box;
+  line-clamp: 3;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  transition: color 0.3s ease;
+}
+
+.rec-card:hover .rec-card-title {
+  color: var(--green-dk);
+}
+
+.rec-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.5rem; /* Reduced to make room for teaser */
+}
+
+.rec-author {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px; /* Prevent long author lists from pushing the year off-screen */
+}
+
+.rec-dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--rule-dk);
+}
+
+.rec-year {
+  font-size: 0.75rem;
+  color: var(--ink-3);
+}
+
+/* Teaser pill (shown before hover) */
+.rec-insight-teaser {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.65rem;
+  font-weight: 600;
   color: var(--green-dk);
   background: var(--green-dim);
-  display: inline-block;
-  padding: 0.1rem 0.4rem;
-  border-radius: 3px;
+  padding: 0.2rem 0.6rem;
+  border-radius: 4px;
+  margin-top: auto;
+  align-self: flex-start;
+  transition: opacity 0.3s ease;
+}
+
+.rec-card:hover .rec-insight-teaser {
+  opacity: 0; /* Hide teaser when expanded */
+  pointer-events: none;
+}
+
+/* Right Insight Content (Revealed on hover) */
+.rec-insight-side {
+  width: 220px;
+  flex-shrink: 0;
+  padding: 1.25rem;
+  background: #fafafa;
+  border-left: 1px dashed var(--rule);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  opacity: 0;
+  transform: translateX(10px);
+  transition: all 0.4s ease 0.1s; /* Delayed fade in */
+}
+
+.rec-card:hover .rec-insight-side {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.insight-side-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.65rem;
+  font-weight: 800;
+  color: var(--green-dk);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 0.5rem;
+}
+
+.rec-insight-text {
+  font-size: 0.85rem;
+  line-height: 1.6;
+  color: var(--ink-2);
+  margin: 0;
+  font-family: 'Lora', serif;
+  font-style: italic;
 }
 
 .rec-empty {
