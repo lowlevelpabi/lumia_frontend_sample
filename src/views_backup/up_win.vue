@@ -45,6 +45,8 @@ watch(uploadError, (val) => {
   }
 })
 
+
+
 const closeUploadMessage = () => {
   showUploadMessage.value = false
   if (uploadMsgTimer) {
@@ -251,6 +253,7 @@ function stopProgressListening() {
 function listenForProgress(sid: string) {
   stopProgressListening()
 
+  // Poll every 2 seconds
   progressTimer = window.setInterval(async () => {
     try {
       const data = await api.getUploadStatus(sid)
@@ -262,6 +265,7 @@ function listenForProgress(sid: string) {
       }
     } catch (err) {
       console.error('Polling error:', err)
+      // We don't stop on a single error to handle transient network hiccups
     }
   }, 2000)
 }
@@ -528,7 +532,7 @@ onMounted(loadSampleDocs)
     <Teleport to="body">
       <div v-if="isDragging" class="drag-overlay">
         <div class="drag-overlay-inner">
-          <FileUp :size="48" color="#00a651" class="animate-float" />
+          <FileUp :size="48" color="#00a651" />
           <p>Drop your PDF here</p>
         </div>
       </div>
@@ -542,6 +546,7 @@ onMounted(loadSampleDocs)
         </div>
         <span class="up-brand">Upload Document</span>
       </div>
+
 
       <div class="up-topbar-right">
         <!-- Step rail -->
@@ -584,7 +589,8 @@ onMounted(loadSampleDocs)
             <AlertCircle v-else :size="16" />
           </div>
           <div class="notif-body">
-            <strong>{{ uploadNotification.includes('Upload Terminated') ? 'Upload Rejected' : 'Error Detected' }}</strong>
+            <strong>{{ uploadNotification.includes('Upload Terminated') ? 'Upload Rejected' : 'Error Detected'
+              }}</strong>
             <p>{{ uploadNotification }}</p>
           </div>
           <button class="notif-close" @click="closeUploadMessage">
@@ -592,7 +598,6 @@ onMounted(loadSampleDocs)
           </button>
         </div>
       </div>
-      
       <!-- Step 1 & 3: Centered card -->
       <div v-if="step !== 2" class="upload-center">
 
@@ -602,7 +607,7 @@ onMounted(loadSampleDocs)
         </div>
 
         <!-- Step 1: Drop zone -->
-        <div v-else-if="step === 1" class="upload-card animate-fade-in">
+        <div v-else-if="step === 1" class="upload-card">
           <div class="upload-card-head">
             <div class="upload-card-icon">
               <FileUp :size="22" color="#00a651" />
@@ -610,8 +615,7 @@ onMounted(loadSampleDocs)
             <h1 class="upload-card-title">Upload Your Research</h1>
             <p>Upload a PDF to index your thesis or capstone into the repository.</p>
           </div>
-          
-          <div class="notice-banner amber" style="margin-bottom: 1.5rem">
+          <div class="notice-banner amber" style="margin-bottom: 1rem">
             <div class="notice-icon">
               <AlertTriangle :size="18" color="#f59e0b" />
             </div>
@@ -625,11 +629,13 @@ onMounted(loadSampleDocs)
             </div>
           </div>
 
+          <!-- Inline upload error banner removed — using floating notification instead -->
+
           <div class="drop-zone" @click="!processingDoc && fileInput?.click()"
             :class="{ processing: processingDoc, dragging: isDragging }">
             <input type="file" ref="fileInput" @change="handleFileChange" style="display:none" accept="application/pdf"
               :disabled="processingDoc" />
-            <FileUp :size="40" color="#00a651" class="drop-icon" />
+            <FileUp :size="40" color="#00a651" />
             <div class="drop-text">
               <strong>Click to upload</strong> or drag and drop
               <span>PDF files only</span>
@@ -677,7 +683,7 @@ onMounted(loadSampleDocs)
         <!-- Step 3: Success -->
         <div v-else-if="step === 3" class="upload-card">
           <div class="upload-success">
-            <CheckCircle :size="56" color="#00a651" class="animate-pulse-slow" />
+            <CheckCircle :size="56" color="#00a651" />
             <h2>Research Indexed!</h2>
             <p>Your paper has been stored in the repository. Redirecting you now…</p>
           </div>
@@ -685,11 +691,11 @@ onMounted(loadSampleDocs)
       </div>
 
       <!-- Step 2: Review UI -->
-      <div v-else class="review-wrap animate-fade-in">
+      <div v-else class="review-wrap">
         <header class="review-bar">
           <div class="review-bar-left">
             <div class="review-bar-icon">
-              <FileText :size="20" color="#00a651" />
+              <FileText :size="20" color="var(--primary)" />
             </div>
             <div>
               <h1 class="review-bar-title">Review & Index Document</h1>
@@ -727,6 +733,9 @@ onMounted(loadSampleDocs)
             <button @click="cancelUpload" class="notice-btn ghost">Decline &amp; Reset</button>
           </div>
         </div>
+
+        <!-- Missing sections notice -->
+        <!-- Inline missing sections banner removed — missing sections are shown via floating notification -->
 
         <!-- Error banner in review -->
         <div v-if="uploadError" class="error-banner"
@@ -774,7 +783,8 @@ onMounted(loadSampleDocs)
                 </select>
               </div>
             </div>
-            
+            <!-- Abstract moved to IMRAD panel to keep metadata compact -->
+            <!-- Abstract removed from meta-panel -->
             <div class="fg">
               <label>Department</label>
               <select v-model="uploadMetadata.department">
@@ -788,7 +798,6 @@ onMounted(loadSampleDocs)
                 <option>College of Information Technology</option>
               </select>
             </div>
-            
             <div class="fg">
               <label>Degree Program</label>
               <select v-model="uploadMetadata.degree_program">
@@ -815,6 +824,7 @@ onMounted(loadSampleDocs)
 
               <div v-if="uploadMetadata.detected_subheadings && uploadMetadata.detected_subheadings.length > 0"
                 class="subheadings-preview">
+                <!-- Abstract moved here from Verify Metadata -->
                 <div class="fg" style="margin-bottom:0.85rem">
                   <label>Abstract</label>
                   <textarea v-model="uploadMetadata.abstract" class="abstract-area" placeholder="Enter abstract…" />
@@ -1008,18 +1018,18 @@ onMounted(loadSampleDocs)
             <p>Our system has detected that this study (ID: <strong>{{ pendingPaperId }}</strong>) has already been
               uploaded and is currently in the <strong>Pending Request</strong> queue.</p>
             <div class="ack-notice">
-              <div class="ack-check amber" style="background: rgba(245, 158, 11, 0.1); color: #f59e0b; border-radius: 50%; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;">
+              <div class="ack-check amber" style="background: var(--amber-dim); color: var(--amber-dk); border-radius: 50%; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;">
                 <AlertTriangle :size="14" />
               </div>
               <span>Duplicate uploads for the same research are not permitted to ensure repository integrity.</span>
             </div>
-            <div class="ack-warning" style="background: rgba(245, 158, 11, 0.08); border-color: rgba(245, 158, 11, 0.2); color: #d97706; margin-top: 1rem; padding: 0.75rem; border-radius: 6px; display: flex; align-items: center; gap: 0.75rem;">
+            <div class="ack-warning" style="background: var(--amber-dim); border-color: var(--amber-rule); color: var(--amber-dk); margin-top: 1rem; padding: 0.75rem; border-radius: 6px; display: flex; align-items: center; gap: 0.75rem;">
               <ShieldAlert :size="16" />
               <span>Please wait for the administrator or faculty to approve the existing request before trying again.</span>
             </div>
           </div>
           <div class="modal-foot">
-            <button @click="showPendingWarningModal = false" class="save-btn amber" style="background: #f59e0b; color: white; border: none; padding: 0.6rem 1.4rem; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 0.5rem; font-weight: 600;">
+            <button @click="showPendingWarningModal = false" class="save-btn amber" style="background: var(--amber-dk); color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 0.5rem; font-weight: 600;">
               <Check :size="14" />
               <span>I Understand</span>
             </button>
@@ -1028,26 +1038,17 @@ onMounted(loadSampleDocs)
       </div>
     </Teleport>
 
+
   </div>
 </template>
 
 <style scoped>
 /* ── Tokens ──────────────────────────────────────────────────── */
 .up-page {
-  --green: var(--accent-primary, #00a651);
-  --green-dk: var(--accent-primary, #00a651);
-  --green-dim: rgba(0, 166, 81, 0.08);
-  --ink: var(--text-primary);
-  --ink-2: var(--text-secondary);
-  --ink-3: var(--text-tertiary);
-  --rule: var(--border-color);
-  --surface: var(--bg-primary);
-  --paper: var(--bg-secondary);
-
   min-height: 100vh;
-  background: var(--surface);
+  background: var(--bg-primary);
   font-family: 'Source Sans 3', sans-serif;
-  color: var(--ink);
+  color: var(--text-primary);
   display: flex;
   flex-direction: column;
 }
@@ -1062,15 +1063,8 @@ onMounted(loadSampleDocs)
   justify-content: space-between;
   gap: 1.5rem;
   padding: 0.75rem 2rem;
-  background: rgba(var(--bg-secondary-rgb, 255, 255, 255), 0.75);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-bottom: 1px solid var(--rule);
-  transition: all 0.3s ease;
-}
-
-.dark .up-topbar {
-  background: rgba(15, 15, 15, 0.75);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .up-topbar-left {
@@ -1091,9 +1085,9 @@ onMounted(loadSampleDocs)
 
 .up-brand {
   font-family: 'Lora', serif;
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: var(--ink);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
 }
 
 @media (max-width: 480px) {
@@ -1105,7 +1099,6 @@ onMounted(loadSampleDocs)
 .up-topbar-right {
   min-width: 120px;
   display: flex;
-  align-items: center;
   justify-content: flex-end;
 }
 
@@ -1114,20 +1107,20 @@ onMounted(loadSampleDocs)
   align-items: center;
   gap: 0.35rem;
   background: none;
-  border: 1.5px solid var(--rule);
-  border-radius: 8px;
-  padding: 0.5rem 1rem;
+  border: 1.5px solid var(--border-color);
+  border-radius: 6px;
+  padding: 0.4rem 0.85rem;
   font-family: 'Source Sans 3', sans-serif;
   font-size: 0.82rem;
-  color: var(--ink-2);
+  color: var(--ink-3);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.14s;
 }
 
 .cancel-btn:hover {
-  border-color: #ef4444;
-  color: #ef4444;
-  background: rgba(239, 68, 68, 0.08);
+  border-color: var(--red-dk);
+  color: var(--red-dk);
+  background: var(--red-dim);
 }
 
 /* ── Steps rail ──────────────────────────────────────────────── */
@@ -1141,9 +1134,9 @@ onMounted(loadSampleDocs)
   justify-content: center;
   gap: 1.5rem;
   padding: 1.5rem 0;
-  border-bottom: 1px solid var(--rule);
+  border-bottom: 1px solid var(--border-color);
   margin-bottom: 1rem;
-  background: var(--paper);
+  background: var(--bg-secondary);
 }
 
 /* Navbar version (Desktop topbar) */
@@ -1169,8 +1162,8 @@ onMounted(loadSampleDocs)
   width: 26px;
   height: 26px;
   border-radius: 50%;
-  background: var(--surface);
-  border: 2px solid var(--rule);
+  background: var(--bg-primary);
+  border: 2px solid var(--border-color);
   font-size: 0.72rem;
   font-weight: 700;
   display: flex;
@@ -1178,21 +1171,18 @@ onMounted(loadSampleDocs)
   justify-content: center;
   position: relative;
   flex-shrink: 0;
-  transition: all 0.3s ease;
 }
 
 .step-item.active .step-num {
-  border-color: var(--green);
-  color: var(--green);
-  box-shadow: 0 0 15px rgba(0, 166, 81, 0.25);
-  background: var(--paper);
+  border-color: var(--border-color);
+  color: var(--accent-primary);
+  background: var(--bg-secondary);
 }
 
 .step-item.done .step-num {
-  background: var(--green);
-  border-color: var(--green);
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
   color: #fff;
-  box-shadow: 0 0 15px rgba(0, 166, 81, 0.2);
 }
 
 .step-label {
@@ -1209,7 +1199,7 @@ onMounted(loadSampleDocs)
 .step-line {
   width: 28px;
   height: 2px;
-  background: var(--rule);
+  background: var(--border-color);
   margin: 0 0.4rem;
   position: relative;
   overflow: hidden;
@@ -1217,28 +1207,39 @@ onMounted(loadSampleDocs)
 
 .step-line.loading {
   background: linear-gradient(90deg,
-      var(--rule) 0%,
-      var(--green) 50%,
-      var(--rule) 100%);
+      var(--border-color) 0%,
+      var(--accent-primary) 50%,
+      var(--border-color) 100%);
   background-size: 200% 100%;
   animation: step-line-sweep 1.2s infinite linear;
 }
 
 @keyframes step-line-sweep {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* ── Main content ────────────────────────────────────────────── */
 .up-content {
   flex: 1;
   padding: 1.5rem 2rem 4rem;
+  /* reduce gutter to fit more content */
   max-width: 1600px;
+  /* allow wider review content */
   width: calc(100% - 4rem);
   margin: 0 auto;
   box-sizing: border-box;
-  position: relative;
-  z-index: 10;
 }
 
 /* ── Upload center ───────────────────────────────────────────── */
@@ -1250,21 +1251,13 @@ onMounted(loadSampleDocs)
 }
 
 .upload-card {
-  background: rgba(var(--bg-secondary-rgb, 255, 255, 255), 0.55);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(0, 166, 81, 0.15);
-  border-radius: 14px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
   padding: 2.5rem;
   width: 100%;
   max-width: 520px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.03);
-}
-
-.dark .upload-card {
-  background: rgba(22, 22, 22, 0.45);
-  border-color: rgba(255, 255, 255, 0.06);
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  /* keep upload card compact for step 1 */
 }
 
 .upload-card-head {
@@ -1275,25 +1268,19 @@ onMounted(loadSampleDocs)
 .upload-card-icon {
   width: 52px;
   height: 52px;
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--green-dim);
   display: flex;
   align-items: center;
   justify-content: center;
   margin: 0 auto 1rem;
-  transition: transform 0.3s ease;
-}
-
-.upload-card:hover .upload-card-icon {
-  transform: scale(1.08) rotate(3deg);
 }
 
 .upload-card-title {
   font-family: 'Lora', serif;
   font-size: 1.4rem;
-  font-weight: 700;
+  font-weight: 600;
   margin: 0 0 0.5rem;
-  color: var(--ink);
 }
 
 .upload-card p {
@@ -1313,44 +1300,28 @@ onMounted(loadSampleDocs)
 }
 
 .drop-zone {
-  border: 2px dashed rgba(0, 166, 81, 0.3);
-  border-radius: 10px;
-  padding: 3rem 1.5rem;
-  background: rgba(var(--bg-primary-rgb, 255, 255, 255), 0.3);
+  border: 2px dashed var(--border-color);
+  border-radius: 8px;
+  padding: 2.5rem 1.5rem;
   cursor: pointer;
   text-align: center;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.75rem;
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.dark .drop-zone {
-  background: rgba(0, 0, 0, 0.15);
-  border-color: rgba(255, 255, 255, 0.1);
+  transition: border-color 0.14s, background 0.14s;
 }
 
 .drop-zone.dragging,
 .drop-zone:hover:not(.processing) {
-  border-color: var(--green);
-  background: rgba(0, 166, 81, 0.06);
-  box-shadow: 0 0 25px rgba(0, 166, 81, 0.1);
-  transform: scale(1.01);
+  border-color: var(--accent-primary);
+  background: var(--green-dim);
 }
 
 .drop-zone.processing {
   cursor: wait;
   opacity: 0.6;
   pointer-events: none;
-}
-
-.drop-icon {
-  transition: transform 0.3s ease;
-}
-
-.drop-zone:hover .drop-icon {
-  transform: translateY(-4px);
 }
 
 .drop-text {
@@ -1362,23 +1333,17 @@ onMounted(loadSampleDocs)
 }
 
 .drop-text strong {
-  color: var(--ink);
+  color: var(--text-primary);
   font-weight: 700;
 }
 
 /* ── Sample Documents Panel (Evaluation Feature) ────────────────── */
 .sample-docs-panel {
   margin-top: 1.5rem;
-  border: 1px solid var(--rule);
-  border-radius: 12px;
-  background: rgba(var(--bg-secondary-rgb, 255, 255, 255), 0.3);
+  border: 1.5px solid var(--border-color);
+  border-radius: 10px;
+  background: var(--bg-secondary);
   overflow: hidden;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.01);
-}
-
-.dark .sample-docs-panel {
-  border-color: rgba(255, 255, 255, 0.06);
-  background: rgba(0, 0, 0, 0.1);
 }
 
 .sample-docs-header {
@@ -1387,13 +1352,8 @@ onMounted(loadSampleDocs)
   justify-content: space-between;
   gap: 0.75rem;
   padding: 0.85rem 1rem;
-  border-bottom: 1px solid var(--rule);
-  background: rgba(var(--bg-primary-rgb, 255, 255, 255), 0.5);
-}
-
-.dark .sample-docs-header {
-  background: rgba(10, 10, 10, 0.3);
-  border-bottom-color: rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-primary);
 }
 
 .sample-docs-header-left {
@@ -1417,7 +1377,7 @@ onMounted(loadSampleDocs)
   margin: 0 0 0.1rem;
   font-size: 0.82rem;
   font-weight: 700;
-  color: var(--ink);
+  color: var(--text-primary);
 }
 
 .sample-docs-subtitle {
@@ -1439,14 +1399,10 @@ onMounted(loadSampleDocs)
   gap: 0.65rem;
   padding: 0.7rem 1rem;
   cursor: pointer;
-  border-bottom: 1px solid var(--rule);
-  transition: all 0.2s;
+  border-bottom: 1px solid var(--border-color);
+  transition: background 0.12s, border-left-color 0.12s;
   border-left: 3px solid transparent;
   user-select: none;
-}
-
-.dark .sample-doc-row {
-  border-bottom-color: rgba(255, 255, 255, 0.05);
 }
 
 .sample-doc-row:last-child {
@@ -1454,9 +1410,8 @@ onMounted(loadSampleDocs)
 }
 
 .sample-doc-row:hover:not(.is-loading) {
-  background: rgba(0, 166, 81, 0.05);
+  background: var(--green-dim);
   border-left-color: var(--accent-primary);
-  padding-left: calc(1rem + 2px);
 }
 
 .sample-doc-row.is-loading {
@@ -1477,7 +1432,7 @@ onMounted(loadSampleDocs)
   flex: 1;
   font-size: 0.82rem;
   font-weight: 600;
-  color: var(--ink);
+  color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1501,7 +1456,7 @@ onMounted(loadSampleDocs)
   display: none;
   align-items: center;
   gap: 0.35rem;
-  background: var(--green);
+  background: var(--accent-primary);
   color: #fff;
   font-size: 0.7rem;
   font-weight: 700;
@@ -1529,7 +1484,6 @@ onMounted(loadSampleDocs)
 .upload-success h2 {
   font-family: 'Lora', serif;
   margin: 0;
-  color: var(--ink);
 }
 
 .upload-success p {
@@ -1543,9 +1497,9 @@ onMounted(loadSampleDocs)
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  background: rgba(239, 68, 68, 0.08);
-  border: 1px solid rgba(239, 68, 68, 0.2);
-  color: #ef4444;
+  background: var(--red-dim);
+  border: 1px solid var(--red-rule);
+  color: var(--red-dk);
   font-size: 0.84rem;
   padding: 0.65rem 0.85rem;
   border-radius: 6px;
@@ -1553,9 +1507,9 @@ onMounted(loadSampleDocs)
 }
 
 .terminal-error {
-  background: rgba(239, 68, 68, 0.08) !important;
-  border-color: #ef4444 !important;
-  color: #ef4444 !important;
+  background: var(--red-dim) !important;
+  border-color: var(--red-dk) !important;
+  color: var(--red-dk) !important;
   padding: 1.5rem !important;
 }
 
@@ -1585,23 +1539,15 @@ onMounted(loadSampleDocs)
 }
 
 .review-bar {
-  background: rgba(var(--bg-secondary-rgb, 255, 255, 255), 0.55);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--rule);
-  border-radius: 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
   padding: 1rem 1.25rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
   flex-wrap: wrap;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.02);
-}
-
-.dark .review-bar {
-  background: rgba(22, 22, 22, 0.45);
-  border-color: rgba(255, 255, 255, 0.06);
 }
 
 .review-bar-left {
@@ -1624,8 +1570,7 @@ onMounted(loadSampleDocs)
 .review-bar-title {
   font-family: 'Lora', serif;
   font-size: 1.1rem;
-  font-weight: 700;
-  color: var(--ink);
+  font-weight: 600;
   margin: 0 0 0.15rem;
 }
 
@@ -1646,10 +1591,10 @@ onMounted(loadSampleDocs)
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  background: var(--surface);
-  border: 1px solid var(--rule);
-  border-radius: 8px;
-  padding: 0.45rem 0.85rem;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  padding: 0.35rem 0.75rem;
   font-size: 0.76rem;
 }
 
@@ -1662,7 +1607,7 @@ onMounted(loadSampleDocs)
 }
 
 .file-pill-name {
-  color: var(--ink);
+  color: var(--text-primary);
   font-weight: 600;
   max-width: 180px;
   overflow: hidden;
@@ -1678,22 +1623,21 @@ onMounted(loadSampleDocs)
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  background: var(--green);
+  background: var(--accent-primary);
   color: #fff;
   border: none;
-  border-radius: 8px;
-  padding: 0.6rem 1.3rem;
+  border-radius: 6px;
+  padding: 0.5rem 1.1rem;
   font-family: 'Source Sans 3', sans-serif;
   font-size: 0.84rem;
-  font-weight: 700;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background 0.14s;
   flex-shrink: 0;
 }
 
 .confirm-btn:hover:not(:disabled) {
-  background: #008f44;
-  box-shadow: 0 4px 12px rgba(0, 166, 81, 0.2);
+  background: var(--green-dk);
 }
 
 .confirm-btn:disabled {
@@ -1706,28 +1650,25 @@ onMounted(loadSampleDocs)
   display: flex;
   align-items: flex-start;
   gap: 0.85rem;
-  padding: 1rem 1.25rem;
-  border-radius: 12px;
+  padding: 0.9rem 1.1rem;
+  border-radius: 8px;
   border: 1px solid;
-  backdrop-filter: blur(10px);
   flex-wrap: wrap;
 }
 
 .notice-banner.amber {
-  background: rgba(245, 158, 11, 0.08);
-  border-color: rgba(245, 158, 11, 0.25);
-  color: #d97706;
+  background: var(--amber-dim);
+  border-color: var(--amber-rule);
 }
 
 .notice-banner.blue {
-  background: rgba(59, 130, 246, 0.08);
-  border-color: rgba(59, 130, 246, 0.25);
-  color: #2563eb;
+  background: var(--blue-dim);
+  border-color: var(--blue-rule);
 }
 
 .notice-icon {
   flex-shrink: 0;
-  margin-top: 2px;
+  margin-top: 1px;
 }
 
 .notice-body {
@@ -1761,28 +1702,19 @@ onMounted(loadSampleDocs)
   gap: 0.35rem;
   color: #fff;
   border: none;
-  border-radius: 6px;
-  padding: 0.4rem 1rem;
+  border-radius: 5px;
+  padding: 0.35rem 0.8rem;
   font-family: 'Source Sans 3', sans-serif;
   font-size: 0.76rem;
   font-weight: 600;
   cursor: pointer;
-  background: #f59e0b;
-  transition: opacity 0.2s;
-}
-
-.notice-btn:hover {
-  opacity: 0.9;
+  background: var(--amber-dk);
 }
 
 .notice-btn.ghost {
   background: transparent;
-  border: 1.5px solid #f59e0b;
-  color: #f59e0b;
-}
-
-.notice-btn.ghost:hover {
-  background: rgba(245, 158, 11, 0.1);
+  border: 1.5px solid var(--amber-dk);
+  color: var(--amber-dk);
 }
 
 .missing-list {
@@ -1796,9 +1728,9 @@ onMounted(loadSampleDocs)
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  background: rgba(245, 158, 11, 0.08);
-  color: #d97706;
-  border: 1px solid rgba(245, 158, 11, 0.2);
+  background: var(--amber-dim);
+  color: var(--amber-dk);
+  border: 1px solid var(--amber-rule);
   padding: 0.2rem 0.55rem;
   border-radius: 4px;
   font-size: 0.72rem;
@@ -1811,7 +1743,7 @@ onMounted(loadSampleDocs)
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: #d97706;
+  background: var(--amber-dk);
   flex-shrink: 0;
 }
 
@@ -1819,6 +1751,7 @@ onMounted(loadSampleDocs)
 .review-grid {
   display: grid;
   grid-template-columns: 480px 1fr;
+  /* increase left column to maximize content area */
   gap: 1.25rem;
   align-items: start;
 }
@@ -1851,13 +1784,13 @@ onMounted(loadSampleDocs)
 .fg textarea {
   width: 100%;
   padding: 0.65rem 0.8rem;
-  border: 1.5px solid var(--rule);
-  border-radius: 8px;
-  background: var(--surface);
-  color: var(--ink);
+  border: 1.5px solid var(--border-color);
+  border-radius: 3px;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
   font-family: 'Source Sans 3', sans-serif;
   font-size: 0.9rem;
-  transition: all 0.2s ease;
+  transition: border-color 0.14s;
   box-sizing: border-box;
 }
 
@@ -1865,8 +1798,7 @@ onMounted(loadSampleDocs)
 .fg select:focus,
 .fg textarea:focus {
   outline: none;
-  border-color: var(--green);
-  box-shadow: 0 0 0 3px rgba(0, 166, 81, 0.15);
+  border-color: var(--accent-primary);
 }
 
 .fg textarea {
@@ -1905,36 +1837,36 @@ onMounted(loadSampleDocs)
 
 .author-row input {
   flex: 1;
-  background: var(--surface);
-  border: 1px solid var(--rule);
-  border-radius: 8px;
-  padding: 0.55rem 0.75rem;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  padding: 0.45rem 0.65rem;
   font-family: 'Source Sans 3', sans-serif;
   font-size: 0.86rem;
-  color: var(--ink);
+  color: var(--text-primary);
   outline: none;
 }
 
 .author-row input:focus {
-  border-color: var(--green);
+  border-color: var(--accent-primary);
 }
 
 .icon-btn {
   background: none;
-  border: 1px solid var(--rule);
-  border-radius: 8px;
-  padding: 0.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: 5px;
+  padding: 0.35rem;
   cursor: pointer;
   color: var(--ink-3);
   display: flex;
   align-items: center;
-  transition: all 0.2s;
+  transition: all 0.13s;
 }
 
 .icon-btn.red:hover {
-  border-color: #ef4444;
-  color: #ef4444;
-  background: rgba(239, 68, 68, 0.08);
+  border-color: var(--red-dk);
+  color: var(--red-dk);
+  background: var(--red-dim);
 }
 
 .add-btn {
@@ -1942,40 +1874,33 @@ onMounted(loadSampleDocs)
   align-items: center;
   gap: 0.35rem;
   background: none;
-  border: 1.5px dashed var(--rule);
-  border-radius: 8px;
-  padding: 0.5rem 0.85rem;
+  border: 1.5px dashed var(--border-color);
+  border-radius: 5px;
+  padding: 0.4rem 0.7rem;
   font-family: 'Source Sans 3', sans-serif;
   font-size: 0.78rem;
-  color: var(--ink-2);
+  color: var(--ink-3);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.13s;
 }
 
 .add-btn:hover {
-  border-color: var(--green);
-  color: var(--green);
-  background: var(--green-dim);
+  border-color: var(--accent-primary);
+  color: var(--green-dk);
 }
 
 /* ── Panels ──────────────────────────────────────────────────── */
 .meta-panel,
 .imrad-panel,
 .page-panel {
-  background: rgba(var(--bg-secondary-rgb, 255, 255, 255), 0.5);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--rule);
-  border-radius: 14px;
-  padding: 1.5rem;
-  box-shadow: 0 4px 25px rgba(0, 0, 0, 0.02);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 1.25rem;
 }
 
-.dark .meta-panel,
-.dark .imrad-panel,
-.dark .page-panel {
-  background: rgba(22, 22, 22, 0.45);
-  border-color: rgba(255, 255, 255, 0.06);
+.imrad-panel {
+  padding: 1.5rem;
 }
 
 .meta-panel-head {
@@ -1984,26 +1909,21 @@ onMounted(loadSampleDocs)
   gap: 0.5rem;
   margin-bottom: 1.25rem;
   padding-bottom: 0.75rem;
-  border-bottom: 1px solid var(--rule);
-}
-
-.dark .meta-panel-head {
-  border-bottom-color: rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .meta-panel-head h4 {
   margin: 0;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-weight: 700;
-  color: var(--ink);
-  font-family: 'Lora', serif;
+  color: var(--text-primary);
 }
 
 .step-badge {
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: var(--green);
+  background: var(--hero);
   color: #fff;
   font-size: 0.7rem;
   font-weight: 700;
@@ -2011,7 +1931,6 @@ onMounted(loadSampleDocs)
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  box-shadow: 0 2px 5px rgba(0, 166, 81, 0.3);
 }
 
 /* ── IMRAD ───────────────────────────────────────────────────── */
@@ -2048,25 +1967,20 @@ onMounted(loadSampleDocs)
 }
 
 .sub-tag-results {
-  background: rgba(245, 158, 11, 0.1);
-  color: #d97706;
+  background: var(--amber-dim);
+  color: var(--amber-dk);
 }
 
 .imrad-tabs {
   display: flex;
   gap: 0.25rem;
-  background: rgba(var(--bg-primary-rgb, 255, 255, 255), 0.3);
-  border: 1px solid var(--rule);
-  padding: 0.3rem;
-  border-radius: 10px;
-  margin-bottom: 1.25rem;
+  background: var(--bg-primary);
+  padding: 0.25rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
   overflow-x: auto;
   scrollbar-width: none;
-}
-
-.dark .imrad-tabs {
-  background: rgba(10, 10, 10, 0.3);
-  border-color: rgba(255, 255, 255, 0.06);
+  /* Hide scrollbar for cleaner look */
 }
 
 .imrad-tabs::-webkit-scrollbar {
@@ -2077,26 +1991,25 @@ onMounted(loadSampleDocs)
   flex: 1;
   background: none;
   border: none;
-  padding: 0.55rem;
+  padding: 0.5rem;
   font-family: inherit;
   font-size: 0.78rem;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--ink-3);
   cursor: pointer;
-  border-radius: 8px;
-  transition: all 0.2s ease;
-  white-space: nowrap;
+  border-radius: 6px;
+  transition: all 0.2s;
 }
 
 .imrad-tab-btn:hover {
-  color: var(--ink);
-  background: rgba(0, 166, 81, 0.05);
+  background: rgba(0, 0, 0, 0.03);
+  color: var(--text-primary);
 }
 
 .imrad-tab-btn.active {
-  background: var(--green);
-  color: #fff;
-  box-shadow: 0 4px 10px rgba(0, 166, 81, 0.25);
+  background: var(--bg-secondary);
+  color: var(--green-dk);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
 .imrad-content {
@@ -2109,9 +2022,9 @@ onMounted(loadSampleDocs)
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  background: rgba(245, 158, 11, 0.08);
-  border: 1px solid rgba(245, 158, 11, 0.25);
-  color: #d97706;
+  background: var(--amber-dim);
+  border: 1px solid #fde68a;
+  color: #92400e;
   padding: 0.75rem 1rem;
   border-radius: 8px;
   font-size: 0.82rem;
@@ -2119,30 +2032,29 @@ onMounted(loadSampleDocs)
 }
 
 .trim-alert strong {
-  color: #b45309;
+  color: #78350f;
 }
 
 .imrad-textarea {
   width: 100%;
   min-height: 480px;
   max-height: 600px;
-  background: var(--surface);
-  border: 1.5px solid var(--rule);
-  border-radius: 10px;
+  background: var(--bg-secondary);
+  border: 1.5px solid var(--border-color);
+  border-radius: 8px;
   padding: 1rem;
   font-size: 0.9rem;
-  line-height: 1.65;
+  line-height: 1.6;
   font-family: inherit;
   resize: vertical;
   overflow-y: auto;
   color: var(--ink-2);
-  box-sizing: border-box;
 }
 
 .imrad-textarea:focus {
   outline: none;
-  border-color: var(--green);
-  box-shadow: 0 0 0 3px rgba(0, 166, 81, 0.15);
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px var(--green-dim);
 }
 
 /* ── References split pane ───────────────────────────────────── */
@@ -2171,11 +2083,7 @@ onMounted(loadSampleDocs)
   letter-spacing: 0.07em;
   color: var(--ink-3);
   padding-bottom: 0.4rem;
-  border-bottom: 1px solid var(--rule);
-}
-
-.dark .ref-pane-label {
-  border-bottom-color: rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .ref-pane-hint {
@@ -2197,29 +2105,24 @@ onMounted(loadSampleDocs)
 }
 
 .ref-preview-list {
-  background: var(--surface);
-  border: 1.5px solid var(--rule);
-  border-radius: 10px;
+  background: var(--bg-secondary);
+  border: 1.5px solid var(--border-color);
+  border-radius: 8px;
   padding: 1rem;
   max-height: 560px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  box-sizing: border-box;
 }
 
 .ref-preview-entry {
   font-size: 0.82rem;
   line-height: 1.7;
-  color: var(--ink);
+  color: #2a2a2a;
   padding: 0.65rem 0 0.65rem 1.75rem;
   text-indent: -1.75rem;
-  border-bottom: 1px solid var(--rule);
+  border-bottom: 1px solid var(--border-color);
   word-break: break-word;
-}
-
-.dark .ref-preview-entry {
-  border-bottom-color: rgba(255, 255, 255, 0.05);
 }
 
 .ref-preview-entry:last-child {
@@ -2228,18 +2131,18 @@ onMounted(loadSampleDocs)
 
 .ref-authors-preview {
   font-weight: 700;
-  color: var(--ink);
+  color: #1a1a1a;
 }
 
 .ref-year-preview {
   font-weight: 600;
-  color: var(--ink-2);
+  color: #444;
 }
 
 .ref-title-preview {
   font-style: italic;
   font-weight: 400;
-  color: var(--ink);
+  color: #222;
 }
 
 .ref-num-preview {
@@ -2259,8 +2162,8 @@ onMounted(loadSampleDocs)
 }
 
 .ref-preview-empty {
-  background: var(--surface);
-  border: 1.5px dashed var(--rule);
+  background: var(--bg-primary);
+  border: 1.5px dashed var(--border-color);
   border-radius: 8px;
   padding: 2rem 1rem;
   text-align: center;
@@ -2280,11 +2183,7 @@ onMounted(loadSampleDocs)
 .page-panel-head {
   margin-bottom: 1rem;
   padding-bottom: 0.75rem;
-  border-bottom: 1px solid var(--rule);
-}
-
-.dark .page-panel-head {
-  border-bottom-color: rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .page-panel-title {
@@ -2296,10 +2195,9 @@ onMounted(loadSampleDocs)
 
 .page-panel-title h4 {
   margin: 0;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-weight: 700;
-  color: var(--ink);
-  font-family: 'Lora', serif;
+  color: var(--text-primary);
 }
 
 .page-panel-actions {
@@ -2341,7 +2239,7 @@ onMounted(loadSampleDocs)
   width: 3px;
   height: 3px;
   border-radius: 50%;
-  background: var(--rule);
+  background: var(--border-color);
 }
 
 .thumbs-grid {
@@ -2352,21 +2250,14 @@ onMounted(loadSampleDocs)
 
 .thumb-card {
   cursor: pointer;
-  border-radius: 10px;
+  border-radius: 6px;
   overflow: hidden;
-  border: 2px solid var(--rule);
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.01);
-}
-
-.dark .thumb-card {
-  border-color: rgba(255, 255, 255, 0.08);
+  border: 2px solid var(--border-color);
+  transition: border-color 0.14s;
 }
 
 .thumb-card.selected {
-  border-color: var(--green);
-  box-shadow: 0 4px 15px rgba(0, 166, 81, 0.2);
-  transform: scale(1.02);
+  border-color: var(--accent-primary);
 }
 
 .thumb-wrap {
@@ -2389,8 +2280,7 @@ onMounted(loadSampleDocs)
   bottom: 0;
   left: 0;
   right: 0;
-  background: rgba(0, 0, 0, 0.65);
-  backdrop-filter: blur(5px);
+  background: rgba(0, 0, 0, 0.55);
   color: #fff;
   font-size: 0.62rem;
   font-weight: 700;
@@ -2412,7 +2302,7 @@ onMounted(loadSampleDocs)
   font-weight: 700;
   text-transform: uppercase;
   padding: 0.1rem 0.3rem;
-  border-radius: 3px;
+  border-radius: 2px;
   color: #fff;
 }
 
@@ -2482,12 +2372,11 @@ onMounted(loadSampleDocs)
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  background: var(--surface);
-  color: var(--green);
+  background: var(--bg-secondary);
+  color: var(--accent-primary);
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 6px rgba(0, 166, 81, 0.3);
 }
 
 /* ── Drag overlay ────────────────────────────────────────────── */
@@ -2501,7 +2390,6 @@ onMounted(loadSampleDocs)
   align-items: center;
   justify-content: center;
   pointer-events: none;
-  backdrop-filter: blur(4px);
 }
 
 .drag-overlay-inner {
@@ -2509,16 +2397,15 @@ onMounted(loadSampleDocs)
   flex-direction: column;
   align-items: center;
   gap: 0.75rem;
-  background: var(--paper);
+  background: var(--bg-secondary);
   border-radius: 16px;
-  padding: 2.5rem 3.5rem;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
-  border: 1px solid rgba(0, 166, 81, 0.2);
+  padding: 2rem 3rem;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
 }
 
 .drag-overlay-inner p {
   font-size: 1.1rem;
-  font-weight: 700;
+  font-weight: 600;
   color: #00a651;
   margin: 0;
 }
@@ -2532,50 +2419,37 @@ onMounted(loadSampleDocs)
   display: flex;
   align-items: center;
   justify-content: center;
-  backdrop-filter: blur(10px);
 }
 
 .zoom-modal {
-  background: var(--paper);
-  border: 1px solid var(--rule);
+  background: #fff;
   border-radius: 12px;
   max-width: 90vw;
   max-height: 90vh;
   overflow: auto;
   position: relative;
   padding: 1rem;
-  box-shadow: 0 15px 50px rgba(0, 0, 0, 0.5);
-}
-
-.dark .zoom-modal {
-  border-color: rgba(255, 255, 255, 0.08);
 }
 
 .zoom-close {
   position: absolute;
   top: 0.75rem;
   right: 0.75rem;
-  background: var(--surface);
-  border: 1px solid var(--rule);
-  border-radius: 8px;
-  padding: 0.4rem;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 0.3rem;
   cursor: pointer;
   display: flex;
   align-items: center;
-  color: var(--ink-2);
-  transition: all 0.2s;
-}
-
-.zoom-close:hover {
-  background: var(--green-dim);
-  color: var(--green);
+  color: var(--ink-3);
 }
 
 .zoom-img {
   max-width: 75vw;
   max-height: 80vh;
   display: block;
-  border-radius: 6px;
+  border-radius: 4px;
 }
 
 .zoom-caption {
@@ -2588,38 +2462,6 @@ onMounted(loadSampleDocs)
 /* ── Spinner ─────────────────────────────────────────────────── */
 .spin {
   animation: spin 0.9s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-/* ── Animation classes ── */
-.animate-fade-in {
-  animation: fadeIn 0.4s ease-out both;
-}
-
-.animate-pulse-slow {
-  animation: pulse-slow 3s infinite;
-}
-
-.animate-float {
-  animation: float 4s ease-in-out infinite;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes pulse-slow {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.7; }
-}
-
-@keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-6px); }
 }
 
 /* ── Responsive ──────────────────────────────────────────────── */
@@ -2708,9 +2550,9 @@ onMounted(loadSampleDocs)
   display: flex;
   gap: 0.75rem;
   align-items: flex-start;
-  background: rgba(239, 68, 68, 0.08);
-  border: 1px solid rgba(239, 68, 68, 0.2);
-  color: #ef4444;
+  background: var(--red-dim);
+  border: 1px solid var(--red-rule);
+  color: var(--red-dk);
   font-size: 0.94rem;
   padding: 0.85rem 1rem;
   border-radius: 8px;
@@ -2719,7 +2561,6 @@ onMounted(loadSampleDocs)
   opacity: 0;
   transform: translateY(-8px) scale(0.995);
   transition: all 260ms cubic-bezier(.2, .9, .25, 1);
-  backdrop-filter: blur(10px);
 }
 
 .upload-notification.show {
@@ -2730,28 +2571,12 @@ onMounted(loadSampleDocs)
 .upload-notification .notif-body p {
   margin: 0;
   font-size: 0.9rem;
-  color: #ef4444;
+  color: var(--red-dk);
 }
 
 .upload-notification .notif-body strong {
   display: block;
   margin-bottom: 0.25rem
-}
-
-.notif-close {
-  background: none;
-  border: none;
-  color: #ef4444;
-  cursor: pointer;
-  padding: 0.2rem;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  transition: background 0.2s;
-}
-
-.notif-close:hover {
-  background: rgba(239, 68, 68, 0.1);
 }
 
 /* ── Modals ─────────────────────────────────────────────────── */
@@ -2764,22 +2589,18 @@ onMounted(loadSampleDocs)
   align-items: center;
   justify-content: center;
   padding: 1rem;
-  backdrop-filter: blur(10px);
+  backdrop-filter: blur(4px);
 }
 
 .modal-card {
-  background: var(--paper);
+  background: var(--bg-secondary);
   border-radius: 12px;
   width: 100%;
   max-width: 480px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
-  border: 1px solid var(--rule);
+  border: 1px solid var(--border-color);
   overflow: hidden;
   animation: modal-pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.dark .modal-card {
-  border-color: rgba(255, 255, 255, 0.08);
 }
 
 @keyframes modal-pop {
@@ -2787,6 +2608,7 @@ onMounted(loadSampleDocs)
     opacity: 0;
     transform: scale(0.95) translateY(10px);
   }
+
   to {
     opacity: 1;
     transform: scale(1) translateY(0);
@@ -2798,11 +2620,7 @@ onMounted(loadSampleDocs)
   align-items: flex-start;
   gap: 1rem;
   padding: 1.5rem;
-  border-bottom: 1px solid var(--rule);
-}
-
-.dark .modal-head {
-  border-bottom-color: rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .modal-head-icon {
@@ -2821,15 +2639,15 @@ onMounted(loadSampleDocs)
 }
 
 .modal-head-icon.amber {
-  background: rgba(245, 158, 11, 0.1);
-  color: #f59e0b;
+  background: var(--amber-dim);
+  color: var(--amber-dk);
 }
 
 .modal-head h3 {
   margin: 0 0 0.15rem;
   font-size: 1.1rem;
   font-weight: 700;
-  color: var(--ink);
+  color: var(--text-primary);
   font-family: 'Lora', serif;
 }
 
@@ -2853,8 +2671,8 @@ onMounted(loadSampleDocs)
 }
 
 .modal-close:hover {
-  background: var(--surface);
-  color: var(--ink);
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 .modal-body {
@@ -2866,12 +2684,8 @@ onMounted(loadSampleDocs)
   justify-content: flex-end;
   gap: 0.75rem;
   padding: 1.25rem 1.5rem;
-  border-top: 1px solid var(--rule);
-  background: var(--surface);
-}
-
-.dark .modal-foot {
-  border-top-color: rgba(255, 255, 255, 0.06);
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-primary);
 }
 
 /* ── Research Acknowledgement Modal ──────────────────────────── */
@@ -2904,14 +2718,13 @@ onMounted(loadSampleDocs)
   justify-content: center;
   flex-shrink: 0;
   margin-top: 2px;
-  box-shadow: 0 2px 4px rgba(0, 166, 81, 0.2);
 }
 
 .ack-notice span {
   font-family: 'Lora', serif;
   font-size: 0.88rem;
   line-height: 1.5;
-  color: var(--ink);
+  color: var(--text-primary);
   font-weight: 500;
 }
 
@@ -2919,9 +2732,9 @@ onMounted(loadSampleDocs)
   display: flex;
   align-items: center;
   gap: 0.85rem;
-  background: rgba(245, 158, 11, 0.08);
-  border: 1px solid rgba(245, 158, 11, 0.2);
-  color: #d97706;
+  background: var(--amber-dim);
+  border: 1px solid var(--amber-rule);
+  color: var(--amber-dk);
   padding: 1rem;
   border-radius: 10px;
   font-size: 0.8rem;
@@ -2932,29 +2745,29 @@ onMounted(loadSampleDocs)
 /* ── Shared Modal Buttons ───────────────────────────────────── */
 .ghost-btn {
   background: none;
-  border: 1.5px solid var(--rule);
+  border: 1.5px solid var(--border-color);
   border-radius: 8px;
   padding: 0.6rem 1.2rem;
   font-family: inherit;
   font-size: 0.86rem;
   font-weight: 600;
-  color: var(--ink-2);
+  color: var(--ink-3);
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .ghost-btn:hover {
-  background: var(--surface);
+  background: var(--bg-primary);
   border-color: var(--ink-3);
-  color: var(--ink);
+  color: var(--text-primary);
 }
 
 .save-btn {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  background: var(--ink);
-  color: var(--surface);
+  background: var(--text-primary);
+  color: var(--bg-secondary);
   border: none;
   border-radius: 8px;
   padding: 0.6rem 1.4rem;
@@ -2966,7 +2779,7 @@ onMounted(loadSampleDocs)
 }
 
 .save-btn.success {
-  background: var(--green);
+  background: var(--accent-primary);
   color: #fff;
 }
 

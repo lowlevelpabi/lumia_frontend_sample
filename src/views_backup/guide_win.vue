@@ -9,13 +9,6 @@
   <div class="guide-wrapper">
     <!-- Hero Header -->
     <div class="header-section">
-      <div class="header-overlay"></div>
-      <div class="hero__dot-grid" aria-hidden="true"></div>
-      <div class="hero-bg-shapes">
-        <div class="floating-shape shape-1"></div>
-        <div class="floating-shape shape-2"></div>
-        <div class="floating-shape shape-3"></div>
-      </div>
       <div class="header-content">
         <div class="badge">Product Documentation</div>
         <h1>Lumia User Guide & Manual</h1>
@@ -239,169 +232,71 @@
 .guide-wrapper {
   min-height: calc(100vh - 64px);
   background: var(--bg-primary);
-  font-family: 'Inter', sans-serif;
+  font-family: 'Source Sans 3', sans-serif;
   color: var(--text-primary);
   line-height: 1.6;
-  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 /* Header Section */
 .header-section {
-  position: relative;
-  background: var(--bg-primary);
-  overflow: hidden;
-  padding: 100px 2rem 80px;
+  background: linear-gradient(135deg, #0d1f12 0%, #1a3a22 100%);
+  padding: 5rem 2rem;
+  border-bottom: 4px solid var(--accent-primary);
   text-align: center;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
+  position: relative;
+  overflow: hidden;
 }
 
-.header-overlay {
+.dark .header-section {
+  background: linear-gradient(135deg, #050a06 0%, #0d1f12 100%);
+}
+
+.header-section::after {
+  content: '';
   position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, 
-    rgba(0, 166, 81, 0.05) 0%, 
-    rgba(255, 255, 255, 0.4) 50%, 
-    var(--bg-primary) 100%
-  );
-  z-index: 1;
-  pointer-events: none;
-  transition: background 0.3s ease;
-}
-
-.dark .header-overlay {
-  background: linear-gradient(180deg, 
-    rgba(0, 200, 83, 0.1) 0%, 
-    rgba(10, 10, 10, 0.4) 50%, 
-    var(--bg-primary) 100%
-  );
-}
-
-.hero__dot-grid {
-  position: absolute;
-  inset: 0;
-  background-image: radial-gradient(circle, rgba(0, 166, 81, 0.04) 1px, transparent 1px);
-  background-size: 22px 22px;
-  pointer-events: none;
-  z-index: 2;
-}
-
-.dark .hero__dot-grid {
-  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-}
-
-/* Translucent floating glowing green shapes behind content */
-.hero-bg-shapes {
-  position: absolute;
-  inset: 0;
-  z-index: 3;
-  pointer-events: none;
-}
-
-.floating-shape {
-  position: absolute;
-  background: linear-gradient(135deg, var(--accent-primary) 0%, transparent 80%);
-  border-radius: 50%;
-  filter: blur(80px);
-  opacity: 0.12;
-  pointer-events: none;
-}
-
-.shape-1 { 
-  width: 400px; 
-  height: 400px; 
-  top: -5%; 
-  left: 10%; 
-  animation: float-shape-1 9s ease-in-out infinite alternate;
-}
-.shape-2 { 
-  width: 350px; 
-  height: 350px; 
-  bottom: 5%; 
-  right: 10%; 
-  opacity: 0.09; 
-  animation: float-shape-2 11s ease-in-out infinite alternate;
-}
-.shape-3 { 
-  width: 250px; 
-  height: 250px; 
-  top: 30%; 
-  left: 60%; 
-  opacity: 0.05; 
-  animation: float-shape-3 8s ease-in-out infinite alternate;
-}
-
-@keyframes float-shape-1 {
-  0% { transform: translate(0, 0) scale(1); }
-  100% { transform: translate(20px, -20px) scale(1.05); }
-}
-
-@keyframes float-shape-2 {
-  0% { transform: translate(0, 0) scale(1); }
-  100% { transform: translate(-15px, 15px) scale(0.95); }
-}
-
-@keyframes float-shape-3 {
-  0% { transform: translate(0, 0) scale(1); }
-  100% { transform: translate(15px, 10px) scale(1.06); }
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: radial-gradient(#ffffff0a 1px, transparent 1px);
+  background-size: 20px 20px;
 }
 
 .badge {
-  position: relative;
   display: inline-block;
-  background: rgba(0, 166, 81, 0.08);
-  color: var(--accent-primary);
+  background: rgba(0, 166, 81, 0.2);
+  color: #00ff7f;
   padding: 4px 12px;
   border-radius: 20px;
-  font-family: 'Schibsted Grotesk', sans-serif;
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
   margin-bottom: 1.5rem;
-  border: 1px solid rgba(0, 166, 81, 0.15);
-  z-index: 10;
-  text-shadow: 0 0 8px rgba(0, 166, 81, 0.2);
-}
-
-.dark .badge {
-  background: rgba(0, 200, 83, 0.12);
-  border-color: rgba(0, 200, 83, 0.2);
-}
-
-.header-content {
-  position: relative;
-  max-width: 800px;
-  margin: 0 auto;
-  text-align: center;
-  z-index: 10;
+  border: 1px solid rgba(0, 166, 81, 0.3);
 }
 
 .header-content h1 {
-  font-family: 'Lora', serif;
+  font-family: 'Lora', Georgia, serif;
   font-size: clamp(2.5rem, 5vw, 3.5rem);
   font-weight: 700;
-  color: var(--text-primary);
+  color: #ffffff;
   margin: 0 0 1rem;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
 }
 
 .header-content p {
-  font-family: 'Inter', sans-serif;
-  color: var(--text-secondary);
-  font-size: 1.15rem;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 1.2rem;
   max-width: 700px;
   margin: 0 auto;
-  opacity: 0.85;
 }
 
 /* Main Layout */
 .content-section {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 2rem 2rem 4rem;
+  padding: 4rem 2rem;
 }
 
 .guide-grid {
@@ -427,7 +322,6 @@
 }
 
 .nav-sticky h3 {
-  font-family: 'Schibsted Grotesk', sans-serif;
   font-size: 0.75rem;
   text-transform: uppercase;
   color: var(--text-tertiary);
@@ -444,21 +338,19 @@
 
 .nav-sticky li a {
   display: block;
-  padding: 0.6rem 0 0.6rem 1.2rem;
+  padding: 0.6rem 0;
   color: var(--text-secondary);
   text-decoration: none;
-  font-family: 'Schibsted Grotesk', sans-serif;
-  font-size: 0.9rem;
-  font-weight: 600;
-  transition: all 0.3s cubic-bezier(0.165, 0.84, 0.44, 1);
+  font-weight: 500;
+  transition: all 0.2s ease;
   border-left: 2px solid var(--border-color);
+  padding-left: 1.2rem;
 }
 
 .nav-sticky li a:hover {
   color: var(--accent-primary);
   border-left-color: var(--accent-primary);
-  background: rgba(0, 166, 81, 0.04);
-  padding-left: 1.4rem;
+  background: var(--green-dim);
 }
 
 /* Content Cards */
@@ -473,26 +365,11 @@
 }
 
 .highlight-card {
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
+  background: var(--bg-secondary);
   padding: 2.5rem;
-  border-radius: 16px;
-  border: 1px solid rgba(0, 166, 81, 0.12);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.02);
-  transition: border-color 0.3s, transform 0.3s, box-shadow 0.3s;
-}
-
-.dark .highlight-card {
-  background: rgba(10, 10, 10, 0.65);
-  border-color: rgba(255, 255, 255, 0.08);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-}
-
-.highlight-card:hover {
-  border-color: var(--accent-primary);
-  transform: translateY(-2px);
-  box-shadow: 0 15px 35px rgba(0, 166, 81, 0.06);
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-md);
 }
 
 .section-title {
@@ -526,20 +403,13 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  background: rgba(0, 166, 81, 0.04);
+  background: var(--green-dim);
   color: var(--accent-primary);
   padding: 6px 14px;
-  border-radius: 8px;
+  border-radius: 6px;
   font-size: 0.85rem;
-  font-family: 'Schibsted Grotesk', sans-serif;
   font-weight: 600;
-  border: 1px solid rgba(0, 166, 81, 0.12);
-  transition: all 0.2s ease;
-}
-
-.pill:hover {
-  background: rgba(0, 166, 81, 0.08);
-  transform: scale(1.02);
+  border: 1px solid var(--border-color);
 }
 
 /* Role Grid */
@@ -551,23 +421,16 @@
 }
 
 .role-card {
-  background: rgba(255, 255, 255, 0.6);
-  backdrop-filter: blur(10px);
+  background: var(--bg-secondary);
   padding: 1.5rem;
-  border-radius: 12px;
-  border: 1px solid rgba(0, 166, 81, 0.1);
-  transition: transform 0.3s cubic-bezier(0.165, 0.84, 0.44, 1), border-color 0.3s, box-shadow 0.3s;
-}
-
-.dark .role-card {
-  background: rgba(10, 10, 10, 0.5);
-  border-color: rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  transition: transform 0.2s ease;
 }
 
 .role-card:hover {
   transform: translateY(-5px);
   border-color: var(--accent-primary);
-  box-shadow: 0 12px 24px -10px rgba(0, 166, 81, 0.15);
 }
 
 .role-header {
@@ -576,7 +439,6 @@
   gap: 0.75rem;
   margin-bottom: 1.25rem;
   color: var(--accent-primary);
-  font-family: 'Schibsted Grotesk', sans-serif;
   font-weight: 700;
   font-size: 1.1rem;
 }
@@ -594,30 +456,19 @@
 
 /* Pro-Tip Box */
 .pro-tip {
-  background: rgba(245, 158, 11, 0.05);
-  border: 1px solid rgba(245, 158, 11, 0.15);
-  border-left: 4px solid #f59e0b;
+  background: var(--amber-dim);
+  border-left: 4px solid var(--amber-dk);
   padding: 1.25rem;
-  border-radius: 8px;
+  border-radius: 4px;
   margin-top: 1.5rem;
   font-size: 0.95rem;
   color: var(--amber-dk);
 }
 
-.dark .pro-tip {
-  background: rgba(245, 158, 11, 0.03);
-  color: #fbbf24;
-  border-left-color: #fbbf24;
-}
-
 .pro-tip strong {
-  color: #d97706;
+  color: var(--amber-dk);
   display: block;
   margin-bottom: 0.25rem;
-}
-
-.dark .pro-tip strong {
-  color: #fbbf24;
 }
 
 /* Process Steps */
@@ -631,23 +482,10 @@
 .step {
   display: flex;
   gap: 1.5rem;
-  background: rgba(255, 255, 255, 0.6);
-  backdrop-filter: blur(10px);
+  background: var(--bg-secondary);
   padding: 1.5rem;
-  border-radius: 12px;
-  border: 1px solid rgba(0, 166, 81, 0.1);
-  transition: transform 0.3s cubic-bezier(0.165, 0.84, 0.44, 1), border-color 0.3s, box-shadow 0.3s;
-}
-
-.dark .step {
-  background: rgba(10, 10, 10, 0.5);
-  border-color: rgba(255, 255, 255, 0.06);
-}
-
-.step:hover {
-  transform: translateY(-2px);
-  border-color: var(--accent-primary);
-  box-shadow: 0 10px 20px -10px rgba(0, 166, 81, 0.12);
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
 }
 
 .step-num {
@@ -659,15 +497,12 @@
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  font-family: 'Lora', serif;
   font-weight: 700;
   flex-shrink: 0;
-  box-shadow: 0 4px 10px rgba(0, 166, 81, 0.2);
 }
 
 .step-info strong {
   display: block;
-  font-family: 'Schibsted Grotesk', sans-serif;
   font-size: 1.1rem;
   margin-bottom: 0.5rem;
   color: var(--text-primary);
@@ -684,11 +519,9 @@
   margin-bottom: 2rem;
   padding-bottom: 1.5rem;
   border-bottom: 1px solid var(--border-color);
-  transition: border-color 0.3s;
 }
 
 .faq-item h4 {
-  font-family: 'Schibsted Grotesk', sans-serif;
   font-size: 1.1rem;
   color: var(--text-primary);
   margin-bottom: 0.75rem;

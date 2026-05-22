@@ -43,19 +43,11 @@ const handleLogin = async () => {
 
 <template>
   <div class="auth-page">
-    <div class="auth-bg-image"></div>
-    <div class="auth-bg-overlay"></div>
-    <div class="hero-bg-shapes">
-      <div class="floating-shape shape-1"></div>
-      <div class="floating-shape shape-2"></div>
-      <div class="floating-shape shape-3"></div>
-    </div>
-
     <div class="auth-card">
 
       <RouterLink :to="{ name: 'home' }" class="auth-logo">
         <div class="logo-icon">
-          <img src="/lumia_logo.png" class="logo-img" />
+          <img src="/lumia_logo.ico" style="width: 22px; height: 22px; object-fit: contain" />
         </div>
         <span class="logo-text">UMIA</span>
       </RouterLink>
@@ -118,133 +110,25 @@ const handleLogin = async () => {
   --surface: var(--bg-primary);
   --paper: var(--bg-secondary);
   --green: var(--accent-primary);
-  --green-dk: #007d3d;
+  --green-dk: var(--accent-primary);
 
-  position: relative;
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: 'Inter', sans-serif;
+  background: var(--surface);
+  font-family: 'Source Sans 3', sans-serif;
   color: var(--ink);
   padding: 2rem;
-  overflow: hidden;
-  box-sizing: border-box;
-}
-
-/* Blurred campus backdrop */
-.auth-bg-image {
-  position: absolute;
-  inset: -15px;
-  background-image: url('/imus_campus_scaled.jpg');
-  background-size: cover;
-  background-position: center;
-  filter: blur(20px) brightness(0.92) contrast(0.95);
-  z-index: 1;
-  pointer-events: none;
-  transition: filter 0.3s ease;
-}
-
-.dark .auth-bg-image {
-  filter: blur(20px) brightness(0.35) contrast(1.1);
-}
-
-.auth-bg-overlay {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at 50% 50%, rgba(255, 255, 255, 0.45) 0%, rgba(245, 247, 250, 0.85) 100%);
-  z-index: 2;
-  pointer-events: none;
-  transition: background 0.3s ease;
-}
-
-.dark .auth-bg-overlay {
-  background: radial-gradient(circle at 50% 50%, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0.9) 100%);
-}
-
-/* Floating green shapes */
-.hero-bg-shapes {
-  position: absolute;
-  inset: 0;
-  z-index: 3;
-  pointer-events: none;
-}
-
-.floating-shape {
-  position: absolute;
-  background: linear-gradient(135deg, var(--green) 0%, transparent 80%);
-  border-radius: 50%;
-  filter: blur(80px);
-  opacity: 0.12;
-  pointer-events: none;
-}
-
-.shape-1 { 
-  width: 350px; 
-  height: 350px; 
-  top: 10%; 
-  left: 15%; 
-  animation: float-shape-1 9s ease-in-out infinite alternate;
-}
-.shape-2 { 
-  width: 300px; 
-  height: 300px; 
-  bottom: 10%; 
-  right: 15%; 
-  opacity: 0.08; 
-  animation: float-shape-2 11s ease-in-out infinite alternate;
-}
-.shape-3 { 
-  width: 200px; 
-  height: 200px; 
-  top: 40%; 
-  left: 60%; 
-  opacity: 0.04; 
-  animation: float-shape-3 8s ease-in-out infinite alternate;
-}
-
-@keyframes float-shape-1 {
-  0% { transform: translate(0, 0) scale(1); }
-  100% { transform: translate(15px, -15px) scale(1.05); }
-}
-
-@keyframes float-shape-2 {
-  0% { transform: translate(0, 0) scale(1); }
-  100% { transform: translate(-15px, 15px) scale(0.95); }
-}
-
-@keyframes float-shape-3 {
-  0% { transform: translate(0, 0) scale(1); }
-  100% { transform: translate(15px, 10px) scale(1.06); }
 }
 
 .auth-card {
-  position: relative;
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(25px);
-  -webkit-backdrop-filter: blur(25px);
-  border: 1px solid rgba(0, 166, 81, 0.18);
-  border-radius: 20px;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
   padding: 2.5rem 2.25rem;
   width: 100%;
   max-width: 400px;
-  z-index: 10;
-  box-shadow: 0 20px 45px -15px rgba(0, 0, 0, 0.08),
-              0 0 1px 1px rgba(255, 255, 255, 0.5) inset;
-  transition: border-color 0.3s, box-shadow 0.3s;
-}
-
-.dark .auth-card {
-  background: rgba(10, 10, 10, 0.65);
-  border-color: rgba(255, 255, 255, 0.08);
-  box-shadow: 0 20px 50px -15px rgba(0, 0, 0, 0.5),
-              0 0 1px 1px rgba(255, 255, 255, 0.05) inset;
-}
-
-.auth-card:hover {
-  border-color: var(--green);
-  box-shadow: 0 25px 55px -15px rgba(0, 166, 81, 0.12),
-              0 0 1px 1px rgba(255, 255, 255, 0.6) inset;
 }
 
 .auth-logo {
@@ -254,12 +138,13 @@ const handleLogin = async () => {
   text-decoration: none;
   margin-bottom: 2rem;
   position: relative;
+  /* We use inline-flex so it centers via text-align: center on card */
 }
 
 .logo-icon {
   width: 36px;
   height: 36px;
-  background: var(--green);
+  background: var(--logo-bg);
   border-radius: 10px;
   display: flex;
   align-items: center;
@@ -268,23 +153,23 @@ const handleLogin = async () => {
   overflow: hidden;
   position: relative;
   z-index: 2;
-  box-shadow: 0 4px 12px rgba(0, 166, 81, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+  border: 1px solid var(--logo-border);
+  /* Stay above text during slide */
   animation: logo-entrance 1.6s cubic-bezier(0.16, 1, 0.3, 1) forwards,
     logo-breathe 3s ease-in-out infinite 1.6s;
 }
 
 .logo-img {
-  width: 24px;
-  height: 24px;
+  width: 100%;
+  height: 100%;
   object-fit: contain;
 }
 
 .logo-text {
-  font-family: 'Lora', serif;
-  font-size: 1.2rem;
-  font-weight: 600;
-  letter-spacing: 0.15em;
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
   color: var(--ink);
   opacity: 0;
   z-index: 1;
@@ -294,19 +179,25 @@ const handleLogin = async () => {
 @keyframes logo-entrance {
   0% {
     opacity: 0;
+    /* 200px (center) - 36px (padding) - 18px (half-width of 36px) = 146px */
     transform: translateX(146px) scale(0.9);
   }
+
   35% {
     opacity: 1;
     transform: translateX(146px) scale(1.1);
   }
+
   45% {
     opacity: 1;
     transform: translateX(146px) scale(1);
   }
+
   75% {
     transform: translateX(0);
+    /* Return to its natural left-aligned position */
   }
+
   100% {
     opacity: 1;
     transform: translateX(0);
@@ -317,8 +208,14 @@ const handleLogin = async () => {
   0% {
     opacity: 0;
     transform: translateX(-40px);
+    /* Hidden behind the logo */
     filter: blur(4px);
   }
+
+  30% {
+    opacity: 0.5;
+  }
+
   100% {
     opacity: 1;
     transform: translateX(0);
@@ -327,10 +224,15 @@ const handleLogin = async () => {
 }
 
 @keyframes logo-breathe {
-  0%, 100% {
+
+  0%,
+  100% {
+    opacity: 1;
     transform: scale(1);
   }
+
   50% {
+    opacity: 0.85;
     transform: scale(0.96);
   }
 }
@@ -342,15 +244,16 @@ const handleLogin = async () => {
 }
 
 .auth-header h1 {
-  font-family: 'Lora', serif;
-  font-size: 1.5rem;
+  font-family: 'Lora', Georgia, serif;
+  font-size: 1.45rem;
   font-weight: 600;
   color: var(--ink);
-  margin: 0 0 0.35rem;
+  margin: 0 0 0.3rem;
+  letter-spacing: -0.01em;
 }
 
 .auth-header p {
-  font-size: 0.85rem;
+  font-size: 0.84rem;
   color: var(--ink-3);
   margin: 0;
   line-height: 1.5;
@@ -359,65 +262,48 @@ const handleLogin = async () => {
 .auth-form {
   display: flex;
   flex-direction: column;
-  gap: 1.2rem;
-  margin-bottom: 1.5rem;
+  gap: 1.1rem;
+  margin-bottom: 1.25rem;
 }
 
 .field {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.35rem;
 }
 
 .field label {
-  font-family: 'Schibsted Grotesk', sans-serif;
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.07em;
   color: var(--ink-3);
 }
 
 .field input,
 .input-wrap input {
   width: 100%;
-  padding: 0.75rem 0.95rem;
-  border: 1px solid rgba(0, 166, 81, 0.15);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.5);
-  font-family: 'Inter', sans-serif;
+  padding: 0.65rem 0.8rem;
+  border: 1.5px solid var(--rule);
+  border-radius: 3px;
+  background: var(--paper);
+  font-family: 'Source Sans 3', sans-serif;
   font-size: 0.9rem;
   color: var(--ink);
-  transition: all 0.2s ease;
+  transition: border-color 0.14s;
   box-sizing: border-box;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.01) inset;
-}
-
-.dark .field input,
-.dark .input-wrap input {
-  background: rgba(0, 0, 0, 0.3);
-  border-color: rgba(255, 255, 255, 0.08);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15) inset;
 }
 
 .field input:focus,
 .input-wrap input:focus {
   outline: none;
   border-color: var(--green);
-  background: var(--paper);
-  box-shadow: 0 0 0 4px rgba(0, 166, 81, 0.1);
-}
-
-.dark .field input:focus,
-.dark .input-wrap input:focus {
-  background: rgba(0, 0, 0, 0.6);
-  box-shadow: 0 0 0 4px rgba(0, 200, 83, 0.12);
 }
 
 .field input::placeholder,
 .input-wrap input::placeholder {
   color: var(--ink-3);
-  opacity: 0.6;
+  opacity: 0.5;
 }
 
 .field input:-webkit-autofill,
@@ -431,12 +317,12 @@ const handleLogin = async () => {
 }
 
 .input-wrap input {
-  padding-right: 2.5rem;
+  padding-right: 2.4rem;
 }
 
 .eye-btn {
   position: absolute;
-  right: 0.8rem;
+  right: 0.7rem;
   top: 50%;
   transform: translateY(-50%);
   background: none;
@@ -446,54 +332,46 @@ const handleLogin = async () => {
   padding: 0;
   display: flex;
   align-items: center;
-  transition: color 0.2s;
+  transition: color 0.13s;
 }
 
 .eye-btn:hover {
-  color: var(--green);
+  color: var(--ink);
 }
 
 .submit-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
+  gap: 0.4rem;
   background: var(--green);
-  color: #ffffff;
+  color: #fff;
   border: none;
-  border-radius: 10px;
-  padding: 0.85rem;
-  font-family: 'Schibsted Grotesk', sans-serif;
-  font-size: 0.9rem;
+  border-radius: 3px;
+  padding: 0.75rem;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.88rem;
   font-weight: 700;
   cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.165, 0.84, 0.44, 1);
-  margin-top: 0.2rem;
+  transition: background 0.14s;
+  margin-top: 0.15rem;
   width: 100%;
-  box-shadow: 0 4px 15px rgba(0, 166, 81, 0.2);
 }
 
 .submit-btn:hover:not(:disabled) {
   background: var(--green-dk);
-  transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(0, 166, 81, 0.3);
-}
-
-.submit-btn:active:not(:disabled) {
-  transform: translateY(1px);
 }
 
 .submit-btn:disabled {
-  opacity: 0.6;
+  opacity: 0.5;
   cursor: not-allowed;
-  box-shadow: none;
 }
 
 .spinner {
   width: 14px;
   height: 14px;
   border: 2px solid rgba(255, 255, 255, 0.4);
-  border-top-color: #ffffff;
+  border-top-color: #fff;
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
   flex-shrink: 0;
@@ -506,21 +384,20 @@ const handleLogin = async () => {
 }
 
 .switch-link {
-  font-size: 0.85rem;
+  font-size: 0.82rem;
   color: var(--ink-3);
-  margin: 1rem 0 0;
+  margin: 0;
   text-align: center;
 }
 
 .switch-link a {
-  color: var(--green);
+  color: var(--green-dk);
   font-weight: 600;
   text-decoration: none;
-  transition: color 0.2s;
 }
 
 .switch-link a:hover {
-  color: var(--green-dk);
+  color: var(--green);
 }
 
 .auth-footer {
@@ -535,24 +412,22 @@ const handleLogin = async () => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-family: 'Schibsted Grotesk', sans-serif;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   font-weight: 600;
   color: var(--ink-3);
   text-decoration: none;
-  transition: color 0.2s, transform 0.2s;
+  transition: color 0.15s;
 }
 
 .home-link:hover {
-  color: var(--green);
-  transform: translateX(-3px);
+  color: var(--green-dk);
 }
 
 @media (max-width: 480px) {
   .auth-page {
     padding: 1.25rem;
     align-items: flex-start;
-    padding-top: 4rem;
+    padding-top: 3rem;
   }
 
   .auth-card {

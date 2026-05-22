@@ -99,8 +99,6 @@ const copyToClipboard = async (text: string, key: string) => {
   }
 }
 
-
-
 // ── RAD combined detection ────────────────────────────────────────────────────
 // The backend stores identical text in both results + discussion when combined.
 // Must be defined BEFORE IMRAD_SECTION_CONFIGS which depends on it.
@@ -110,7 +108,6 @@ const isRadCombined = computed(() => {
   const d = paper.value.discussion
   return !!(r && d && r.trim() === d.trim())
 })
-
 
 // Resolve virtual 'rad' key → actual Paper field key ('results')
 // Use this everywhere we access paper[key] or sectionPageCache[key]
@@ -150,7 +147,6 @@ const parseSummaryBlocks = (text: string): { heading: string; body: string }[] =
   return blocks.filter(b => b.body.trim())
 }
 
-
 const loadPaperData = async (id: string) => {
   loading.value = true
   try {
@@ -186,7 +182,6 @@ const loadPaperData = async (id: string) => {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 }
-
 
 const initScrollObserver = () => {
   if (observer) observer.disconnect()
@@ -321,15 +316,10 @@ const authorList = computed(() => {
   return [raw]
 })
 
-
 // ── IMRAD structured rendering ────────────────────────────────────────────────
-// The backend pre-parses flat text into typed blocks via imrad_structure_service.
-// We just render them here — no client-side regex or label lists needed.
-
 import type { ImradBlock } from '../services/api'
 
 // Get structured blocks for a section key, falling back to an empty array.
-// Resolves the virtual 'rad' key → 'results' (combined RAD documents).
 const getStructuredBlocks = (key: string): ImradBlock[] => {
   if (!paper.value?.imrad_structured) return []
   if (key === 'rad') {
@@ -343,12 +333,10 @@ const getStructuredBlocks = (key: string): ImradBlock[] => {
   return paper.value.imrad_structured[key as keyof typeof paper.value.imrad_structured] ?? []
 }
 
-
 // Whether a section has structured blocks available from the backend
 const hasStructured = (key: string): boolean => getStructuredBlocks(key).length > 0
 
 // Strip any [[TABLE_IMAGE:X]] or [TABLE_IMAGE:X] markers from raw text
-// Used in the fallback path for older papers without structured data
 const stripMarkers = (text: string): string => {
   if (!text) return ''
   return text
@@ -358,16 +346,12 @@ const stripMarkers = (text: string): string => {
     .trim()
 }
 
-// ── References helpers ────────────────────────────────────────────────────────
-
 // Parse the flat references string into individual entries.
-// The backend's _postprocess_references() separates entries with blank lines.
-// We fall back to splitting on common citation markers for older records.
 const parsedReferences = computed((): string[] => {
   if (!paper.value?.references) return []
   const raw = paper.value.references.trim()
 
-  // Primary: blank-line separation (output of _postprocess_references)
+  // Primary: blank-line separation
   const byBlankLine = raw.split(/\n\n+/).map(s => s.replace(/\n/g, ' ').trim()).filter(Boolean)
   if (byBlankLine.length > 1) return byBlankLine
 
@@ -379,37 +363,20 @@ const parsedReferences = computed((): string[] => {
   const byNumbered = raw.split(/(?=\d+\.\s)/).map(s => s.trim()).filter(Boolean)
   if (byNumbered.length > 1) return byNumbered
 
-  // Last resort: treat the whole string as one entry
+  // Last resort
   return [raw]
 })
 
 // Turn DOIs and bare URLs inside a reference entry into clickable links.
-/**
- * formatReferenceEntry
- * --------------------
- * Renders a single APA reference entry with semantic HTML so it matches the
- * target visual style (bold authors, italic title/journal, live DOI links).
- *
- * Parsing strategy (handles APA 6th / 7th and IEEE numeric styles):
- *   1. Author block  — everything up to the first "(YEAR)" token
- *   2. Year          — the (YEAR) token itself
- *   3. Rest          — title + source + DOI/URL, split further heuristically
- *
- * Falls back to plain text + linkification for entries that don't match.
- */
 const formatReferenceEntry = (raw: string): string => {
-  // ── 0. HTML-escape the raw string to prevent XSS ──────────────────────
   const esc = (s: string) =>
     s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
-  // ── 1. Linkify URLs and bare DOIs (operates on already-escaped text) ──
   const linkify = (s: string): string => {
-    // URLs
     let out = s.replace(
       /https?:\/\/[^\s,)\]&]+/g,
       url => `<a href="${url}" target="_blank" rel="noopener noreferrer" class="ref-link">${url}</a>`
     )
-    // bare doi: 10.xxx not already inside an href
     out = out.replace(
       /(?<!href=")(?:doi:\s*)(10\.[^\s,)\]&]+)/gi,
       (_, doi) =>
@@ -420,8 +387,7 @@ const formatReferenceEntry = (raw: string): string => {
 
   const escapedRaw = esc(raw)
 
-  // ── 2. Try to detect APA format: "Authors. (Year). Title. Source." ────
-  //   Match the first (4-digit year) or (Year, Month) parenthetical
+  // APA Format detection
   const yearMatch = escapedRaw.match(/^(.*?)\((\d{4}[a-z]?(?:,\s*[A-Z][a-z]+)?)\)\.\s*(.*)$/s)
 
   if (yearMatch) {
@@ -429,23 +395,18 @@ const formatReferenceEntry = (raw: string): string => {
     const year = yearMatch[2] ?? ''
     const remainder = (yearMatch[3] ?? '').trim()
 
-    // Split remainder into title vs. source at the first ". " that follows
-    // a lowercase letter or closing paren/bracket — heuristic boundary.
-    // Title ends at the first period that is followed by a space + capital or digit.
     const titleSourceMatch = remainder.match(/^(.*?[.!?])\s+([A-Z\d*(].*)$/s)
 
     let titleHtml = ''
     let sourceHtml = ''
 
     if (titleSourceMatch) {
-      // Title: strip trailing period for display, render in italics
       const titleText = (titleSourceMatch[1] ?? '').replace(/\.$/, '').trim()
       const sourceText = (titleSourceMatch[2] ?? '').trim()
 
       titleHtml = `<em class="ref-title">${titleText}.</em> `
       sourceHtml = linkify(sourceText)
     } else {
-      // Can't split — treat the whole remainder as title
       titleHtml = `<em class="ref-title">${linkify(remainder)}</em>`
     }
 
@@ -457,7 +418,7 @@ const formatReferenceEntry = (raw: string): string => {
     )
   }
 
-  // ── 3. IEEE numeric  [1] Authors, "Title," Journal, … ─────────────────
+  // IEEE format
   const ieeeMatch = escapedRaw.match(/^(\[\d+\])\s+(.*)$/s)
   if (ieeeMatch) {
     return (
@@ -466,7 +427,7 @@ const formatReferenceEntry = (raw: string): string => {
     )
   }
 
-  // ── 4. Numbered list  1. Authors … ────────────────────────────────────
+  // Numbered list
   const numMatch = escapedRaw.match(/^(\d+\.)\s+(.*)$/s)
   if (numMatch) {
     return (
@@ -475,13 +436,10 @@ const formatReferenceEntry = (raw: string): string => {
     )
   }
 
-  // ── 5. Fallback: plain linkified text ─────────────────────────────────
   return linkify(escapedRaw)
 }
 
-// ── Inverted Pyramid Title ─────────────────────────────────────────────────────
-// Splits a title into lines where each line is shorter than the previous,
-// producing a top-heavy inverted pyramid shape regardless of title length.
+// Inverted Pyramid Title
 const pyramidTitleLines = computed((): string[] => {
   const title = paper.value?.title
   if (!title) return []
@@ -489,33 +447,24 @@ const pyramidTitleLines = computed((): string[] => {
   const words = title.trim().split(/\s+/)
   const total = words.length
 
-  // Very short titles: single line
   if (total <= 3) return [words.join(' ')]
 
   const charLen = title.length
-
-  // FIX: Base the number of lines on character length instead of word count.
-  // This breaks longer titles into more lines, preventing the top line
-  // from exceeding the container width and triggering a CSS wrap.
   const numLines = charLen <= 45 ? 2 : charLen <= 80 ? 3 : charLen <= 115 ? 4 : 5
 
-  // Strategy: greedily fill each line up to a shrinking character budget.
   const shareWeights: number[] = []
   for (let i = numLines; i >= 1; i--) shareWeights.push(i)
   const shareSum = shareWeights.reduce((a, b) => a + b, 0)
-
-  // Character budgets per line (descending)
   const budgets = shareWeights.map(w => Math.floor((w / shareSum) * charLen))
 
   const lines: string[] = []
-  let wi = 0 // word index
+  let wi = 0
 
   for (let li = 0; li < numLines; li++) {
     if (wi >= total) break
     const remaining = numLines - li - 1
     const wordsLeft = total - wi
 
-    // Last line: take all remaining words
     if (li === numLines - 1 || wordsLeft <= remaining) {
       lines.push(words.slice(wi).join(' '))
       wi = total
@@ -525,8 +474,6 @@ const pyramidTitleLines = computed((): string[] => {
     const budget = budgets[li]
     if (budget === undefined) break
 
-    // Greedily add words while under budget, but always leave at least
-    // 1 word per remaining line
     let count = 0
     let len = 0
     while (wi + count < total - remaining) {
@@ -545,13 +492,17 @@ const pyramidTitleLines = computed((): string[] => {
 
   return lines.filter(l => l.length > 0)
 })
-
 </script>
 
 <template>
   <div class="detail-page" v-if="!loading && paper">
 
-
+    <!-- Ambient background shapes for premium overlay -->
+    <div class="hero-bg-shapes" aria-hidden="true">
+      <div class="floating-shape shape-1"></div>
+      <div class="floating-shape shape-2"></div>
+      <div class="floating-shape shape-3"></div>
+    </div>
 
     <!-- ══ PAGE LAYOUT ════════════════════════════════════════════ -->
     <div class="journal-page-layout">
@@ -594,14 +545,13 @@ const pyramidTitleLines = computed((): string[] => {
         <transition name="view-fade" mode="out-in">
           <!-- ── Main Journal Paper ── -->
           <div v-if="activeView === 'paper'" class="journal-paper-wrap" key="paper">
-            <!-- Breadcrumb relocated from topbar -->
+            <!-- Breadcrumb -->
             <nav class="breadcrumb detail-breadcrumb">
               <RouterLink :to="{ name: 'home' }" class="bc-link">Home</RouterLink>
               <ChevronRight :size="12" class="bc-sep" />
               <button @click="goBack" class="bc-link">Results</button>
               <ChevronRight :size="12" class="bc-sep" />
-              <span class="bc-active">{{ paper.title.length > 55 ? paper.title.substring(0, 55) + '…' : paper.title
-                }}</span>
+              <span class="bc-active">{{ paper.title.length > 55 ? paper.title.substring(0, 55) + '…' : paper.title }}</span>
             </nav>
 
             <article class="imrad-journal-page">
@@ -677,9 +627,8 @@ const pyramidTitleLines = computed((): string[] => {
                     <span>{{ cfg.label }}</span>
                   </div>
 
-                  <!-- Section Wrapper to reset CSS counter -->
+                  <!-- Section Wrapper -->
                   <div class="journal-section-content">
-                    <!-- Introduction → AI summary blocks -->
                     <template v-if="cfg.key === 'introduction'">
                       <template v-if="paper.introduction_summary">
                         <div v-for="(block, idx) in parseSummaryBlocks(paper.introduction_summary as string)"
@@ -694,7 +643,6 @@ const pyramidTitleLines = computed((): string[] => {
                       <p v-else class="journal-para journal-no-content">No introduction available.</p>
                     </template>
 
-                    <!-- Methods / Results / Discussion → structured blocks -->
                     <template v-else>
                       <div v-if="hasStructured(cfg.key)">
                         <template v-for="(block, i) in getStructuredBlocks(cfg.key)" :key="i">
@@ -703,8 +651,7 @@ const pyramidTitleLines = computed((): string[] => {
                             <img :src="block.text" :alt="block.id" class="journal-figure-img"
                               @click="openZoomModal(block.text)" />
                           </div>
-                          <p v-else-if="block.type === 'table-label'" class="journal-figure-caption">{{ block.text }}
-                          </p>
+                          <p v-else-if="block.type === 'table-label'" class="journal-figure-caption">{{ block.text }}</p>
                           <p v-else class="journal-para">{{ block.text }}</p>
                         </template>
                       </div>
@@ -714,14 +661,13 @@ const pyramidTitleLines = computed((): string[] => {
                           <p class="journal-para">{{ stripMarkers(paper.discussion as string) }}</p>
                         </template>
                       </div>
-                      <p v-else class="journal-para journal-no-content">No extracted text available for this section.
-                      </p>
+                      <p v-else class="journal-para journal-no-content">No extracted text available for this section.</p>
                     </template>
                   </div>
                 </template>
               </div>
 
-              <!-- ── References — full-width below the 2-column body ── -->
+              <!-- ── References ── -->
               <section v-if="parsedReferences.length > 0" id="references-section" class="journal-references-section">
                 <div class="journal-references-heading">
                   <span>References</span>
@@ -776,7 +722,6 @@ const pyramidTitleLines = computed((): string[] => {
 
           <div v-if="recommendations.length > 0" class="rec-list">
             <div v-for="rec in recommendations" :key="rec.id" class="rec-card" @click="viewDetail(rec.id)">
-              <!-- Left: Main Card Content -->
               <div class="rec-card-main">
                 <div class="rec-card-header">
                   <div class="rec-match-score" :class="getConfidence(rec.score).cls"
@@ -793,20 +738,18 @@ const pyramidTitleLines = computed((): string[] => {
 
                 <div class="rec-card-meta">
                   <span class="rec-author">{{rec.payload?.author ? rec.payload.author.split('|').map(a =>
-                    (a.split(',')[0] ||
-                      '').trim()).join(', ') : ''}}</span>
+                    (a.split(',')[0] || '').trim()).join(', ') : ''}}</span>
                   <span class="rec-dot"></span>
                   <span class="rec-year">{{ rec.payload?.year }}</span>
                 </div>
 
-                <!-- Teaser pill (visible before hover) -->
                 <div v-if="rec.recommendation_reason" class="rec-insight-teaser">
                   <Info :size="10" />
                   <span>Hover for insight</span>
                 </div>
               </div>
 
-              <!-- Right: Insight Flow Content (Reveals on Hover) -->
+              <!-- Right: Insight Flow Content -->
               <div v-if="rec.recommendation_reason" class="rec-insight-side">
                 <div class="insight-side-head">
                   <Info :size="12" /> AI INSIGHT
@@ -826,19 +769,15 @@ const pyramidTitleLines = computed((): string[] => {
               <ul class="insight-list">
                 <li>
                   <span class="insight-marker">1</span>
-                  <span><strong>Limited Repository:</strong> The database may not have sufficient records yet to
-                    establish
-                    semantic links.</span>
+                  <span><strong>Limited Repository:</strong> The database may not have sufficient records yet to establish semantic links.</span>
                 </li>
                 <li>
                   <span class="insight-marker">2</span>
-                  <span><strong>Low Similarity:</strong> No other papers share close conceptual keywords or research
-                    themes.</span>
+                  <span><strong>Low Similarity:</strong> No other papers share close conceptual keywords or research themes.</span>
                 </li>
                 <li>
                   <span class="insight-marker">3</span>
-                  <span><strong>Highly Niche Topic:</strong> This study covers a unique academic area without matching
-                    methodologies.</span>
+                  <span><strong>Highly Niche Topic:</strong> This study covers a unique academic area without matching methodologies.</span>
                 </li>
               </ul>
             </div>
@@ -850,66 +789,45 @@ const pyramidTitleLines = computed((): string[] => {
   </div>
 
   <!-- Skeleton Loading State -->
-  <div v-else-if="loading" class="imrad-journal-page skeleton-page">
-    <!-- Header Skeleton -->
-    <div class="journal-header">
-      <div class="journal-meta-top">
-        <div class="skeleton-badge"></div>
-        <div class="skeleton-badge"></div>
-        <div class="skeleton-badge"></div>
-      </div>
-      <div class="skeleton-title"></div>
-      <div class="skeleton-title short"></div>
-      <div class="skeleton-authors"></div>
-      <div class="skeleton-stats"></div>
-    </div>
-
-    <!-- Body Skeleton -->
-    <div class="detail-layout">
+  <div v-else-if="loading" class="detail-page skeleton-page-wrap">
+    <div class="journal-page-layout">
       <!-- Left sidebar -->
-      <aside class="doc-nav-aside">
-        <div class="skeleton-nav-label"></div>
-        <div class="skeleton-nav-item"></div>
-        <div class="skeleton-nav-item"></div>
-        <div class="skeleton-nav-item"></div>
-        <div class="skeleton-nav-item"></div>
+      <aside class="journal-toc skeleton-toc">
+        <div class="toc-inner">
+          <div class="skeleton-nav-label"></div>
+          <div class="skeleton-nav-item"></div>
+          <div class="skeleton-nav-item"></div>
+          <div class="skeleton-nav-item"></div>
+          <div class="skeleton-nav-item"></div>
+        </div>
       </aside>
 
       <!-- Main Content -->
-      <div class="paper-main">
-        <div class="skeleton-tab-bar">
-          <div class="skeleton-tab"></div>
-          <div class="skeleton-tab"></div>
-          <div class="skeleton-tab"></div>
+      <div class="journal-main-col">
+        <div class="imrad-journal-page skeleton-page">
+          <div class="journal-header">
+            <div class="journal-meta-top">
+              <div class="skeleton-badge"></div>
+              <div class="skeleton-badge"></div>
+            </div>
+            <div class="skeleton-title"></div>
+            <div class="skeleton-title short"></div>
+            <div class="skeleton-authors"></div>
+            <div class="skeleton-stats"></div>
+          </div>
+          <div class="skeleton-text-block"></div>
+          <div class="skeleton-text-block"></div>
+          <div class="skeleton-text-block short"></div>
         </div>
-        <div class="skeleton-section-title"></div>
-        <div class="skeleton-text-block"></div>
-        <div class="skeleton-text-block"></div>
-        <div class="skeleton-text-block short"></div>
-
-        <div class="skeleton-section-title mt-4"></div>
-        <div class="skeleton-text-block"></div>
-        <div class="skeleton-text-block"></div>
-        <div class="skeleton-text-block short"></div>
       </div>
 
-      <!-- Right Sidebar (Recommendations) -->
-      <aside class="journal-sidebar">
+      <!-- Right Sidebar -->
+      <aside class="journal-sidebar skeleton-sidebar">
         <div class="sidebar-inner">
           <div class="skeleton-sidebar-title"></div>
           <div class="skeleton-sidebar-sub"></div>
-          <div class="rec-list">
-            <div class="rec-card skeleton-card">
-              <div class="skeleton-card-header"></div>
-              <div class="skeleton-card-title"></div>
-              <div class="skeleton-card-meta"></div>
-            </div>
-            <div class="rec-card skeleton-card">
-              <div class="skeleton-card-header"></div>
-              <div class="skeleton-card-title"></div>
-              <div class="skeleton-card-meta"></div>
-            </div>
-          </div>
+          <div class="rec-card skeleton-card"></div>
+          <div class="rec-card skeleton-card"></div>
         </div>
       </aside>
     </div>
@@ -970,14 +888,10 @@ const pyramidTitleLines = computed((): string[] => {
             <!-- Citation text area -->
             <div class="citation-area">
               <div class="citation-area-inner">
-                <p class="citation-text" v-html="apaVariation === '6' ? formattedCitations.apa_6 : apaVariation === '7' ? formattedCitations.apa_7 : formattedCitations.apa_intext
-                  "></p>
+                <p class="citation-text" v-html="apaVariation === '6' ? formattedCitations.apa_6 : apaVariation === '7' ? formattedCitations.apa_7 : formattedCitations.apa_intext"></p>
               </div>
-              <p class="selector-note">Note: If you are citating this study, please make sure that you are manually
-                adding
-                it to your reference list.<br><br>
-                Auto-citation detection in the system is not available at this time due to lack of resources and local
-                development and testing.</p>
+              <p class="selector-note">Note: If you are citing this study, please make sure that you are manually adding it to your reference list.<br><br>
+                Auto-citation detection in the system is not available at this time due to lack of resources and local development and testing.</p>
             </div>
 
             <!-- Footer -->
@@ -1022,9 +936,8 @@ const pyramidTitleLines = computed((): string[] => {
   </Teleport>
 </template>
 
-
 <style scoped>
-/* ── Tokens ──────────────────────────────────────────────── */
+/* ── Tokens & Reset ──────────────────────────────────────── */
 .detail-page {
   --ink: var(--text-primary);
   --ink-2: var(--text-secondary);
@@ -1033,1729 +946,308 @@ const pyramidTitleLines = computed((): string[] => {
   --surface: var(--bg-primary);
   --paper: var(--bg-secondary);
   --green: var(--accent-primary);
-  --green-dk: var(--accent-primary);
-  --green-dim: rgba(16, 185, 129, 0.1);
-  --hero-bg: #0d1f12;
+  --green-dk: #007d3d;
+  --green-dim: rgba(0, 166, 81, 0.08);
 
-  background: var(--surface);
   min-height: 100vh;
-  padding-top: 64px;
-  /* Height of the nav */
-  font-family: 'Source Sans 3', sans-serif;
+  background: var(--surface);
+  font-family: 'Inter', sans-serif;
   color: var(--ink);
-  /* Prevent horizontal scroll without breaking sticky */
+  position: relative;
+  overflow: hidden;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Translucent floating glowing green shapes */
+.hero-bg-shapes {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.floating-shape {
+  position: absolute;
+  background: linear-gradient(135deg, var(--green) 0%, transparent 80%);
+  border-radius: 50%;
+  filter: blur(120px);
+  opacity: 0.04;
+  pointer-events: none;
+}
+
+.dark .floating-shape {
+  opacity: 0.08;
+}
+
+.shape-1 {
+  width: 500px;
+  height: 500px;
+  top: -10%;
+  left: 5%;
+  animation: float-shape-1 12s ease-in-out infinite alternate;
+}
+.shape-2 {
+  width: 450px;
+  height: 450px;
+  bottom: 10%;
+  right: 5%;
+  animation: float-shape-2 15s ease-in-out infinite alternate;
+}
+.shape-3 {
+  width: 300px;
+  height: 300px;
+  top: 40%;
+  left: 50%;
+  animation: float-shape-3 10s ease-in-out infinite alternate;
+}
+
+@keyframes float-shape-1 {
+  0% { transform: translate(0, 0) scale(1); }
+  100% { transform: translate(30px, -30px) scale(1.05); }
+}
+@keyframes float-shape-2 {
+  0% { transform: translate(0, 0) scale(1); }
+  100% { transform: translate(-20px, 20px) scale(0.95); }
+}
+@keyframes float-shape-3 {
+  0% { transform: translate(0, 0) scale(1); }
+  100% { transform: translate(20px, 15px) scale(1.06); }
+}
+
+/* ══ PAGE LAYOUT ════════════════════════════════════════════ */
+.journal-page-layout {
+  position: relative;
+  z-index: 2;
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 5rem;
+  display: grid;
+  grid-template-columns: 200px 1fr 260px;
+  gap: 1.75rem;
+  align-items: start;
+}
+
+/* ── Left Sidebar (TOC) ────────────────────────────────── */
+.journal-toc {
+  position: sticky;
+  top: calc(52px + 2rem);
+  z-index: 10;
+}
+
+.toc-inner {
+  background: rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(0, 166, 81, 0.08);
+  border-radius: 16px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 20px -5px rgba(0, 0, 0, 0.02);
+}
+
+.dark .toc-inner {
+  background: rgba(15, 15, 15, 0.5);
+  border-color: rgba(255, 255, 255, 0.05);
+}
+
+.toc-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--green);
+  margin-bottom: 1.25rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.toc-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.toc-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--ink-2);
+  text-decoration: none;
+  background: transparent;
+  border: none;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s cubic-bezier(0.165, 0.84, 0.44, 1);
   width: 100%;
 }
 
-.dark .detail-container {
-  --hero-bg: #050505;
+.toc-bullet {
+  width: 6px;
+  height: 6px;
+  background: var(--ink-3);
+  border-radius: 50%;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
 }
 
-/* Breadcrumb - Improved visibility */
-.detail-breadcrumb {
-  margin-top: 0.5rem;
-  margin-bottom: 1rem;
-  padding-left: 0.25rem;
+.toc-item:hover {
+  color: var(--green);
+  background: rgba(0, 166, 81, 0.05);
+  transform: translateX(3px);
+}
+
+.toc-item:hover .toc-bullet {
+  background: var(--green);
+  transform: scale(1.3);
+}
+
+.toc-item.active {
+  color: #fff;
+  background: var(--green);
+  box-shadow: 0 4px 10px rgba(0, 166, 81, 0.2);
+}
+
+.toc-item.active .toc-bullet {
+  background: #fff;
+  transform: scale(1.3);
+}
+
+.toc-divider {
+  height: 1px;
+  background: var(--rule);
+  margin: 0.75rem 0;
+}
+
+/* ── Main Journal Column ───────────────────────────────── */
+.journal-main-col {
+  min-width: 0;
+}
+
+.journal-paper-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: var(--ink-3);
+  flex-wrap: wrap;
 }
 
 .bc-link {
-  font-size: 0.8rem;
-  font-weight: 500;
   color: var(--ink-2);
+  text-decoration: none;
   background: none;
   border: none;
-  cursor: pointer;
   padding: 0;
-  text-decoration: none;
-  transition: all 0.2s ease;
-  font-family: 'Source Sans 3', sans-serif;
-  opacity: 0.7;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.2s;
 }
 
 .bc-link:hover {
   color: var(--green);
-  opacity: 1;
 }
 
 .bc-sep {
-  color: var(--rule);
-  margin: 0 4px;
+  opacity: 0.5;
 }
 
 .bc-active {
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--ink);
-}
-
-/* ══ PAGE LAYOUT ══════════════════════════════════════════ */
-
-/* Paper wrapper — must have min-width:0 so 1fr column doesn't overflow grid */
-.journal-paper-wrap {
-  min-width: 0;
-  width: 100%;
-}
-
-/* ══ RELATED STUDIES SIDEBAR ══════════════════════════════ */
-.journal-sidebar {
-  width: 260px;
-  flex-shrink: 0;
-  position: relative;
-  align-self: stretch;
-}
-
-.sidebar-inner {
-  position: sticky;
-  top: 1.5rem;
-  background: transparent;
-  padding: 0;
-  border: none;
-  box-shadow: none;
-}
-
-.sidebar-label {
-  font-size: 0.72rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--green-dk);
-  margin: 0 0 0.2rem;
-}
-
-.sidebar-sub {
-  font-size: 0.75rem;
   color: var(--ink-3);
-  margin: 0 0 1rem;
+  font-weight: 400;
 }
 
-/* ── Confidence badges ──────────────────────────────────────────── */
-.confidence-badge {
-  display: inline-flex;
-  align-items: center;
-  font-size: 0.58rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  padding: 0.12rem 0.4rem;
-  border-radius: 99px;
-  white-space: nowrap;
-}
-
-.badge-strong {
-  background: #d4f0e2;
-  color: #0a6639;
-}
-
-.badge-good {
-  background: #dceeff;
-  color: #1a5fa8;
-}
-
-.badge-related {
-  background: #efefed;
-  color: #6b7068;
-}
-
-.badge-pct {
-  font-weight: 500;
-  opacity: 0.75;
-  font-variant-numeric: tabular-nums;
-}
-
-
-
-
-/* ══ CITATION MODAL ══════════════════════════════════════════ */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(5, 14, 8, 0.72);
-  backdrop-filter: blur(6px);
-  z-index: 1000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1.5rem;
-}
-
-.citation-modal {
-  background: var(--bg-secondary);
-  width: 100%;
-  max-width: 540px;
-  border-radius: 2px;
-  box-shadow:
-    0 0 0 1px rgba(0, 166, 81, 0.18),
-    0 24px 48px rgba(0, 0, 0, 0.3),
-    0 4px 12px rgba(0, 0, 0, 0.15);
-  overflow: hidden;
-}
-
-/* ── Header — dark theme band ── */
-.modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 1rem 1.25rem;
-  background: var(--hero-bg);
-  border-bottom: 2.5px solid var(--green);
-  position: relative;
-}
-
-.modal-header::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
-  background-size: 22px 22px;
-  pointer-events: none;
-}
-
-.modal-header-left {
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
-  position: relative;
-  z-index: 1;
-}
-
-.modal-header-icon {
-  color: var(--green);
-  flex-shrink: 0;
-}
-
-.modal-title {
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: #000000;
-  font-family: 'Source Sans 3', sans-serif;
-}
-
-.modal-close {
-  background: none;
-  border: none;
-  color: rgba(0, 0, 0, 0.4);
-  cursor: pointer;
-  padding: 4px;
-  line-height: 1;
-  display: flex;
-  border-radius: 2px;
-  transition: color 0.15s, background 0.15s;
-  position: relative;
-  z-index: 1;
-}
-
-.modal-close:hover {
-  color: var(--green-dk);
-  background: rgb(255, 255, 255);
-}
-
-/* ── Loading state ── */
-.modal-loading {
-  padding: 3.5rem 1.5rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.7rem;
-  color: var(--ink-3);
-  font-size: 0.82rem;
-  font-family: 'Source Sans 3', sans-serif;
-}
-
-/* ── Error state ── */
-.modal-error {
-  padding: 2.5rem 1.5rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.75rem;
-  font-size: 0.82rem;
-  color: var(--ink-3);
-  font-family: 'Source Sans 3', sans-serif;
-}
-
-.m-retry-btn {
-  background: none;
-  border: 1.5px solid var(--green);
-  border-radius: 2px;
-  padding: 0.4rem 1.1rem;
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--green-dk);
-  cursor: pointer;
-  font-family: 'Source Sans 3', sans-serif;
-  transition: background 0.15s, color 0.15s;
-}
-
-.m-retry-btn:hover {
-  background: var(--green-dim);
-}
-
-/* ── Body ── */
-.modal-body {
-  padding: 0;
-}
-
-/* ── Selectors row ── */
-.modal-selectors {
-  display: flex;
-  align-items: flex-end;
-  gap: 1rem;
-  padding: 1.1rem 1.4rem 1rem;
-  background: var(--surface);
-  border-bottom: 1px solid var(--rule);
-}
-
-.selector-field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-}
-
-.selector-note {
-  font-size: 0.70rem;
-  color: var(--ink-3);
-  margin: 0.25rem 0 0;
-  font-style: italic;
-}
-
-.selector-label {
-  font-size: 0.58rem;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--green-dk);
-  font-family: 'Source Sans 3', sans-serif;
-}
-
-.select-wrap {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-}
-
-.m-select {
-  appearance: none;
-  -webkit-appearance: none;
-  background: var(--bg-primary);
-  border: 1.5px solid var(--border-color);
-  border-radius: 3px;
-  padding: 0.4rem 2.2rem 0.4rem 0.75rem;
-  font-size: 0.84rem;
-  font-weight: 600;
-  font-family: 'Source Sans 3', sans-serif;
-  color: var(--ink);
-  cursor: pointer;
-  outline: none;
-  min-width: 140px;
-  transition: border-color 0.15s, box-shadow 0.15s;
-  line-height: 1.3;
-}
-
-.m-select:hover {
-  border-color: var(--green);
-}
-
-.m-select:focus {
-  border-color: var(--green);
-  box-shadow: 0 0 0 3px rgba(0, 166, 81, 0.12);
-}
-
-.select-arrow {
-  position: absolute;
-  right: 0.65rem;
-  top: 50%;
-  transform: translateY(-50%);
-  pointer-events: none;
-  color: var(--green-dk);
-  display: flex;
-  align-items: center;
-  transition: color 0.15s;
-}
-
-/* ── Citation text area ── */
-.citation-area {
-  padding: 1.4rem 1.4rem 1.1rem;
-  min-height: 110px;
-}
-
-.citation-area-inner {
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
-  border-radius: 3px;
-  border-left: 3px solid var(--green);
-  padding: 1rem 1.1rem;
-}
-
-.citation-text {
-  font-family: 'Lora', Georgia, serif;
-  font-size: 0.91rem;
-  line-height: 1.85;
-  margin: 0;
-  color: var(--ink);
-  /* APA hanging indent: first line flush, subsequent lines indented */
-  padding-left: 1.5em;
-  text-indent: -1.5em;
-}
-
-.citation-bibtex {
-  font-family: 'Courier New', monospace;
-  font-size: 0.76rem;
-  line-height: 1.7;
-  margin: 0;
-  white-space: pre-wrap;
-  color: var(--ink-2);
-  background: none;
-  padding: 0;
-  width: 100%;
-}
-
-/* ── Footer ── */
-.modal-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.75rem 1.4rem;
-  border-top: 1px solid var(--border-color);
-  background: var(--bg-tertiary);
-  gap: 1rem;
-}
-
-.m-copy-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  background: var(--green);
-  color: #000000;
-  border: none;
-  border-radius: 3px;
-  padding: 0.45rem 1.1rem;
-  font-size: 0.76rem;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  cursor: pointer;
-  font-family: 'Source Sans 3', sans-serif;
-  transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
-  box-shadow: 0 1px 4px rgba(0, 166, 81, 0.25);
-}
-
-.m-copy-btn:hover {
-  background: var(--green-dk);
-  box-shadow: 0 2px 8px rgba(0, 166, 81, 0.3);
-}
-
-.m-copy-btn:active {
-  transform: scale(0.97);
-}
-
-.m-copy-btn.copied {
-  background: #1a6b3a;
-}
-
-.citation-hint {
-  font-size: 0.6rem;
-  color: var(--ink-3);
-  margin: 0;
-  line-height: 1.4;
-  text-align: right;
-  font-family: 'Source Sans 3', sans-serif;
-  letter-spacing: 0.02em;
-}
-
-/* ── Transitions ── */
-.cite-fade-enter-active,
-.cite-fade-leave-active {
-  transition: opacity 0.2s ease;
-}
-
-.cite-fade-enter-from,
-.cite-fade-leave-to {
-  opacity: 0;
-}
-
-.slide-in-enter-active {
-  transition: all 0.18s ease-out;
-}
-
-.slide-in-leave-active {
-  transition: all 0.14s ease-in;
-}
-
-.slide-in-enter-from {
-  opacity: 0;
-  transform: translateX(-8px);
-}
-
-.slide-in-leave-to {
-  opacity: 0;
-  transform: translateX(-4px);
-}
-
-/* ── Zoom Modal (Lightbox) Styles ── */
-.zoom-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.9);
-  backdrop-filter: blur(10px);
-  z-index: 2000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2rem;
-  cursor: zoom-out;
-}
-
-.zoom-container {
-  position: relative;
-  max-width: 95vw;
-  max-height: 90vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1rem;
-}
-
-.zoom-full-img {
-  max-width: 100%;
-  max-height: 85vh;
-  object-fit: contain;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: var(--bg-secondary);
-  /* Use theme bg instead of pure white */
-}
-
-.zoom-close {
-  position: absolute;
-  top: -3rem;
-  right: 0;
-  background: none;
-  border: none;
-  color: #fff;
-  cursor: pointer;
-  padding: 0.5rem;
-  opacity: 0.7;
-  transition: opacity 0.2s, transform 0.2s;
-}
-
-.zoom-close:hover {
-  opacity: 1;
-  transform: scale(1.1);
-}
-
-.zoom-hint {
-  color: rgba(255, 255, 255, 0.4);
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  margin: 0;
-}
-
-/* Transitions */
-.zoom-fade-enter-active,
-.zoom-fade-leave-active {
-  transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.zoom-fade-enter-from,
-.zoom-fade-leave-to {
-  opacity: 0;
-  transform: scale(0.95);
-}
-
-
-
-/* Badges */
-.header-badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  margin-bottom: 1rem;
-}
-
-.badge {
-  font-size: 0.62rem;
-  font-weight: 700;
-  padding: 0.22rem 0.55rem;
-  border-radius: 3px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-
-.badge-dept {
-  background: rgba(0, 166, 81, 0.18);
-  color: #6ee7aa;
-}
-
-.badge-type {
-  background: rgba(96, 165, 250, 0.15);
-  color: #93c5fd;
-}
-
-.badge-degree {
-  background: rgba(251, 191, 36, 0.15);
-  color: #fcd34d;
-}
-
-/* Title */
-.paper-title {
-  font-family: 'Lora', Georgia, serif;
-  font-size: clamp(1.5rem, 3vw, 2.1rem);
-  font-weight: 600;
-  line-height: 1.25;
-  color: #fff;
-  margin: 0 0 1.1rem;
-  max-width: 900px;
-}
-
-/* Metadata */
-.meta-row {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-bottom: 1.25rem;
-}
-
-.meta-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.84rem;
-  color: rgba(255, 255, 255, 0.5);
-}
-
-.meta-dot {
-  color: rgba(255, 255, 255, 0.2);
-  font-size: 0.8rem;
-}
-
-/* Engagement */
-.engagement-row {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.6rem;
-}
-
-.stat-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  background: rgba(255, 255, 255, 0.07);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.5);
-  font-size: 0.76rem;
-  font-weight: 600;
-  padding: 0.3rem 0.7rem;
-  border-radius: 4px;
-}
-
-.j-cite-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  background: var(--green);
-  color: #fff;
-  border: none;
-  padding: 0.38rem 1rem;
-  border-radius: 5px;
-  font-family: 'Source Sans 3', sans-serif;
-  font-size: 0.8rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.14s;
-}
-
-.j-cite-btn:hover:not(:disabled) {
-  background: var(--green-dk);
-}
-
-.j-cite-btn.cited {
-  background: var(--paper);
-  border: 1px solid var(--green);
-  color: var(--green-dk);
-  cursor: pointer;
-}
-
-.j-cite-btn.cited:hover {
-  background: var(--green-dim);
-  border-color: var(--green-dk);
-  color: var(--green-dk);
-}
-
-.j-cite-btn.loading {
-  opacity: 0.6;
-  cursor: wait;
-}
-
-.j-download-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  background: var(--paper);
-  border: 1px solid var(--rule);
-  color: var(--ink-2);
-  padding: 0.38rem 1rem;
-  border-radius: 5px;
-  font-family: 'Source Sans 3', sans-serif;
-  font-size: 0.8rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.14s;
-}
-
-.j-download-btn:hover:not(:disabled) {
-  border-color: var(--green);
-  color: var(--green-dk);
-  background: var(--green-dim);
-}
-
-.j-download-btn:disabled {
-  opacity: 0.6;
-  cursor: wait;
-}
-
-.cite-hint {
-  font-size: 0.76rem;
-  color: rgba(255, 255, 255, 0.28);
-}
-
-/* ══ BODY ════════════════════════════════════════════════ */
-.detail-layout {
-  display: flex;
-  max-width: 1600px;
-  margin: 0 auto;
-  padding: 2.5rem 2rem;
-  gap: 2rem;
-  align-items: flex-start;
-}
-
-/* ── Left doc nav sidebar ─────────────────────────────── */
-.doc-nav-aside {
-  width: 180px;
-  flex-shrink: 0;
-  position: sticky;
-  top: 1.5rem;
-  align-self: flex-start;
-}
-
-.aside-group-label {
-  font-size: 0.62rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--ink-3);
-  margin: 0 0 0.4rem 0.5rem;
-}
-
-.aside-nav {
-  display: flex;
-  flex-direction: column;
-  gap: 0.05rem;
-}
-
-.aside-item {
-  display: flex;
-  align-items: center;
-  width: 100%;
-  text-align: left;
-  background: none;
-  border: none;
-  padding: 0.42rem 0.6rem;
-  border-radius: 5px;
-  font-family: 'Source Sans 3', sans-serif;
-  font-size: 0.84rem;
-  font-weight: 500;
-  color: var(--ink-3);
-  cursor: pointer;
-  transition: background 0.13s, color 0.13s;
-}
-
-.aside-item:hover {
-  background: rgba(0, 0, 0, 0.04);
-  color: var(--ink);
-}
-
-.aside-item.active {
-  background: var(--green-dim);
-  color: var(--green-dk);
-  font-weight: 700;
-}
-
-/* ── Main content ─────────────────────────────────────── */
-.paper-main {
-  flex: 1 1 0;
-  min-width: 0;
-}
-
-/* Tabs */
-.doc-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0;
-  border-bottom: 2px solid var(--rule);
-  margin-bottom: 2rem;
-}
-
-.doc-tab {
-  padding: 0.6rem 1rem;
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -2px;
-  cursor: pointer;
-  font-family: 'Source Sans 3', sans-serif;
-  font-size: 0.84rem;
-  font-weight: 600;
-  color: var(--ink-3);
-  transition: color 0.14s, border-color 0.14s;
-}
-
-.doc-tab:hover {
-  color: var(--ink);
-}
-
-.doc-tab.active {
-  color: var(--green-dk);
-  border-bottom-color: var(--green);
-}
-
-/* Paper sections */
-.paper-section {
-  margin-bottom: 2.25rem;
-}
-
-.section-heading {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-family: 'Source Sans 3', sans-serif;
-  font-size: 0.72rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.09em;
-  color: var(--ink-3);
-  margin: 0 0 1rem;
-  padding-bottom: 0.6rem;
-  border-bottom: 1px solid var(--rule);
-}
-
-.body-text {
-  font-size: 0.96rem;
-  line-height: 1.9;
-  color: var(--ink-2);
-  text-align: justify;
-  margin: 0 0 0.75rem;
-}
-
-.read-more-btn {
-  background: none;
-  border: none;
-  color: var(--green-dk);
-  font-family: 'Source Sans 3', sans-serif;
-  font-size: 0.84rem;
-  font-weight: 600;
-  cursor: pointer;
-  padding: 0;
-}
-
-.read-more-btn:hover {
-  text-decoration: underline;
-}
-
-/* Keywords */
-.tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-.tag {
-  background: var(--paper);
-  border: 1px solid var(--rule);
-  padding: 0.3rem 0.65rem;
-  border-radius: 4px;
-  font-size: 0.78rem;
-  color: var(--ink-2);
-  text-decoration: none;
-  transition: border-color 0.13s, color 0.13s;
-}
-
-.tag:hover {
-  border-color: var(--green);
-  color: var(--green-dk);
-}
-
-/* IMRAD section */
-.imrad-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
-}
-
-
-
-/* Section text */
-.section-text-outer {
-  position: relative;
-  margin-bottom: 1rem;
-  border-radius: 6px;
-}
-
-@keyframes border-ripple {
-  0% {
-    inset: -1px;
-    border-color: rgba(0, 166, 81, 0.55);
-    opacity: 1;
-  }
-
-  100% {
-    inset: -14px;
-    border-color: rgba(0, 166, 81, 0);
-    opacity: 0;
-  }
-}
-
-.section-text-wrap {
-  margin-bottom: 2.25rem;
-}
-
-.section-text {
-  word-break: break-word;
-  font-family: 'Source Sans 3', sans-serif;
-  font-size: 0.96rem;
-  line-height: 1.9;
-  color: var(--ink-2);
-  margin: 0;
-  padding: 0;
-  background: none;
-  text-align: justify;
-  border: none;
-}
-
-/* Sub-heading line — merged into text flow with green left bar */
-.section-subheading {
-  display: block;
-  font-family: 'Source Sans 3', sans-serif;
-  font-size: 0.78rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--green-dk);
-  background: var(--green-dim);
-  border-left: 3px solid var(--green);
-  padding: 0.3rem 0.75rem;
-  border-radius: 0 4px 4px 0;
-  margin: 1rem 0 0.25rem;
-}
-
-/* Table / Figure caption label — amber bar */
-.section-table-label {
-  display: block;
-  font-family: 'Source Sans 3', sans-serif;
-  font-size: 0.78rem;
-  font-weight: 600;
-  font-style: italic;
-  color: #fbbf24;
-  background: rgba(245, 158, 11, 0.1);
-  border-left: 3px solid #f59e0b;
-  padding: 0.25rem 0.75rem;
-  border-radius: 0 4px 4px 0;
-  margin: 0.75rem 0 0.2rem;
-}
-
-/* Plain paragraph block between sub-headings — flows as prose, no forced breaks */
-.section-text-block {
-  word-break: break-word;
-  font-family: 'Source Sans 3', sans-serif;
-  font-size: 0.96rem;
-  line-height: 1.9;
-  color: var(--ink-2);
-  margin: 0 0 0.25rem;
-  padding: 0;
-  background: none;
-  border: none;
-  text-align: justify;
-  white-space: normal;
-}
-
-/* ── IMRAD full view — inline subheading / table label ──────── */
-.imrad-raw-block {
-  padding: 0;
-}
-
-.imrad-inline-subheading {
-  display: block;
-  font-family: 'Source Sans 3', sans-serif;
-  font-size: 0.75rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--green-dk);
-  background: var(--green-dim);
-  border-left: 3px solid var(--green);
-  padding: 0.25rem 0.6rem;
-  border-radius: 0 4px 4px 0;
-  margin: 0.75rem 0 0.2rem;
-}
-
-.imrad-inline-table-label {
-  display: block;
-  font-family: 'Source Sans 3', sans-serif;
-  font-size: 0.75rem;
-  font-weight: 600;
-  font-style: italic;
-  color: #fbbf24;
-  background: rgba(245, 158, 11, 0.1);
-  border-left: 3px solid #f59e0b;
-  padding: 0.2rem 0.6rem;
-  border-radius: 0 4px 4px 0;
-  margin: 0.5rem 0 0.15rem;
-}
-
-.imrad-raw-para {
-  white-space: normal;
-  word-break: break-word;
-  font-size: 0.88rem;
-  line-height: 1.8;
-  color: var(--ink-2);
-  margin: 0 0 0.4rem;
-  text-align: justify;
-}
-
-.no-content {
-  font-size: 0.84rem;
-  color: var(--ink-3);
-  font-style: italic;
-}
-
-/* Pages viewer */
-
-/* PDF viewer */
-.pdf-viewer-wrap {
-  border: 1px solid var(--rule);
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.pdf-iframe {
-  width: 100%;
-  height: 80vh;
-  border: none;
-  display: block;
-}
-
-/* ── Authors tab ──────────────────────────────────────── */
-.authors-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.65rem;
-}
-
-.author-row {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding: 0.85rem 1rem;
-  background: var(--paper);
-  border: 1px solid var(--rule);
-  border-radius: 6px;
-}
-
-.author-initial {
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  background: var(--hero-bg);
-  border: 2px solid var(--green);
-  color: #fff;
-  font-family: 'Lora', Georgia, serif;
-  font-size: 1rem;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.author-name {
-  font-size: 0.92rem;
-  font-weight: 600;
-  color: var(--ink);
-  margin: 0 0 0.1rem;
-}
-
-.author-label {
-  font-size: 0.75rem;
-  color: var(--ink-3);
-  margin: 0;
-}
-
-/* ── Recommendations sidebar ──────────────────────────── */
-.rec-aside {
-  width: 256px;
-  flex-shrink: 0;
-  position: sticky;
-  top: 1.5rem;
-  align-self: flex-start;
-}
-
-.rec-head {
-  border-top: 2px solid var(--ink);
-  padding-top: 0.85rem;
-  margin-bottom: 1.25rem;
-}
-
-.rec-sub {
-  font-size: 0.75rem;
-  color: var(--ink-3);
-  margin: 0.25rem 0 0;
-  line-height: 1.4;
-}
-
-.rec-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-
-.rec-card {
-  padding: 1rem 0;
-  border-bottom: 1px solid var(--rule);
-  cursor: pointer;
-  transition: padding-left 0.14s;
-}
-
-.rec-card:last-of-type {
-  border-bottom: none;
-}
-
-.rec-card:hover {
-  padding-left: 4px;
-}
-
-.rec-badge {
-  display: inline-block;
-  font-size: 0.6rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--green-dk);
-  background: var(--green-dim);
-  padding: 0.12rem 0.4rem;
-  border-radius: 2px;
-  margin-bottom: 0.4rem;
-}
-
-.rec-title {
-  font-family: 'Lora', Georgia, serif;
-  font-size: 0.88rem;
-  font-weight: 600;
-  color: var(--ink);
-  line-height: 1.4;
-  margin: 0 0 0.35rem;
-}
-
-.rec-card:hover .rec-title {
-  color: var(--green-dk);
-}
-
-.rec-meta {
-  font-size: 0.74rem;
-  color: var(--ink-3);
-  margin: 0 0 0.4rem;
-}
-
-.rec-score-row {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
-}
-
-.rec-score-bar {
-  flex: 1;
-  height: 4px;
-  background: var(--surface);
-  border-radius: 2px;
-  overflow: hidden;
-}
-
-.rec-score-fill {
-  height: 100%;
-  background: var(--green);
-  border-radius: 2px;
-  transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.rec-score-pct {
-  font-size: 0.65rem;
-  font-weight: 700;
-  color: var(--green-dk);
-  white-space: nowrap;
-}
-
-.rec-card-top {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  margin-bottom: 0.4rem;
-}
-
-/* ── Skeleton Loading Styles ───────────────────────────── */
-.skeleton-page {
-  animation: pulse-bg 1.5s infinite ease-in-out;
-  pointer-events: none;
-}
-
-@keyframes pulse-bg {
-  0% {
-    opacity: 0.6;
-  }
-
-  50% {
-    opacity: 1;
-  }
-
-  100% {
-    opacity: 0.6;
-  }
-}
-
-.skeleton-badge {
-  width: 60px;
-  height: 18px;
-  background: var(--skeleton-bg);
-  border-radius: 3px;
-}
-
-.skeleton-title {
-  width: 70%;
-  height: 34px;
-  background: var(--skeleton-highlight);
-  margin: 0 auto 0.6rem;
-  border-radius: 6px;
-}
-
-.skeleton-title.short {
-  width: 45%;
-  margin-bottom: 1.25rem;
-}
-
-.skeleton-authors {
-  width: 40%;
-  height: 16px;
-  background: var(--skeleton-bg);
-  margin: 0 auto 1.5rem;
-  border-radius: 4px;
-}
-
-.skeleton-stats {
-  width: 30%;
-  height: 32px;
-  background: var(--skeleton-bg);
-  margin: 0 auto;
-  border-radius: 6px;
-}
-
-/* Nav Skeleton */
-.skeleton-nav-label {
-  width: 80%;
-  height: 12px;
-  background: var(--skeleton-bg);
-  margin-bottom: 1rem;
-  border-radius: 4px;
-}
-
-.skeleton-nav-item {
-  width: 100%;
-  height: 28px;
-  background: var(--skeleton-bg);
-  margin-bottom: 0.4rem;
-  border-radius: 4px;
-  opacity: 0.6;
-}
-
-/* Main Content Skeleton */
-.skeleton-tab-bar {
-  display: flex;
-  gap: 1.5rem;
-  border-bottom: 2px solid var(--rule);
-  margin-bottom: 2rem;
-  padding-bottom: 0.5rem;
-}
-
-.skeleton-tab {
-  width: 80px;
-  height: 20px;
-  background: var(--skeleton-bg);
-  border-radius: 4px;
-}
-
-.skeleton-section-title {
-  width: 150px;
-  height: 16px;
-  background: var(--skeleton-highlight);
-  margin-bottom: 1rem;
-  border-radius: 4px;
-}
-
-.skeleton-section-title.mt-4 {
-  margin-top: 2.5rem;
-}
-
-.skeleton-text-block {
-  width: 100%;
-  height: 14px;
-  background: var(--skeleton-bg);
-  margin-bottom: 0.6rem;
-  border-radius: 4px;
-  opacity: 0.7;
-}
-
-.skeleton-text-block.short {
-  width: 85%;
-  margin-bottom: 1.5rem;
-}
-
-/* Sidebar Skeleton */
-.skeleton-sidebar-title {
-  width: 140px;
-  height: 14px;
-  background: var(--skeleton-highlight);
-  margin-bottom: 0.5rem;
-  border-radius: 4px;
-}
-
-.skeleton-sidebar-sub {
-  width: 180px;
-  height: 12px;
-  background: var(--skeleton-bg);
-  margin-bottom: 1.5rem;
-  border-radius: 4px;
-}
-
-.skeleton-card {
-  height: 130px;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  padding: 1.25rem;
-  box-shadow: none;
-  cursor: default;
-}
-
-.skeleton-card:hover {
-  transform: none;
-  width: 260px;
-  /* Prevent expansion */
-  box-shadow: none;
-  border-color: var(--rule);
-}
-
-.skeleton-card-header {
-  width: 100%;
-  height: 22px;
-  background: var(--skeleton-bg);
-  border-radius: 20px;
-  margin-bottom: 0.2rem;
-  opacity: 0.8;
-}
-
-.skeleton-card-title {
-  width: 100%;
-  height: 14px;
-  background: var(--skeleton-bg);
-  border-radius: 4px;
-}
-
-.skeleton-card-meta {
-  width: 60%;
-  height: 12px;
-  background: var(--skeleton-bg);
-  border-radius: 4px;
-  margin-top: auto;
-  opacity: 0.6;
-}
-
-/* ── Responsive ────────────────────────────────────────── */
-.rad-toggle-btn {
-  font-size: 0.72rem;
-  padding: 0.25rem 0.6rem;
-  background: var(--green-dim, #e6f4ed);
-  color: var(--green-dk, #007d3d);
-  border: 1px solid var(--green, #00a651);
-  border-radius: 4px;
-  cursor: pointer;
-  font-weight: 500;
-  white-space: nowrap;
-  transition: background 0.15s, color 0.15s;
-}
-
-.rad-toggle-btn:hover {
-  background: var(--green, #00a651);
-  color: #fff;
-}
-
-.rad-split-inline-btn {
-  font-size: 0.65rem;
-  padding: 0.15rem 0.45rem;
-  background: transparent;
-  color: var(--green-dk, #007d3d);
-  border: 1px solid var(--green, #00a651);
-  border-radius: 3px;
-  cursor: pointer;
-  margin-left: auto;
-  transition: background 0.15s;
-}
-
-.rad-split-inline-btn:hover {
-  background: var(--green-dim, #e6f4ed);
-}
-
-
-
-
-
-
-
-/* ── IMRAD "NEW" tag on sidebar button ───────────────── */
-.imrad-new-tag {
-  margin-left: auto;
-  background: #e63946;
-  color: #fff;
-  font-size: 0.55rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  padding: 0.15rem 0.4rem;
-  border-radius: 3px;
-  text-transform: uppercase;
-  flex-shrink: 0;
-  line-height: 1.4;
-}
-
-/* ── IMRAD availability banner ────────────────────────── */
-.imrad-avail-banner {
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-  padding: 0.65rem 1rem;
-  margin-bottom: 1rem;
-  background: var(--green-dim);
-  border: 1.5px solid var(--green);
-  border-radius: 7px;
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
-}
-
-.imrad-avail-banner:hover {
-  background: #c8ecd9;
-  border-color: var(--green-dk);
-}
-
-.imrad-avail-tag {
-  background: var(--green);
-  color: #fff;
-  font-size: 0.6rem;
-  font-weight: 800;
-  letter-spacing: 0.07em;
-  padding: 0.2rem 0.55rem;
-  border-radius: 4px;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.imrad-avail-text {
-  font-size: 0.82rem;
-  color: var(--green-dk);
-  flex: 1;
-  line-height: 1.4;
-}
-
-.imrad-avail-cta {
-  font-size: 0.78rem;
-  font-weight: 700;
-  color: var(--green-dk);
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-/* IMRAD Summary top tab — subtle accent */
-.doc-tab-imrad {
-  color: var(--green-dk);
-}
-
-.doc-tab-imrad.active {
-  color: var(--green-dk);
-  border-bottom-color: var(--green);
-}
-
-/* ── IMRAD summary shortcut in sidebar ────────────────── */
-.aside-item-imrad {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin-top: 0.5rem;
-  border-top: 1px dashed var(--rule);
-  padding-top: 0.65rem;
-  color: var(--green-dk);
-  font-weight: 600;
-}
-
-.aside-item-imrad.active {
-  background: var(--green-dim);
-  color: var(--green-dk);
-}
-
-.aside-item-imrad:hover:not(.active) {
-  background: var(--surface);
-  color: var(--green-dk);
-}
-
-.aside-imrad-icon {
-  flex-shrink: 0;
-  opacity: 0.75;
-}
-
-/* ── IMRAD view toggle + 2-column layout ──────────────── */
-
-.imrad-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
-
-.view-toggle {
-  display: inline-flex;
-  border: 1.5px solid var(--rule);
-  border-radius: 6px;
-  overflow: hidden;
-  background: var(--paper);
-}
-
-.toggle-opt {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  padding: 0.28rem 0.7rem;
-  background: none;
-  border: none;
-  font-family: 'Source Sans 3', sans-serif;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--ink-3);
-  cursor: pointer;
-  transition: background 0.13s, color 0.13s;
-  white-space: nowrap;
-}
-
-.toggle-opt+.toggle-opt {
-  border-left: 1.5px solid var(--rule);
-}
-
-.toggle-opt:hover {
-  background: var(--surface);
-  color: var(--ink);
-}
-
-.toggle-opt.active {
-  background: var(--green-dim);
-  color: var(--green-dk);
-}
-
-/* 2-column flowing layout — content fills columns top-to-bottom, no orphan gaps */
-.imrad-two-col-wrap {
-  margin-bottom: 1rem;
-}
-
-.imrad-two-col {
-  column-count: 2;
-  column-gap: 1.75rem;
-  padding: 1.25rem 1.5rem;
-  background: var(--paper);
-  border: 1px solid var(--rule);
-  border-radius: 6px;
-  border-top: 3px solid var(--green);
-}
-
-.imrad-col-block {
-  break-inside: avoid;
-  margin-bottom: 1.1rem;
-  display: block;
-}
-
-.imrad-block-heading {
-  font-family: 'Source Sans 3', sans-serif;
-  font-size: 0.7rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--green-dk);
-  margin: 0 0 0.4rem;
-  padding-bottom: 0.3rem;
-  border-bottom: 1px solid var(--green-dim);
-}
-
-.imrad-block-body {
-  font-family: 'Source Sans 3', sans-serif;
-  font-size: 0.95rem;
-  line-height: 1.85;
-  /* Reverted to preferred spacing */
-  color: var(--text-secondary);
-  margin: 0;
-  text-align: justify;
-}
-
-.section-text-block {
-  display: inline;
-  /* Continuous flow */
-  font-size: 0.98rem;
-  line-height: 1.85;
-  color: var(--text-secondary);
-}
-
-/* No summary fallback */
-.imrad-no-summary {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 2.5rem 1.5rem;
-  background: var(--paper);
-  border: 1px dashed var(--rule);
-  border-radius: 6px;
-  text-align: center;
-  color: var(--ink-3);
-  font-size: 0.88rem;
-}
-
-.imrad-no-summary-icon {
-  opacity: 0.35;
-  margin-bottom: 0.25rem;
-}
-
-.imrad-no-summary-hint {
-  font-size: 0.8rem;
-  color: var(--ink-3);
-  margin: 0;
-  max-width: 380px;
-}
-
-/* Collapse to single column on narrow screens */
-@media (max-width: 640px) {
-  .imrad-two-col {
-    columns: 1;
-  }
-}
-
-
-/* ═══════════════════════════════════════════════════════════
-   IMRAD JOURNAL PAGE
-   A white academic paper layout matching real IMRAD format.
-   ═══════════════════════════════════════════════════════════ */
-
+/* Main Academic Paper Card */
 .imrad-journal-page {
-  background: var(--bg-secondary);
-  border-radius: 6px;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08), 0 1px 4px rgba(0, 0, 0, 0.05);
-  overflow: hidden;
-  margin-bottom: 2rem;
-  transition: background-color 0.3s ease;
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(25px);
+  -webkit-backdrop-filter: blur(25px);
+  border: 1px solid rgba(0, 166, 81, 0.15);
+  border-radius: 20px;
+  padding: 2.5rem 2.25rem;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.02);
+  transition: background-color 0.3s, border-color 0.3s, box-shadow 0.3s;
 }
 
 .dark .imrad-journal-page {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
+  background: rgba(12, 12, 12, 0.65);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
 }
 
-/* ── Journal Header (Title / Authors / Abstract) ── */
+/* Header inside paper */
 .journal-header {
-  padding: 2.5rem 3rem 2rem;
-  border-bottom: 1px solid #e8e8e0;
-  text-align: center;
+  margin-bottom: 2.5rem;
 }
 
 .journal-meta-top {
   display: flex;
+  gap: 0.5rem;
   flex-wrap: wrap;
-  gap: 0.35rem;
-  justify-content: center;
-  margin-bottom: 1.25rem;
+  margin-bottom: 1.5rem;
 }
 
 .journal-badge {
-  font-size: 0.6rem;
+  font-size: 0.68rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  padding: 0.2rem 0.6rem;
-  border-radius: 3px;
-  background: var(--green-dim);
-  color: var(--green-dk);
-  border: 1px solid rgba(0, 125, 61, 0.15);
+  letter-spacing: 0.06em;
+  color: var(--ink-2);
+  background: var(--bg-secondary);
+  border: 1px solid var(--rule);
+  padding: 0.25rem 0.65rem;
+  border-radius: 6px;
 }
 
 .journal-badge-type {
-  background: rgba(96, 165, 250, 0.1);
-  color: #1d4ed8;
-  border-color: rgba(96, 165, 250, 0.2);
+  color: var(--green);
+  background: var(--green-dim);
+  border-color: rgba(0, 166, 81, 0.15);
 }
 
 .journal-badge-degree {
-  background: rgba(251, 191, 36, 0.1);
-  color: #92400e;
-  border-color: rgba(251, 191, 36, 0.2);
+  color: #3b82f6;
+  background: rgba(59, 130, 246, 0.08);
+  border-color: rgba(59, 130, 246, 0.15);
 }
 
 .journal-title {
-  font-family: 'Lora', Georgia, serif;
-  font-size: clamp(1.35rem, 2.5vw, 1.95rem);
-  font-weight: 700;
-  line-height: 1.3;
-  color: var(--text-primary);
-  margin: 0 auto 1.1rem;
-  max-width: 820px;
+  font-family: 'Lora', serif;
+  font-size: clamp(1.8rem, 3.5vw, 2.5rem);
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--ink);
+  margin-bottom: 1.5rem;
   text-align: center;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0;
 }
 
 .journal-title-line {
   display: block;
-  white-space: normal;
-  text-align: center;
 }
 
 .journal-authors {
-  font-family: 'Source Sans 3', sans-serif;
-  font-size: 0.9rem;
-  color: var(--text-secondary);
-  margin-bottom: 0.65rem;
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 0;
-}
-
-.journal-author {
+  text-align: center;
+  font-size: 0.92rem;
   font-weight: 600;
+  color: var(--ink-2);
+  margin-bottom: 2rem;
 }
 
 .author-sep {
-  color: #bbb;
-  font-weight: 400;
-  padding: 0 0.2rem;
+  opacity: 0.5;
+  color: var(--green);
 }
 
 .journal-stats {
@@ -2763,439 +1255,328 @@ const pyramidTitleLines = computed((): string[] => {
   align-items: center;
   justify-content: center;
   gap: 0.75rem;
-  margin-bottom: 1.5rem;
   flex-wrap: wrap;
+  padding: 1rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  margin-bottom: 2.5rem;
 }
 
 .j-stat {
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
-  font-size: 0.73rem;
-  color: #999;
-  font-weight: 500;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  color: var(--ink-2);
+  font-weight: 600;
+}
+
+.j-cite-btn,
+.j-bookmark-btn,
+.j-download-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border-radius: 8px;
+  padding: 0.45rem 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.165, 0.84, 0.44, 1);
 }
 
 .j-cite-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
   background: var(--green);
   color: #fff;
   border: none;
-  padding: 0.32rem 0.85rem;
-  border-radius: 4px;
-  font-family: 'Source Sans 3', sans-serif;
-  font-size: 0.74rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: background 0.14s;
+  box-shadow: 0 4px 10px rgba(0, 166, 81, 0.15);
 }
 
-.j-cite-btn:hover:not(:disabled) {
+.j-cite-btn:hover {
   background: var(--green-dk);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 14px rgba(0, 166, 81, 0.25);
+}
+
+.j-cite-btn.cited {
+  background: var(--green-dim);
+  color: var(--green);
+  border: 1px solid rgba(0, 166, 81, 0.3);
+  box-shadow: none;
 }
 
 .j-cite-btn.cited:hover {
-  background: var(--green-dim);
-  border-color: var(--green-dk);
-  color: var(--green-dk);
+  background: rgba(0, 166, 81, 0.12);
 }
 
 .j-bookmark-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  background: transparent;
-  color: var(--ink-2);
+  background: var(--bg-secondary);
   border: 1px solid var(--rule);
-  padding: 0.32rem 0.85rem;
-  border-radius: 4px;
-  font-family: 'Source Sans 3', sans-serif;
-  font-size: 0.74rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.14s;
+  color: var(--ink-2);
 }
 
-.j-bookmark-btn:hover:not(:disabled) {
-  border-color: var(--ink-3);
-  background: var(--surface);
+.j-bookmark-btn:hover {
+  border-color: var(--green);
+  color: var(--green);
 }
 
 .j-bookmark-btn.bookmarked {
-  background: var(--hero-bg);
-  color: #fff;
-  border-color: var(--hero-bg);
+  color: var(--green);
+  background: var(--green-dim);
+  border-color: rgba(0, 166, 81, 0.2);
 }
 
-.j-bookmark-btn.bookmarked:hover {
-  opacity: 0.9;
+.j-download-btn {
+  background: var(--bg-secondary);
+  border: 1px solid var(--rule);
+  color: var(--ink-2);
 }
 
+.j-download-btn:hover {
+  border-color: var(--green);
+  color: var(--green);
+  background: var(--green-dim);
+}
 
-/* Plain Abstract layout */
+.j-login-hint {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ink-3);
+  font-style: italic;
+}
+
+/* Abstract segment inside paper */
 .journal-abstract-plain {
-  text-align: left;
-  margin: 1.5rem 0 1.25rem;
-  max-width: 100%;
+  padding: 2rem;
+  background: rgba(0, 166, 81, 0.03);
+  border-left: 4px solid var(--green);
+  border-radius: 0 12px 12px 0;
+  margin-bottom: 1.5rem;
+}
+
+.dark .journal-abstract-plain {
+  background: rgba(0, 200, 83, 0.04);
 }
 
 .journal-abstract-label {
   display: block;
-  font-family: 'Source Sans 3', sans-serif;
-  font-size: 0.75rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--green-dk);
-  margin-bottom: 0.4rem;
+  font-family: 'Lora', serif;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--green);
+  margin-bottom: 0.75rem;
 }
 
 .journal-abstract-text {
-  font-family: 'Lora', Georgia, serif;
-  font-size: 0.9rem;
-  line-height: 1.8;
-  color: var(--text-primary);
-  margin: 0 0 0.75rem;
+  font-size: 0.95rem;
+  line-height: 1.75;
+  color: var(--ink-2);
   text-align: justify;
-  text-indent: 2rem;
 }
 
 .journal-keywords {
-  font-family: 'Source Sans 3', sans-serif;
-  font-size: 0.78rem;
-  color: var(--ink-2);
-  margin-top: 0.5rem;
+  margin-top: 1rem;
+  font-size: 0.82rem;
+  color: var(--ink-3);
+}
+
+.journal-keywords strong {
+  color: var(--ink);
 }
 
 .journal-divider {
   border: none;
-  border-top: 2.5px solid var(--green);
-  margin: 2.5rem auto 1.5rem;
-  max-width: 80px;
-  opacity: 0.35;
+  height: 1px;
+  background: var(--rule);
+  margin: 3rem 0;
 }
 
+/* ── 2-Column IMRAD Body (academic journal format) ── */
 .journal-body {
   display: block;
   width: 100%;
-  padding: 2.5rem 3rem 4rem;
   column-count: 2;
-  column-gap: 3.5rem;
-  column-rule: 1.5px solid rgba(0, 0, 0, 0.04);
+  column-gap: 3rem;
+  column-rule: 1px solid rgba(0, 0, 0, 0.06);
   text-align: justify;
+  box-sizing: border-box;
 }
 
+.dark .journal-body {
+  column-rule-color: rgba(255, 255, 255, 0.04);
+}
+
+/* Prevent headings and section blocks from being split across columns */
 .journal-section-heading {
   break-inside: avoid;
-  /* Prevents heading from being orphaned at column bottom */
   break-after: avoid;
-  margin: 0 0 1rem;
+  column-span: none;
 }
 
-.journal-section-heading:first-child {
-  margin-top: 0;
-}
-
-.journal-section-heading span {
-  display: block;
-  font-family: 'Source Sans 3', sans-serif;
-  font-size: 0.85rem;
-  font-weight: 900;
-  text-transform: uppercase;
-  letter-spacing: 0.15em;
-  color: var(--green-dk);
-  padding-bottom: 0.4rem;
-  border-bottom: 2.5px solid var(--green);
-  width: fit-content;
-}
-
-/* Section content resets the A. B. C. counter */
 .journal-section-content {
-  counter-reset: subheading;
-  margin-bottom: 2rem;
+  break-inside: auto;
+}
+
+/* Keep figures from splitting */
+.journal-figure {
+  break-inside: avoid;
+}
+
+/* References full-width below 2-col body */
+.journal-references-section {
+  columns: 1 !important;
+  column-rule: none !important;
+  border-top: 2px solid var(--green);
+  padding-top: 2.5rem;
+  margin-top: 2rem;
+}
+
+/* Collapse to 1 column on narrow screens */
+@media (max-width: 900px) {
+  .journal-body {
+    column-count: 1;
+    column-gap: 0;
+    column-rule: none;
+  }
+}
+
+/* IMRAD Section Headings & Text */
+.journal-section-heading {
+  font-family: 'Lora', serif;
+  font-size: 1.45rem;
+  font-weight: 600;
+  color: var(--green);
+  margin: 3rem 0 1.25rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid var(--green);
+}
+
+.journal-section-content {
+  margin-bottom: 2.5rem;
 }
 
 .journal-subheading {
-  font-family: 'Source Sans 3', sans-serif;
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin: 1.25rem 0 0.5rem;
-  break-after: avoid;
-  display: flex;
-  align-items: baseline;
-  gap: 0.4rem;
-}
-
-.journal-subheading::before {
-  counter-increment: subheading;
-  content: counter(subheading, upper-alpha) ". ";
-  font-weight: 700;
+  font-family: 'Lora', serif;
+  font-size: 1.15rem;
+  font-weight: 600;
   color: var(--ink);
+  margin: 2rem 0 0.85rem;
 }
 
 .journal-para {
-  font-family: 'Lora', Georgia, serif;
-  font-size: 0.92rem;
-  line-height: 1.85;
-  color: var(--text-secondary);
-  margin: 0 0 0.75rem;
-  padding-left: 2rem;
-  /* Academic indentation */
-  text-indent: 1.5rem;
-  /* First-line indentation */
-}
-
-/* ── References — full-width section below the 2-col body ── */
-.journal-references-section {
-  padding: 2.5rem 4rem 3.5rem;
-  border-top: 2.5px solid var(--green);
-  background: var(--bg-tertiary);
-  /* Explicitly single-column — must NOT inherit the parent's column layout */
-  columns: 1 !important;
-  column-rule: none !important;
-}
-
-.journal-references-heading {
-  margin-bottom: 1.5rem;
-}
-
-.journal-references-heading span {
-  display: inline-block;
-  font-family: 'Source Sans 3', sans-serif;
-  font-size: 0.85rem;
-  font-weight: 900;
-  text-transform: uppercase;
-  letter-spacing: 0.15em;
-  color: var(--green-dk);
-  padding-bottom: 0.4rem;
-  border-bottom: 2.5px solid var(--green);
-}
-
-.journal-references-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  /* Two-column reference list, matching Nature / IEEE style */
-  column-count: 2;
-  column-gap: 3rem;
-}
-
-.journal-reference-entry {
-  font-family: 'Source Sans 3', sans-serif;
-  font-size: 0.86rem;
-  line-height: 1.7;
-  color: var(--text-secondary);
-  /* APA hanging indent */
-  padding-left: 2.5rem;
-  text-indent: -2.5rem;
-  margin-bottom: 1rem;
-  break-inside: avoid;
-  text-align: left;
-}
-
-/* Bold author block */
-.ref-authors {
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
-/* Year in parentheses — slightly muted */
-.ref-year {
-  font-weight: 600;
-  color: var(--text-secondary);
-}
-
-/* Title in italics */
-.ref-title {
-  font-style: italic;
-  font-weight: 400;
-  color: var(--text-secondary);
-}
-
-/* IEEE / numbered citation marker */
-.ref-number {
-  font-weight: 700;
-  color: var(--green-dk);
-  margin-right: 0.2rem;
-}
-
-.ref-link {
-  color: var(--green-dk);
-  text-decoration: none;
-  word-break: break-all;
-}
-
-.ref-link:hover {
-  text-decoration: underline;
+  font-size: 0.96rem;
+  line-height: 1.8;
+  color: var(--ink-2);
+  margin-bottom: 1.25rem;
+  text-align: justify;
 }
 
 .journal-no-content {
   color: var(--ink-3);
   font-style: italic;
-  padding-left: 2rem;
+  font-size: 0.88rem;
 }
 
-/* Figures / Tables inline */
 .journal-figure {
-  break-inside: avoid;
+  margin: 2rem 0;
   text-align: center;
-  margin: 1.5rem 0 1.2rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--rule);
+  padding: 1rem;
+  border-radius: 12px;
 }
 
 .journal-figure-img {
   max-width: 100%;
-  height: auto;
-  border: none;
-  box-shadow: none;
-  transition: transform 0.22s cubic-bezier(0.2, 0, 0.2, 1), box-shadow 0.22s ease;
+  max-height: 380px;
+  border-radius: 8px;
   cursor: zoom-in;
-  position: relative;
-  z-index: 1;
+  transition: transform 0.2s ease;
 }
 
 .journal-figure-img:hover {
-  transform: scale(1.15);
-  z-index: 10;
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.14), 0 4px 10px rgba(0, 0, 0, 0.08);
+  transform: scale(1.01);
 }
 
 .journal-figure-caption {
-  font-family: 'Source Sans 3', sans-serif;
-  font-size: 0.73rem;
-  color: var(--text-tertiary);
-  text-align: center;
-  font-style: italic;
-  margin: 0.3rem 0 0.7rem;
-  break-inside: avoid;
-}
-
-
-/* ── Loading ───────────────────────────────────────────────── */
-.loading-full {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.75rem;
-  padding: 6rem 2rem;
-  font-size: 0.9rem;
+  margin-top: 0.75rem;
+  font-size: 0.78rem;
   color: var(--ink-3);
+  font-style: italic;
 }
 
-/* ── Responsive ────────────────────────────────────────────── */
-
-
-/* ══ PAGE LAYOUT ════════════════════════════════════════════ */
-.journal-page-layout {
-  max-width: 1580px;
-  margin: 0 auto;
-  width: 100%;
-  display: grid;
-  /* 3-Column: Navigation | Paper | Recommendations */
-  grid-template-columns: 220px 1fr 320px;
-  gap: 2rem;
-  padding: 0 1.5rem 5rem;
-  box-sizing: border-box;
+/* References Section */
+.journal-references-section {
+  margin-top: 5rem;
+  padding-top: 3rem;
+  border-top: 1px solid var(--rule);
 }
 
-.journal-toc {
-  position: relative;
-  z-index: 10;
-  align-self: stretch;
+.journal-references-heading {
+  font-family: 'Lora', serif;
+  font-size: 1.35rem;
+  font-weight: 600;
+  color: var(--ink);
+  margin-bottom: 1.5rem;
 }
 
-.toc-inner {
+.journal-references-list {
+  padding-left: 1.5rem;
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
-  position: sticky;
-  top: 84px;
+  gap: 1.25rem;
 }
 
-.toc-divider {
-  height: 1px;
-  background: var(--rule);
-  margin: 0.5rem 0;
-  opacity: 0.5;
+.journal-reference-entry {
+  font-size: 0.88rem;
+  line-height: 1.6;
+  color: var(--ink-2);
+  text-align: justify;
 }
 
-.toc-item.active {
+.journal-reference-entry :deep(.ref-authors) {
+  font-weight: 600;
+}
+
+.journal-reference-entry :deep(.ref-year) {
+  font-weight: 500;
+}
+
+.journal-reference-entry :deep(.ref-title) {
+  font-style: italic;
+  font-family: 'Lora', serif;
+}
+
+.journal-reference-entry :deep(.ref-link) {
+  color: var(--green);
+  text-decoration: underline;
+  word-break: break-all;
+}
+
+.journal-reference-entry :deep(.ref-link:hover) {
   color: var(--green-dk);
-  background: var(--green-dim);
-  font-weight: 600;
 }
 
-.toc-item.active .toc-bullet {
-  background: var(--green);
-  transform: scale(1.2);
-}
-
-.toc-item.active .m-copy-btn:hover {
-  background: var(--green-dk);
-  transform: translateY(-1px);
-}
-
-.m-uncite-btn {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.5rem 0.75rem;
-  background: transparent;
-  border: 1px solid var(--rule);
-  border-radius: 4px;
-  color: #c53030;
-  /* Red color for removal */
-  font-size: 0.75rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.m-uncite-btn:hover {
-  background: #fff5f5;
-  border-color: #feb2b2;
-}
-
-.m-uncite-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.journal-main-col {
-  min-width: 0;
-  width: 100%;
-}
-
-/* ── View Transitions ── */
-.view-fade-enter-active,
-.view-fade-leave-active {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.view-fade-enter-from {
-  opacity: 0;
-  transform: translateY(10px);
-}
-
-.view-fade-leave-to {
-  opacity: 0;
-  transform: translateY(-10px);
-}
-
-/* ── Authors View Styles ── */
+/* ── Authors Card Page ────────────────────────────────── */
 .authors-view-wrap {
   width: 100%;
-  min-height: 600px;
 }
 
 .authors-card-page {
-  background: var(--bg-secondary);
-  border-radius: 8px;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
-  padding: 3rem;
-  border: 1px solid var(--border-color);
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(25px);
+  -webkit-backdrop-filter: blur(25px);
+  border: 1px solid rgba(0, 166, 81, 0.15);
+  border-radius: 20px;
+  padding: 3.5rem;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.02);
+}
+
+.dark .authors-card-page {
+  background: rgba(12, 12, 12, 0.65);
+  border-color: rgba(255, 255, 255, 0.08);
 }
 
 .authors-header {
@@ -3206,587 +1587,822 @@ const pyramidTitleLines = computed((): string[] => {
 .authors-view-title {
   font-family: 'Lora', serif;
   font-size: 2rem;
+  font-weight: 600;
   color: var(--ink);
   margin-bottom: 0.5rem;
 }
 
 .authors-view-sub {
-  color: var(--ink-3);
   font-size: 0.95rem;
+  color: var(--ink-3);
 }
 
 .authors-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 1.5rem;
-  margin-bottom: 3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 600px;
+  margin: 0 auto;
 }
 
 .author-row-card {
   display: flex;
   align-items: center;
-  gap: 1.25rem;
+  gap: 1.5rem;
   padding: 1.5rem;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  transition: transform 0.2s;
-}
-
-.author-row-card:hover {
-  transform: translateY(-2px);
-  border-color: var(--green);
+  background: var(--bg-secondary);
+  border: 1px solid var(--rule);
+  border-radius: 14px;
 }
 
 .author-avatar {
-  width: 54px;
-  height: 54px;
-  background: var(--hero-bg);
-  color: #fff;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
+  background: var(--green-dim);
+  color: var(--green);
+  border: 1px solid rgba(0, 166, 81, 0.2);
   display: flex;
   align-items: center;
   justify-content: center;
+  font-family: 'Lora', serif;
   font-size: 1.25rem;
   font-weight: 700;
-  font-family: 'Lora', serif;
-  border: 2px solid var(--green);
+}
+
+.author-info {
+  flex: 1;
 }
 
 .author-card-name {
-  font-size: 1.1rem;
+  font-size: 1.05rem;
   font-weight: 600;
   color: var(--ink);
-  margin-bottom: 0.2rem;
+  margin: 0 0 0.2rem;
 }
 
 .author-card-role {
   font-size: 0.8rem;
-  color: var(--green-dk);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 0.4rem;
+  color: var(--ink-3);
+  margin: 0 0 0.4rem;
 }
 
 .auth-dept {
-  font-size: 0.85rem;
-  color: var(--ink-3);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--green);
+  background: var(--green-dim);
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
 }
 
 .authors-footer {
-  display: flex;
-  justify-content: center;
-  border-top: 1px solid var(--rule);
-  padding-top: 2rem;
+  text-align: center;
+  margin-top: 3rem;
 }
 
 .return-btn {
-  background: var(--green);
-  color: #fff;
-  border: none;
-  padding: 0.75rem 1.5rem;
-  border-radius: 6px;
+  background: transparent;
+  border: 1px solid var(--green);
+  color: var(--green);
+  padding: 0.6rem 1.5rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: all 0.2s;
 }
 
 .return-btn:hover {
-  background: var(--green-dk);
+  background: var(--green);
+  color: #fff;
+  box-shadow: 0 4px 10px rgba(0, 166, 81, 0.15);
 }
 
-
-
-.toc-label {
-  font-family: 'Source Sans 3', sans-serif;
-  font-size: 0.65rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  color: var(--ink-3);
-  margin: 0;
-  padding-bottom: 0.5rem;
-  border-bottom: 1px solid var(--rule);
+/* ── Right Recommended Sidebar ─────────────────────────── */
+.journal-sidebar {
+  position: sticky;
+  top: calc(52px + 2rem);
+  z-index: 10;
 }
 
-.toc-list {
+.sidebar-inner {
   display: flex;
   flex-direction: column;
-  gap: 0.1rem;
+  gap: 0.5rem;
 }
 
-.toc-item {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.5rem 0.75rem;
-  text-decoration: none;
-  font-family: 'Source Sans 3', sans-serif;
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: var(--ink-2);
-  border-radius: 4px;
-  transition: all 0.15s ease;
-  border: none;
-  background: none;
-  cursor: pointer;
-  width: 100%;
-  text-align: left;
+.sidebar-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--green);
+  margin-bottom: 0.25rem;
 }
 
-.toc-bullet {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--ink-4);
-  transition: transform 0.2s, background 0.2s;
+.sidebar-sub {
+  font-size: 0.78rem;
+  color: var(--ink-3);
+  margin-bottom: 1rem;
 }
 
-.toc-item:hover {
-  background: var(--surface);
-  color: var(--green-dk);
-  transform: translateX(4px);
-}
-
-.toc-item:hover .toc-bullet {
-  background: var(--green);
-  transform: scale(1.5);
-}
-
-.toc-footer {
-  margin-top: 2rem;
-  padding-top: 1.5rem;
-  border-top: 1px dashed var(--rule);
-}
-
-.toc-footer p {
-  font-size: 0.68rem;
-  color: var(--ink-4);
-  margin: 0.2rem 0;
-  font-weight: 600;
-}
-
-/* Anchor Offsets for Topbar */
-#abstract-section,
-#introduction-section,
-#methods-section,
-#rad-section,
-#references-section {
-  scroll-margin-top: 100px;
-}
-
-
-
-/* ── Rec Cards (used in sidebar) ───────────────────────────── */
 .rec-list {
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
-  margin-top: 1.5rem;
+  gap: 0.75rem;
 }
 
 .rec-card {
   position: relative;
-  display: flex;
-  width: 260px;
-  /* Base width matching sidebar */
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(0, 166, 81, 0.08);
+  border-radius: 16px;
+  padding: 1.25rem;
   cursor: pointer;
-  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02);
-  overflow: hidden;
-  animation: slide-up-fade 0.6s ease-out backwards;
+  transition: all 0.3s cubic-bezier(0.165, 0.84, 0.44, 1);
+  box-shadow: 0 4px 20px -5px rgba(0, 0, 0, 0.02);
 }
 
-.rec-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: var(--green);
-  opacity: 0;
-  transition: opacity 0.3s ease;
-  z-index: 2;
+.dark .rec-card {
+  background: rgba(15, 15, 15, 0.5);
+  border-color: rgba(255, 255, 255, 0.05);
 }
 
 .rec-card:hover {
-  width: 480px;
-  /* Fully accommodate both the 260px main card and the 220px insight panel */
-  transform: translateY(-5px);
-  border-color: var(--green-dim);
-  box-shadow: 0 12px 24px rgba(0, 166, 81, 0.12);
-  z-index: 100;
-}
-
-.rec-card:hover::before {
-  opacity: 1;
-}
-
-/* Left Main Content */
-.rec-card-main {
-  width: 260px;
-  flex-shrink: 0;
-  padding: 1.25rem;
-  display: flex;
-  flex-direction: column;
+  transform: translateY(-3px);
+  box-shadow: 0 15px 30px -10px rgba(0, 166, 81, 0.1);
+  border-color: var(--green);
 }
 
 .rec-card-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.85rem;
+  margin-bottom: 0.6rem;
 }
 
 .rec-match-score {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  font-size: 0.7rem;
+  gap: 0.25rem;
+  font-size: 0.65rem;
   font-weight: 700;
-  padding: 0.25rem 0.6rem;
-  border-radius: 20px;
-  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 0.15rem 0.45rem;
+  border-radius: 99px;
 }
 
 .rec-match-score.badge-strong {
-  background: var(--green-dim);
-  color: var(--green-dk);
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
 }
 
 .rec-match-score.badge-good {
-  background: rgba(16, 185, 129, 0.1);
-  color: #10b981;
+  background: rgba(59, 130, 246, 0.12);
+  color: #3b82f6;
+}
+
+.rec-match-score.badge-related {
+  background: rgba(120, 120, 120, 0.08);
+  color: var(--ink-2);
 }
 
 .rec-program-tag {
   font-size: 0.62rem;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--ink-3);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  background: var(--bg-dim);
-  padding: 0.2rem 0.5rem;
+  border: 1px solid var(--rule);
+  padding: 0.1rem 0.35rem;
   border-radius: 4px;
 }
 
 .rec-card-title {
-  font-size: 0.9rem;
-  font-weight: 700;
-  line-height: 1.45;
+  font-family: 'Lora', serif;
+  font-size: 0.92rem;
+  font-weight: 600;
+  line-height: 1.35;
   color: var(--ink);
-  margin: 0 0 0.75rem;
+  margin: 0 0 0.5rem;
   display: -webkit-box;
-  line-clamp: 3;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-  transition: color 0.3s ease;
-}
-
-.rec-card:hover .rec-card-title {
-  color: var(--green-dk);
 }
 
 .rec-card-meta {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  color: var(--ink-3);
   margin-bottom: 0.5rem;
-  /* Reduced to make room for teaser */
-}
-
-.rec-author {
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: var(--ink-2);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 140px;
-  /* Prevent long author lists from pushing the year off-screen */
 }
 
 .rec-dot {
   width: 3px;
   height: 3px;
+  background: var(--ink-3);
   border-radius: 50%;
-  background: var(--rule-dk);
+  opacity: 0.5;
 }
 
-.rec-year {
-  font-size: 0.75rem;
-  color: var(--ink-3);
-}
-
-/* Teaser pill (shown before hover) */
 .rec-insight-teaser {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.25rem;
   font-size: 0.65rem;
   font-weight: 600;
-  color: var(--green-dk);
-  background: var(--green-dim);
-  padding: 0.2rem 0.6rem;
-  border-radius: 4px;
-  margin-top: auto;
-  align-self: flex-start;
-  transition: opacity 0.3s ease;
+  color: var(--green);
+  opacity: 0.8;
 }
 
-.rec-card:hover .rec-insight-teaser {
-  opacity: 0;
-  /* Hide teaser when expanded */
-  pointer-events: none;
-}
-
-/* Right Insight Content (Revealed on hover) */
+/* AI Insight — expands inline below the card content on hover (pushes card height, not overlap) */
 .rec-insight-side {
-  width: 220px;
-  flex-shrink: 0;
-  padding: 1.25rem;
-  background: var(--bg-tertiary);
-  border-left: 1px dashed var(--border-color);
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
+  overflow: hidden;
+  max-height: 0;
   opacity: 0;
-  transform: translateX(10px);
-  transition: all 0.4s ease 0.1s;
-  /* Delayed fade in */
+  margin-top: 0;
+  padding: 0 0.85rem;
+  background: rgba(0, 166, 81, 0.04);
+  border-radius: 10px;
+  border: 1px solid transparent;
+  transition:
+    max-height 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.25s ease,
+    margin-top 0.25s ease,
+    padding 0.25s ease,
+    border-color 0.25s ease;
+}
+
+.dark .rec-insight-side {
+  background: rgba(0, 200, 83, 0.05);
 }
 
 .rec-card:hover .rec-insight-side {
+  max-height: 180px;
   opacity: 1;
-  transform: translateX(0);
+  margin-top: 0.75rem;
+  padding: 0.75rem 0.85rem;
+  border-color: rgba(0, 166, 81, 0.18);
 }
 
 .insight-side-head {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.35rem;
   font-size: 0.65rem;
-  font-weight: 800;
-  color: var(--green-dk);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  margin-bottom: 0.5rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--green);
+  margin-bottom: 0.4rem;
 }
 
 .rec-insight-text {
-  font-size: 0.85rem;
-  line-height: 1.6;
+  font-size: 0.76rem;
+  line-height: 1.45;
   color: var(--ink-2);
   margin: 0;
-  font-family: 'Lora', serif;
-  font-style: italic;
 }
 
+/* Empty recommendation state */
 .rec-empty {
-  padding: 2.5rem 1rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.75rem;
+  background: rgba(255, 255, 255, 0.4);
+  border: 1px solid var(--rule);
+  border-radius: 16px;
+  padding: 1.5rem;
   text-align: center;
-  background: var(--bg-secondary);
-  backdrop-filter: blur(8px);
-  border-radius: 12px;
-  border: 1px dashed var(--border-color);
-  width: 100%;
-  box-sizing: border-box;
 }
 
 .rec-empty-icon {
-  width: 40px;
-  height: 40px;
-  opacity: 0.25;
-  filter: grayscale(1);
-  margin-bottom: 0.25rem;
+  width: 32px;
+  height: 32px;
+  opacity: 0.5;
+  margin-bottom: 0.75rem;
 }
 
 .rec-empty-title {
   font-size: 0.85rem;
-  font-weight: 700;
-  color: var(--ink-2);
-  margin: 0 0 0.5rem;
+  font-weight: 600;
+  color: var(--ink-3);
+  margin-bottom: 1rem;
 }
 
 .rec-empty-insight {
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  padding: 1rem;
   text-align: left;
-  width: 100%;
-  max-width: 260px;
-  box-sizing: border-box;
+  border-top: 1px dashed var(--rule);
+  padding-top: 1rem;
 }
 
-.rec-empty-insight .insight-head {
+.insight-head {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.35rem;
   font-size: 0.68rem;
-  font-weight: 800;
-  color: #64748b;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 0.75rem;
+  color: var(--green);
+  margin-bottom: 0.5rem;
 }
 
-.rec-empty-insight .insight-list {
+.insight-list {
   list-style: none;
   padding: 0;
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.65rem;
-}
-
-.rec-empty-insight .insight-list li {
-  font-size: 0.72rem;
-  line-height: 1.5;
-  color: #475569;
-  display: flex;
-  align-items: flex-start;
   gap: 0.5rem;
 }
 
-.rec-empty-insight .insight-marker {
-  background: rgba(100, 116, 139, 0.1);
-  color: #64748b;
-  font-size: 0.65rem;
-  font-weight: 700;
-  width: 16px;
-  height: 16px;
+.insight-list li {
+  display: flex;
+  gap: 0.5rem;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: var(--ink-2);
+}
+
+.insight-marker {
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
+  background: var(--green-dim);
+  color: var(--green);
   display: flex;
   align-items: center;
   justify-content: center;
+  font-size: 0.65rem;
+  font-weight: 700;
   flex-shrink: 0;
-  margin-top: 2px;
 }
 
-.j-login-hint {
-  font-size: 0.73rem;
-  color: #999;
+/* ── Skeletons ─────────────────────────────────────────── */
+.skeleton-page-wrap {
+  pointer-events: none;
+}
+
+.skeleton-toc .skeleton-nav-label {
+  height: 12px;
+  width: 60%;
+  background: var(--border-color);
+  border-radius: 3px;
+  margin-bottom: 1rem;
+}
+
+.skeleton-toc .skeleton-nav-item {
+  height: 28px;
+  background: var(--border-color);
+  border-radius: 6px;
+  margin-bottom: 0.5rem;
+}
+
+.skeleton-page .skeleton-badge {
+  width: 70px;
+  height: 18px;
+  background: var(--border-color);
+  border-radius: 4px;
+  display: inline-block;
+  margin-right: 0.5rem;
+}
+
+.skeleton-page .skeleton-title {
+  height: 32px;
+  width: 80%;
+  background: var(--border-color);
+  border-radius: 6px;
+  margin: 1rem auto;
+}
+
+.skeleton-page .skeleton-title.short {
+  width: 50%;
+}
+
+.skeleton-page .skeleton-authors {
+  height: 16px;
+  width: 40%;
+  background: var(--border-color);
+  border-radius: 4px;
+  margin: 1rem auto 2rem;
+}
+
+.skeleton-page .skeleton-stats {
+  height: 48px;
+  background: var(--border-color);
+  border-radius: 12px;
+  margin-bottom: 2.5rem;
+}
+
+.skeleton-page .skeleton-text-block {
+  height: 14px;
+  background: var(--border-color);
+  border-radius: 3px;
+  margin-bottom: 0.65rem;
+}
+
+.skeleton-page .skeleton-text-block.short {
+  width: 70%;
+}
+
+.skeleton-sidebar .skeleton-sidebar-title {
+  height: 12px;
+  width: 70%;
+  background: var(--border-color);
+  border-radius: 3px;
+  margin-bottom: 0.5rem;
+}
+
+.skeleton-sidebar .skeleton-sidebar-sub {
+  height: 10px;
+  width: 50%;
+  background: var(--border-color);
+  border-radius: 3px;
+  margin-bottom: 1.5rem;
+}
+
+.skeleton-card {
+  height: 120px;
+  background: var(--border-color) !important;
+  border-radius: 16px;
+}
+
+/* Shimmer animation on all skeletons */
+@keyframes skeleton-shimmer {
+  0% { opacity: 0.6; }
+  100% { opacity: 1; }
+}
+
+.skeleton-page-wrap [class^="skeleton-"] {
+  animation: skeleton-shimmer 1.2s ease-in-out infinite alternate;
+}
+
+/* ── Citation Modal ────────────────────────────────────── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.citation-modal {
+  background: var(--paper);
+  border: 1px solid rgba(0, 166, 81, 0.2);
+  border-radius: 20px;
+  width: 90%;
+  max-width: 550px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  animation: modal-enter 0.3s cubic-bezier(0.165, 0.84, 0.44, 1);
+}
+
+.dark .citation-modal {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+@keyframes modal-enter {
+  0% { transform: scale(0.95) translateY(10px); opacity: 0; }
+  100% { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+.modal-header {
+  background: var(--green);
+  padding: 1rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #fff;
+}
+
+.modal-header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.modal-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.modal-close {
+  background: transparent;
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  opacity: 0.8;
+  transition: opacity 0.2s;
+  display: flex;
+  align-items: center;
+}
+
+.modal-close:hover {
+  opacity: 1;
+}
+
+.modal-loading,
+.modal-error {
+  padding: 3rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--ink-3);
+  font-size: 0.9rem;
+}
+
+.m-retry-btn {
+  background: var(--green);
+  color: #fff;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.modal-body {
+  padding: 1.5rem;
+}
+
+.modal-selectors {
+  margin-bottom: 1.25rem;
+}
+
+.selector-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.selector-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  letter-spacing: 0.05em;
+}
+
+.select-wrap {
+  position: relative;
+  width: fit-content;
+}
+
+.m-select {
+  appearance: none;
+  background: var(--bg-secondary);
+  border: 1px solid var(--rule);
+  padding: 0.5rem 2.5rem 0.5rem 1rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--ink-2);
+  cursor: pointer;
+  outline: none;
+  min-width: 140px;
+}
+
+.select-arrow {
+  position: absolute;
+  right: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--ink-3);
+}
+
+.citation-area {
+  margin-bottom: 1.5rem;
+}
+
+.citation-area-inner {
+  background: var(--bg-secondary);
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  padding: 1.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.citation-text {
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--ink);
+  font-family: 'Lora', serif;
+  text-align: justify;
+}
+
+.citation-text :deep(em) {
   font-style: italic;
 }
 
-/* ── Responsive ────────────────────────────────────────────── */
+.selector-note {
+  font-size: 0.72rem;
+  line-height: 1.4;
+  color: var(--ink-3);
+}
 
+.modal-footer {
+  display: flex;
+  align-items: center;
+  border-top: 1px solid var(--rule);
+  padding-top: 1.25rem;
+}
+
+.m-uncite-btn {
+  background: transparent;
+  border: 1px solid rgba(220, 53, 69, 0.2);
+  color: #dc3545;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  transition: all 0.2s;
+}
+
+.m-uncite-btn:hover {
+  background: rgba(220, 53, 69, 0.05);
+  border-color: #dc3545;
+}
+
+.m-copy-btn {
+  background: var(--green);
+  color: #fff;
+  border: none;
+  padding: 0.5rem 1.25rem;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  box-shadow: 0 4px 10px rgba(0, 166, 81, 0.15);
+  transition: all 0.2s;
+}
+
+.m-copy-btn:hover {
+  background: var(--green-dk);
+  box-shadow: 0 6px 14px rgba(0, 166, 81, 0.25);
+}
+
+.m-copy-btn.copied {
+  background: #10b981;
+  box-shadow: none;
+}
+
+/* ── Image Zoom Lightbox ───────────────────────────────── */
+.zoom-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  cursor: zoom-out;
+}
+
+.zoom-container {
+  position: relative;
+  width: 90%;
+  max-width: 960px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.zoom-close {
+  position: absolute;
+  top: -3rem;
+  right: 0;
+  background: transparent;
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  opacity: 0.8;
+  transition: opacity 0.2s;
+}
+
+.zoom-close:hover {
+  opacity: 1;
+}
+
+.zoom-full-img {
+  max-width: 100%;
+  max-height: 80vh;
+  border-radius: 12px;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+  cursor: default;
+}
+
+.zoom-hint {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.8rem;
+  margin-top: 1rem;
+}
+
+/* ── Transitions ───────────────────────────────────────── */
+.view-fade-enter-active,
+.view-fade-leave-active {
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.view-fade-enter-from {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+.view-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
+.cite-fade-enter-active,
+.cite-fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.cite-fade-enter-from,
+.cite-fade-leave-to {
+  opacity: 0;
+}
+
+.zoom-fade-enter-active,
+.zoom-fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.zoom-fade-enter-from,
+.zoom-fade-leave-to {
+  opacity: 0;
+}
+
+/* ── Responsive ─────────────────────────────────────────── */
 @media (max-width: 1200px) {
-  .journal-toc {
-    display: none;
-  }
-
   .journal-page-layout {
-    /* TOC hidden → 2-column: Paper | Sidebar */
-    grid-template-columns: 1fr 280px;
-    gap: 2rem;
+    grid-template-columns: 200px 1fr;
+    padding: 2rem 1.5rem 4rem;
   }
-}
 
-@media (max-width: 1100px) {
-
-  .journal-toc,
   .journal-sidebar {
-    display: none;
+    grid-column: 1 / -1;
+    position: static;
+    margin-top: 2rem;
   }
 
-  .journal-page-layout {
-    /* Both sidebars hidden → single column, centered */
-    grid-template-columns: 1fr;
-    gap: 0;
-    padding: 0.75rem 1.5rem 4rem;
-  }
-}
-
-@media (max-width: 1024px) {
-  .rec-aside {
-    display: none;
+  .rec-list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 900px) {
   .journal-page-layout {
     grid-template-columns: 1fr;
-    padding: 0.5rem 1rem 3rem;
   }
 
-  .journal-body {
-    column-count: 1;
-    column-rule: none;
-    column-gap: 0;
-    padding: 1.5rem 1.25rem;
+  .journal-toc {
+    display: none; /* Hide TOC on mobile for space */
   }
 
-  .journal-header {
-    padding: 1.75rem 1.25rem 1.5rem;
+  .imrad-journal-page,
+  .authors-card-page {
+    padding: 2rem 1.5rem;
   }
 
-  .journal-references-section {
-    padding: 2rem 1.25rem 2.5rem;
-  }
-
-  .journal-references-list {
-    column-count: 1;
-  }
-
-  /* Old detail-layout classes fallback */
-  .detail-layout {
-    flex-direction: column;
-    padding: 1.5rem 1.25rem;
-  }
-
-  .doc-nav-aside {
-    display: none;
-  }
-
-  .paper-header-wrap {
-    padding: 1.5rem 1.25rem 2rem;
-  }
-
-  .paper-title {
-    font-size: 1.4rem;
-  }
-}
-
-@media (max-width: 640px) {
-  .imrad-two-col {
-    columns: 1;
+  .rec-list {
+    grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 480px) {
   .journal-page-layout {
-    padding: 1rem;
+    padding: 1rem 0.75rem 3rem;
   }
 
-  .paper-title {
-    font-size: 1.2rem;
-  }
-
-  .doc-tab {
-    font-size: 0.78rem;
-    padding: 0.5rem 0.7rem;
-  }
-
-  .meta-dot {
-    display: none;
-  }
-
-  .meta-row {
+  .journal-stats {
     flex-direction: column;
-    align-items: flex-start;
-    gap: 0.35rem;
+    align-items: stretch;
+  }
+
+  .j-cite-btn,
+  .j-bookmark-btn,
+  .j-download-btn {
+    justify-content: center;
   }
 }
 </style>
