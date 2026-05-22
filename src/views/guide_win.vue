@@ -1,13 +1,18 @@
 <script setup lang="ts">
-import { Search, Upload, Sparkle } from 'lucide-vue-next'
+/**
+ * Lumia User Guide & Manual
+ * Optimized with inline SVGs for performance and full theme-aware CSS variables.
+ */
 </script>
 
 <template>
   <div class="guide-wrapper">
+    <!-- Hero Header -->
     <div class="header-section">
       <div class="header-content">
+        <div class="badge">Product Documentation</div>
         <h1>Lumia User Guide & Manual</h1>
-        <p>A comprehensive guide on how to navigate the repository, evaluate papers, and manage the system.</p>
+        <p>Master the Lumia Research Retrieval System: From discovery and analysis to repository management.</p>
       </div>
     </div>
 
@@ -16,122 +21,206 @@ import { Search, Upload, Sparkle } from 'lucide-vue-next'
         <!-- Sidebar Navigation (Sticky) -->
         <aside class="guide-nav">
           <div class="nav-sticky">
-            <h3>Contents</h3>
+            <h3>On this page</h3>
             <ul>
-              <li><a href="#getting-started">Getting Started</a></li>
-              <li><a href="#upload-guide">Upload Guide</a></li>
-              <!-- <li><a href="#testing-reproduction">Testing & Reproduction</a></li> -->
-              <li><a href="#searching">Searching & Exploring</a></li>
+              <li><a href="#introduction">Introduction</a></li>
+              <li><a href="#user-roles">User Roles & Access</a></li>
+              <li><a href="#discovery">Search & Discovery</a></li>
+              <li><a href="#reading-view">Reading & Analysis</a></li>
+              <li><a href="#management">Staff Management</a></li>
+              <li><a href="#admin-tasks">System Administration</a></li>
+              <li><a href="#faq">FAQ</a></li>
             </ul>
           </div>
         </aside>
 
         <!-- Main Content -->
         <article class="guide-body">
-          <section id="getting-started" class="card-section">
+          
+          <!-- Introduction -->
+          <section id="introduction" class="card-section highlight-card">
             <div class="section-title">
-              <Sparkle class="text-green" :size="24" />
-              <h2>Getting Started</h2>
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-green"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+              <h2>Introduction to Lumia</h2>
             </div>
-            <p>Welcome to Lumia, a specialized Research Retrieval System. This platform is designed to effortlessly
-              extract structured content (like Introduction, Methods, Results, and Discussion) directly from uploaded
-              thesis and capstone documents.</p>
+            <p>Lumia is a next-generation <strong>Research Retrieval and Management System</strong> specifically engineered for academic institutions. Unlike traditional repositories, Lumia uses advanced Natural Language Processing (NLP) to parse complex thesis and capstone documents into structured <strong>IMRAD</strong> (Introduction, Methods, Results, and Discussion) sections.</p>
+            
+            <div class="feature-pills">
+              <div class="pill">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m13 2-2 10h3l-2 10 7-10h-3l2-10z"/></svg>
+                Semantic Search
+              </div>
+              <div class="pill">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+                IMRAD Extraction
+              </div>
+              <div class="pill">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><line x1="10" y1="9" x2="8" y2="9"/></svg>
+                AI Summaries
+              </div>
+              <div class="pill">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                A4 PDF Export
+              </div>
+            </div>
+          </section>
+
+          <!-- User Roles -->
+          <section id="user-roles" class="card-section">
+            <div class="section-title">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-green"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+              <h2>User Roles & Permissions</h2>
+            </div>
+            <p>Access level determines your available features within the system:</p>
+            
+            <div class="role-grid">
+              <div class="role-card">
+                <div class="role-header">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                  <span>Public / Student</span>
+                </div>
+                <ul>
+                  <li>Browse repository</li>
+                  <li>Search via Keyword & Context</li>
+                  <li>Read extracted sections</li>
+                  <li>Generate Citations & PDF</li>
+                </ul>
+              </div>
+              <div class="role-card">
+                <div class="role-header">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+                  <span>Faculty / Researcher</span>
+                </div>
+                <ul>
+                  <li>All Student privileges</li>
+                  <li>Upload new research</li>
+                  <li>Verify & Edit extractions</li>
+                  <li>Track personal upload logs</li>
+                </ul>
+              </div>
+              <div class="role-card">
+                <div class="role-header">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+                  <span>System Admin</span>
+                </div>
+                <ul>
+                  <li>Full repository control</li>
+                  <li>User account management</li>
+                  <li>Global activity monitoring</li>
+                  <li>Database maintenance</li>
+                </ul>
+              </div>
+            </div>
+          </section>
+
+          <!-- Search & Discovery -->
+          <section id="discovery" class="card-section">
+            <div class="section-title">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-green"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <h2>Advanced Discovery</h2>
+            </div>
+            <p>Lumia offers two powerful ways to find literature:</p>
+            <ol>
+              <li><strong>Keyword Search:</strong> Finds exact matches for titles, authors, or specific terms.</li>
+              <li><strong>Semantic (Contextual) Search:</strong> Understands the <em>intent</em> behind your query. Typing "Machine learning in rice farming" will find papers about agricultural AI even if they don't use those exact words.</li>
+            </ol>
+            
+            <div class="pro-tip">
+              <strong>Pro-Tip:</strong> Use the "Threshold" slider in the Explore page to adjust how strict the semantic matching should be. A lower threshold returns more broad results, while a higher one focuses on direct matches.
+            </div>
+          </section>
+
+          <!-- Reading View -->
+          <section id="reading-view" class="card-section">
+            <div class="section-title">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-green"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+              <h2>The Reading Experience</h2>
+            </div>
+            <p>Skip the 100-page PDF scrolling. Lumia provides a structured interface for faster comprehension:</p>
             <ul>
-              <li><strong>Students/Guests:</strong> You can upload, search for existing literature, read abstracts, and
-                view
-                full IMRAD sections of indexed studies.</li>
-              <li><strong>Staff/Faculty:</strong> You have the ability to upload new documents and manage the
-                repository. Except
-                from managing users.</li>
+              <li><strong>IMRAD Navigation:</strong> Instantly jump between Introduction, Methodology, and Results.</li>
+              <li><strong>AI Summarization:</strong> View concise summaries for each section to grasp key points in seconds.</li>
+              <li><strong>Interactive Tables:</strong> Click on figures or tables to zoom in for detailed inspection.</li>
+              <li><strong>Citations:</strong> Click "Cite this study" to get APA 6th, 7th, or In-text formats ready to copy.</li>
             </ul>
+          </section>
+
+          <!-- Staff Management -->
+          <section id="management" class="card-section">
+            <div class="section-title">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-green"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <h2>Document Management (Staff)</h2>
+            </div>
+            <p>Faculty and authorized staff can grow the repository by following these steps:</p>
+            <div class="process-steps">
+              <div class="step">
+                <div class="step-num">1</div>
+                <div class="step-info">
+                  <strong>Upload Document</strong>
+                  <p>Upload a PDF of the manuscript. The system will automatically begin OCR and NLP processing.</p>
+                </div>
+              </div>
+              <div class="step">
+                <div class="step-num">2</div>
+                <div class="step-info">
+                  <strong>Review Extraction</strong>
+                  <p>Check the extracted text for accuracy. You can manually adjust section boundaries if needed.</p>
+                </div>
+              </div>
+              <div class="step">
+                <div class="step-num">3</div>
+                <div class="step-info">
+                  <strong>Index & Publish</strong>
+                  <p>Once verified, index the paper. It will now be available for discovery via semantic search.</p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Admin Tasks -->
+          <section id="admin-tasks" class="card-section">
+            <div class="section-title">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-green"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+              <h2>System Administration</h2>
+            </div>
+            <p>Administrators have exclusive access to the <strong>Management Console</strong>:</p>
             <ul>
-              <li><strong>Admin:</strong> You have the overall control of the system. You can manage users, upload new
-                documents, and manage the repository.</li>
+              <li><strong>User Management:</strong> Create, disable, or change roles of system users.</li>
+              <li><strong>Activity Logs:</strong> Monitor who is uploading, deleting, or editing records for audit purposes.</li>
+              <li><strong>Repository Health:</strong> Permanently delete records from the "Trash" or restore accidentally deleted items.</li>
+              <li><strong>Pending Requests:</strong> Approve or reject student-submitted documents before they go live.</li>
             </ul>
           </section>
 
-          <!-- Upload Guide Section -->
-          <section id="upload-guide" class="card-section">
+          <!-- FAQ -->
+          <section id="faq" class="card-section">
             <div class="section-title">
-              <Upload class="text-green" :size="24" />
-              <h2>Upload Guide</h2>
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-green"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              <h2>Frequently Asked Questions</h2>
+            </div>
+            
+            <div class="faq-item">
+              <h4>Why is the extraction sometimes incomplete?</h4>
+              <p>Lumia depends on the quality of the PDF. Scanned documents without text layers may require cleaner scans for optimal OCR results. Documents with non-standard IMRAD headings might need manual boundary adjustment.</p>
+            </div>
+            
+            <div class="faq-item">
+              <h4>Can I export my research?</h4>
+              <p>Yes. Every indexed study can be exported as a professional A4-formatted PDF, which includes the extracted IMRAD content in a clean, justified layout.</p>
             </div>
 
-            <h3 class="subsection-title">For Students:</h3>
-            <ol>
-              <li><strong>Create an Account:</strong> Register and log in using a student account.</li>
-              <li><strong>Upload a Document:</strong> Navigate to the upload section and submit the document.</li>
-              <li><strong>Verify the Document:</strong> Review the uploaded document to ensure successful extraction.
-              </li>
-              <li><strong>Index the Document:</strong> Finalize the process by indexing the verified document.</li>
-              <li><strong>Explore the Repository:</strong> Search for or locate the indexed document in the repository.
-              </li>
-            </ol>
-
-            <h3 class="subsection-title" style="margin-top: 1.5rem;">For Faculty:</h3>
-            <ol>
-              <li><strong>Log In:</strong> Access the system using a faculty account.</li>
-              <li><strong>Access Management:</strong> Navigate to the "Management" tab in the main navigation bar.</li>
-              <li><strong>Open Upload Menu:</strong> Click the "Upload Research" tab located in the side menu panel.
-              </li>
-              <li><strong>Upload File:</strong> Drag and drop or manually upload the PDF or soft copy of the thesis or
-                capstone.</li>
-              <li><strong>Review Content:</strong> Carefully review the extracted content after the upload is complete.
-              </li>
-              <li><strong>Index and Verify:</strong> Index the document and verify its presence in the "Thesis &
-                Research" section.</li>
-            </ol>
-          </section>
-
-          <!-- Testing & Reproduction Content
-          <section id="testing-reproduction" class="card-section highlight-card">
-            <div class="section-title">
-              <ClipboardList class="text-green" :size="24" />
-              <h2>Evaluation Testing</h2>
+            <div class="faq-item">
+              <h4>How do I get an account?</h4>
+              <p>Students can register via the Registration page. Faculty accounts must be approved or created by a System Administrator.</p>
             </div>
-            <p>This sequence outlines the end-to-end user flow for testing the complete platform lifecycle:</p>
-            <ol>
-              <li><strong>Create an account:</strong> Register a new student account to simulate public access.</li>
-              <li><strong>Upload document:</strong> Use the provided thesis and capstone document from the upload UI.
-                (We provided an empty document and non-imrad pages for guard rails)
-              </li>
-              <li><strong>Review extraction:</strong> Verify the initial OCR/NLP extraction, adjust metadata or
-                boundaries if necessary, and index the document.</li>
-              <li><strong>Go to Explore:</strong> Navigate to the Home or Explore page to see your newly indexed
-                document.</li>
-              <li><strong>Test search queries:</strong> Use the search bar to test keyword and semantic search with
-                various queries (e.g., document title, topic keywords). Verify results relevance and ranking.</li>
-              <li><strong>Select the article:</strong> Click on your uploaded article to open the detailed reading view.
-              </li>
-              <li><strong>Review IMRAD format:</strong> Ensure the comprehensive IMRAD format correctly renders the
-                introduction, methods, results, and discussion alongside text and tables.</li>
-              <li><strong>Citate:</strong> Click the "Cite this study" action to ensure citing increments and tracks
-                usage accurately.</li>
-              <li><strong>Test Download as PDF:</strong> Export the study and verify the A4-formatted, justified,
-                standard IMRaD PDF.</li>
-              <li><strong>Others:</strong> Test the rest of the remaining UI features such as filter and sorting.</li>
-              <li><strong>Answer Evaluation:</strong> If you are ready to evaluate the system, use this <a
-                  href="https://forms.gle/D2Ys5qyd7eKJU8Hq6" target="_blank" rel="noopener noreferrer">Google Form
-                  Evaluation Link</a>
-              </li>
-            </ol>
           </section>
-          -->
 
-          <section id="searching" class="card-section">
-            <div class="section-title">
-              <Search class="text-green" :size="24" />
-              <h2>Searching & Exploring</h2>
+          <footer class="guide-footer">
+            <div class="footer-content">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+              <span>Need further assistance? Contact your department administrator or visit the <a href="https://github.com/marufshidiq/lumia" target="_blank">Lumia Repository <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a></span>
             </div>
-            <p>Our search engine utilizes advanced Semantic Search alongside traditional Keyword Search to fetch the
-              most relevant papers.</p>
-            <ol>
-              <li>Use the <strong>Search Bar</strong> on the Home or Explore page.</li>
-              <li>Type in your context (e.g., "Machine Learning in Agriculture") or exact titles.</li>
-              <li>Use the Filters on the Explore page to narrow down by Year, Program, or Degree.</li>
-              <li>Click "Read full record" to read the document's structured extraction and view tables/figures.</li>
-            </ol>
-          </section>
+          </footer>
 
         </article>
       </div>
@@ -142,67 +231,103 @@ import { Search, Upload, Sparkle } from 'lucide-vue-next'
 <style scoped>
 .guide-wrapper {
   min-height: calc(100vh - 64px);
-  background: #f5f5f2;
+  background: var(--bg-primary);
   font-family: 'Source Sans 3', sans-serif;
-  color: #181c18;
+  color: var(--text-primary);
+  line-height: 1.6;
 }
 
+/* Header Section */
 .header-section {
-  background: #0d1f12;
-  padding: 4.5rem 2rem;
-  border-bottom: 3px solid #00a651;
+  background: linear-gradient(135deg, #0d1f12 0%, #1a3a22 100%);
+  padding: 5rem 2rem;
+  border-bottom: 4px solid var(--accent-primary);
   text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.dark .header-section {
+  background: linear-gradient(135deg, #050a06 0%, #0d1f12 100%);
+}
+
+.header-section::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-image: radial-gradient(#ffffff0a 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+.badge {
+  display: inline-block;
+  background: rgba(0, 166, 81, 0.2);
+  color: #00ff7f;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin-bottom: 1.5rem;
+  border: 1px solid rgba(0, 166, 81, 0.3);
 }
 
 .header-content h1 {
   font-family: 'Lora', Georgia, serif;
-  font-size: clamp(2rem, 4vw, 3rem);
-  font-weight: 600;
+  font-size: clamp(2.5rem, 5vw, 3.5rem);
+  font-weight: 700;
   color: #ffffff;
   margin: 0 0 1rem;
+  letter-spacing: -0.02em;
 }
 
 .header-content p {
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 1.1rem;
-  max-width: 600px;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 1.2rem;
+  max-width: 700px;
   margin: 0 auto;
 }
 
+/* Main Layout */
 .content-section {
   max-width: 1200px;
   margin: 0 auto;
-  padding: 3rem 2rem;
+  padding: 4rem 2rem;
 }
 
 .guide-grid {
   display: grid;
-  grid-template-columns: 250px 1fr;
-  gap: 3rem;
+  grid-template-columns: 260px 1fr;
+  gap: 4rem;
   align-items: start;
 }
 
-@media (max-width: 868px) {
+@media (max-width: 1024px) {
   .guide-grid {
     grid-template-columns: 1fr;
   }
-
   .guide-nav {
     display: none;
   }
 }
 
+/* Navigation */
 .nav-sticky {
   position: sticky;
   top: 100px;
 }
 
 .nav-sticky h3 {
-  font-size: 0.85rem;
+  font-size: 0.75rem;
   text-transform: uppercase;
-  color: #7a7f75;
-  letter-spacing: 0.1em;
-  margin-bottom: 1rem;
+  color: var(--text-tertiary);
+  letter-spacing: 0.15em;
+  margin-bottom: 1.5rem;
+  font-weight: 700;
 }
 
 .nav-sticky ul {
@@ -213,114 +338,226 @@ import { Search, Upload, Sparkle } from 'lucide-vue-next'
 
 .nav-sticky li a {
   display: block;
-  padding: 0.5rem 0;
-  color: #3d4239;
+  padding: 0.6rem 0;
+  color: var(--text-secondary);
   text-decoration: none;
   font-weight: 500;
-  transition: color 0.2s;
-  border-left: 2px solid transparent;
+  transition: all 0.2s ease;
+  border-left: 2px solid var(--border-color);
+  padding-left: 1.2rem;
 }
 
 .nav-sticky li a:hover {
-  color: #00a651;
-  padding-left: 0.5rem;
-  border-left-color: #00a651;
+  color: var(--accent-primary);
+  border-left-color: var(--accent-primary);
+  background: var(--green-dim);
 }
 
+/* Content Cards */
 .guide-body {
   display: flex;
   flex-direction: column;
-  gap: 2rem;
+  gap: 3rem;
 }
 
 .card-section {
-  background: #ffffff;
-  padding: 2.5rem;
-  border-radius: 8px;
-  border: 1px solid #dfe0db;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.02);
+  scroll-margin-top: 100px;
 }
 
 .highlight-card {
-  border-top: 4px solid #00a651;
+  background: var(--bg-secondary);
+  padding: 2.5rem;
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-md);
 }
 
 .section-title {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 1.5rem;
-}
-
-.text-green {
-  color: #00a651;
+  gap: 1rem;
+  margin-bottom: 2rem;
 }
 
 .section-title h2 {
   font-family: 'Lora', serif;
-  font-size: 1.5rem;
-  color: #181c18;
+  font-size: 1.8rem;
+  color: var(--text-primary);
   margin: 0;
-}
-
-.subsection-title {
-  font-family: 'Source Sans 3', sans-serif;
-  font-size: 1.1rem;
-  color: #181c18;
-  margin-bottom: 0.75rem;
   font-weight: 600;
 }
 
-.card-section p,
-.card-section li {
-  line-height: 1.6;
-  color: #3d4239;
-  margin-bottom: 1rem;
+.text-green {
+  color: var(--accent-primary);
 }
 
-.card-section ul,
-.card-section ol {
-  padding-left: 1.5rem;
-}
-
-.eval-steps {
+/* Feature Pills */
+.feature-pills {
   display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
+  flex-wrap: wrap;
+  gap: 0.75rem;
   margin-top: 1.5rem;
 }
 
-.step-item {
+.pill {
   display: flex;
-  gap: 1rem;
-  background: #fdfdfc;
-  padding: 1.5rem;
-  border: 1px solid #dfe0db;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--green-dim);
+  color: var(--accent-primary);
+  padding: 6px 14px;
   border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border: 1px solid var(--border-color);
+}
+
+/* Role Grid */
+.role-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1.5rem;
+  margin-top: 2rem;
+}
+
+.role-card {
+  background: var(--bg-secondary);
+  padding: 1.5rem;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  transition: transform 0.2s ease;
+}
+
+.role-card:hover {
+  transform: translateY(-5px);
+  border-color: var(--accent-primary);
+}
+
+.role-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+  color: var(--accent-primary);
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+.role-card ul {
+  padding-left: 1.25rem;
+  margin: 0;
+}
+
+.role-card li {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.5rem;
+}
+
+/* Pro-Tip Box */
+.pro-tip {
+  background: var(--amber-dim);
+  border-left: 4px solid var(--amber-dk);
+  padding: 1.25rem;
+  border-radius: 4px;
+  margin-top: 1.5rem;
+  font-size: 0.95rem;
+  color: var(--amber-dk);
+}
+
+.pro-tip strong {
+  color: var(--amber-dk);
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+/* Process Steps */
+.process-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  margin-top: 2rem;
+}
+
+.step {
+  display: flex;
+  gap: 1.5rem;
+  background: var(--bg-secondary);
+  padding: 1.5rem;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
 }
 
 .step-num {
-  background: #00a651;
+  background: var(--accent-primary);
   color: white;
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  font-weight: bold;
+  font-weight: 700;
   flex-shrink: 0;
 }
 
-.step-item strong {
+.step-info strong {
   display: block;
   font-size: 1.1rem;
   margin-bottom: 0.5rem;
-  color: #181c18;
+  color: var(--text-primary);
 }
 
-.step-item p {
+.step-info p {
   margin: 0;
   font-size: 0.95rem;
+  color: var(--text-secondary);
+}
+
+/* FAQ */
+.faq-item {
+  margin-bottom: 2rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.faq-item h4 {
+  font-size: 1.1rem;
+  color: var(--text-primary);
+  margin-bottom: 0.75rem;
+  font-weight: 600;
+}
+
+.faq-item p {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+/* Footer */
+.guide-footer {
+  margin-top: 4rem;
+  padding-top: 2rem;
+  border-top: 1px solid var(--border-color);
+}
+
+.footer-content {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--text-tertiary);
+  font-size: 0.9rem;
+}
+
+.footer-content a {
+  color: var(--accent-primary);
+  text-decoration: none;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.footer-content a:hover {
+  text-decoration: underline;
 }
 </style>

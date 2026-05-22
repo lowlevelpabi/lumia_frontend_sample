@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed, onUnmounted } from 'vue'
 import { useRouter, RouterLink } from 'vue-router'
-import { Search, User, ArrowRight, Clock, X } from 'lucide-vue-next'
+import { Search, User, ArrowRight, Clock, X, Shield, Zap, Database } from 'lucide-vue-next'
 import { api, type Paper } from '../services/api'
 import { historyService } from '../services/history'
+import { useAuth } from '../composables/useAuth'
 
 const searchHistory = ref<string[]>([])
 const showHistory = ref(false)
@@ -14,26 +15,49 @@ const searchQuery = ref('')
 const recentPapers = ref<Paper[]>([])
 const loading = ref(true)
 
+const { fullName } = useAuth()
+const scrollY = ref(0)
+
+const handleScroll = () => {
+  scrollY.value = window.scrollY
+}
+
+const greetingText = computed(() => {
+  if (!fullName.value) {
+    return 'Lumia Discovery'
+  }
+  const hour = new Date().getHours()
+  let timeGreeting = 'Welcome'
+  if (hour < 12) timeGreeting = 'Good morning'
+  else if (hour < 18) timeGreeting = 'Good afternoon'
+  else timeGreeting = 'Good evening'
+
+  return `${timeGreeting}, ${fullName.value.split(' ')[0]}!`
+})
+
 onMounted(async () => {
+  window.addEventListener('scroll', handleScroll)
   searchHistory.value = historyService.getHistory()
   try {
     const allPapers = await api.listAllPapers()
-    
     recentPapers.value = allPapers
       .sort((a, b) => String(b.id).localeCompare(String(a.id)))
-      .slice(0, 6)
+      .slice(0, 4)
   } catch (e) {
     console.error('Failed to fetch recent papers:', e)
   } finally {
     loading.value = false
   }
 
-  // Close history when clicking outside
   document.addEventListener('click', (e) => {
     if (historyRef.value && !historyRef.value.contains(e.target as Node)) {
       showHistory.value = false
     }
   })
+})
+
+onUnmounted(() => {
+  window.removeEventListener('scroll', handleScroll)
 })
 
 const handleSearch = () => {
@@ -43,96 +67,160 @@ const handleSearch = () => {
     showHistory.value = false
   }
 }
+
+const scrollToSearch = () => {
+  const el = document.getElementById('main-search')
+  if (el) el.scrollIntoView({ behavior: 'smooth' })
+}
 </script>
 
 <template>
-  <div class="home">
+  <div class="landing-page">
+    
+    <!-- ══ PARALLAX HERO ════════════════════════════════════════════ -->
+    <section class="parallax-hero">
+      <div class="parallax-bg" :style="{ transform: `translateY(${scrollY * 0.5}px)` }">
+        <div class="floating-shape shape-1"></div>
+        <div class="floating-shape shape-2"></div>
+        <div class="floating-shape shape-3"></div>
+      </div>
+      
+      <div class="hero-content" :style="{ transform: `translateY(${scrollY * 0.1}px)`, opacity: 1 - scrollY / 600 }">
+        <div class="hero-brand">
+          <h1 class="hero-title">
+            <img src="/lumia_logo.png" alt="Lumia Logo" class="brand-logo" />
+            <span class="title-text">umia</span>
+          </h1>
+        </div>
+        
+        <p class="hero-subtitle">
+          Intelligent information retrieval and analysis for modern academic research.
+        </p>
+        
+        <div class="hero-actions">
+          <button @click="scrollToSearch" class="primary-btn">
+            Get Started <ArrowRight :size="18" />
+          </button>
+          <RouterLink :to="{ name: 'about' }" class="secondary-btn">Learn More</RouterLink>
+        </div>
+      </div>
 
-    <!-- ══ HERO ══════════════════════════════════════════════════════ -->
-    <section class="hero">
-      <div class="hero-inner">
+      <div class="scroll-indicator" :class="{ 'hidden': scrollY > 50 }">
+        <div class="mouse">
+          <div class="wheel"></div>
+        </div>
+      </div>
+    </section>
 
-        <div class="hero-masthead">
-          <span class="masthead-rule"></span>
-          <span class="masthead-label">Lumia · Research Retrieval System</span>
-          <span class="masthead-rule"></span>
+    <!-- ══ FEATURES SECTION ═════════════════════════════════════════ -->
+    <section class="features-section">
+      <div class="container">
+        <div class="section-header">
+          <h2 class="section-title">Why Lumia?</h2>
+          <p class="section-desc">Designed to streamline the way you interact with academic documents.</p>
         </div>
 
-        <h1 class="hero-heading">
-          What are we looking for?
-        </h1>
+        <div class="features-grid">
+          <div class="feature-card">
+            <div class="feature-icon"><Zap :size="24" /></div>
+            <h3>Fast Retrieval</h3>
+            <p>Locate specific sections of any manuscript in milliseconds with our optimized indexing engine.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon"><Database :size="24" /></div>
+            <h3>Structured Data</h3>
+            <p>Automatically extracts IMRAD components and metadata from uploaded PDF documents.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon"><Shield :size="24" /></div>
+            <h3>Secure Storage</h3>
+            <p>Your research is protected with enterprise-grade security and role-based access control.</p>
+          </div>
+        </div>
+      </div>
+    </section>
 
-        <div class="search-row">
-          <div class="search-field" ref="historyRef">
-            <Search :size="17" class="s-icon" />
-            <input v-model="searchQuery" type="text" placeholder="Title, keywords, context-based search, and more…"
-              @keyup.enter="handleSearch" @focus="showHistory = true" spellcheck="false" autocomplete="off" />
+    <!-- ══ SEARCH SECTION (Anchored) ════════════════════════════════ -->
+    <section id="main-search" class="search-section">
+      <div class="container">
+        <div class="search-container">
+          <div class="search-header">
+            <span class="search-greeting">{{ greetingText }}</span>
+            <h2 class="search-title">What are we looking for today?</h2>
+          </div>
 
-            <!-- Search History Popup -->
-            <div v-if="showHistory && searchHistory.length > 0" class="history-popup">
-              <div class="history-head">
-                <span>Recent Searches</span>
-                <button @click="historyService.clearHistory(); searchHistory = []">Clear All</button>
-              </div>
-              <div class="history-list">
-                <div v-for="h in searchHistory" :key="h" class="history-item" @click="searchQuery = h; handleSearch()">
-                  <Search :size="12" />
-                  <span>{{ h }}</span>
-                  <button class="h-remove" @click.stop="historyService.removeQuery(h); searchHistory = historyService.getHistory()">
-                    <X :size="10" />
-                  </button>
+          <div class="search-box-wrap" ref="historyRef">
+            <div class="search-field">
+              <Search :size="20" class="s-icon" />
+              <input 
+                v-model="searchQuery" 
+                type="text" 
+                placeholder="Search by title, author, or keywords..."
+                @keyup.enter="handleSearch" 
+                @focus="showHistory = true" 
+                spellcheck="false" 
+                autocomplete="off" 
+              />
+              <button @click="handleSearch" class="search-go">Search</button>
+
+              <!-- Search History Popup -->
+              <div v-if="showHistory && searchHistory.length > 0" class="history-popup">
+                <div class="history-head">
+                  <span>Recent Searches</span>
+                  <button @click="historyService.clearHistory(); searchHistory = []">Clear All</button>
+                </div>
+                <div class="history-list">
+                  <div v-for="h in searchHistory" :key="h" class="history-item" @click="searchQuery = h; handleSearch()">
+                    <Search :size="12" />
+                    <span>{{ h }}</span>
+                    <button class="h-remove" @click.stop="historyService.removeQuery(h); searchHistory = historyService.getHistory()">
+                      <X :size="10" />
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
-
       </div>
     </section>
 
-    <!-- ══ CONTENT ════════════════════════════════════════════════════ -->
+    <!-- ══ RECENT RESEARCH ══════════════════════════════════════════ -->
     <main class="content-wrap">
-      <div class="content-grid">
-
-        <!-- Recent Papers Feed -->
+      <div class="container">
         <section class="feed">
-
           <header class="feed-head">
             <div class="feed-head-left">
-              <Clock :size="13" />
-              <span>Recently Added</span>
+              <Clock :size="14" />
+              <span>Recent Contributions</span>
             </div>
+            <RouterLink :to="{ name: 'explore' }" class="text-link">View Archive <ArrowRight :size="14" /></RouterLink>
           </header>
 
-          <!-- Skeleton state -->
           <div v-if="loading" class="paper-list">
-            <div v-for="i in 5" :key="i" class="paper-item skeleton">
-              <div class="sk-num"></div>
+            <div v-for="i in 4" :key="i" class="paper-item skeleton">
               <div class="sk-body">
                 <div class="sk-tag"></div>
                 <div class="sk-title"></div>
                 <div class="sk-meta"></div>
-                <div class="sk-abstract"></div>
               </div>
             </div>
           </div>
 
-          <!-- Papers list -->
           <ol v-else-if="recentPapers.length > 0" class="paper-list">
-            <li v-for="(paper) in recentPapers" :key="paper.id" class="paper-item">
-              <span class="item-num"></span>
-
+            <li v-for="paper in recentPapers" :key="paper.id" class="paper-item">
               <div class="item-body">
                 <div class="item-tags">
                   <span class="type-tag">{{ paper.project_type || 'Research' }}</span>
                   <span v-if="paper.year" class="year-tag">{{ paper.year }}</span>
                 </div>
 
-                <RouterLink :to="{ name: 'detail', params: { id: paper.id } }" class="item-title">{{ paper.title }}
+                <RouterLink :to="{ name: 'detail', params: { id: paper.id } }" class="item-title">
+                  {{ paper.title }}
                 </RouterLink>
 
                 <div class="item-meta">
-                  <User :size="11" />
+                  <User :size="12" />
                   <span>{{ paper.author }}</span>
                   <template v-if="paper.department">
                     <span class="dot">·</span>
@@ -140,29 +228,15 @@ const handleSearch = () => {
                   </template>
                 </div>
 
-                <p class="item-abstract">{{ paper.abstract?.substring(0, 210) }}…</p>
-
-                <RouterLink :to="{ name: 'detail', params: { id: paper.id } }" class="item-action">
-                  Read full record
-                  <ArrowRight :size="12" />
-                </RouterLink>
+                <p class="item-abstract">{{ paper.abstract?.substring(0, 180) }}...</p>
               </div>
             </li>
           </ol>
 
-          <!-- Empty state when no papers are found -->
           <div v-else class="empty-feed">
-            <p class="empty-feed-title">The archive is currently empty</p>
-            <p class="empty-feed-sub">No research papers or capstone projects have been uploaded yet.</p>
+            <p>The archive is currently empty</p>
           </div>
-
-          <RouterLink v-if="recentPapers.length > 0" :to="{ name: 'explore' }" class="view-more">
-            Go to explore
-            <ArrowRight :size="14" />
-          </RouterLink>
-
         </section>
-
       </div>
     </main>
 
@@ -170,45 +244,370 @@ const handleSearch = () => {
 </template>
 
 <style scoped>
-
-/* ── Design tokens ───────────────────────────────────────── */
-.home {
-  --ink: #181c18;
-  --ink-2: #3d4239;
-  --ink-3: #7a7f75;
-  --rule: #dfe0db;
-  --surface: #f5f5f2;
-  --paper: #ffffff;
-  --green: #00a651;
-  --green-dk: #007d3d;
-  --green-dim: #e6f4ed;
-  --hero-bg: #0d1f12;
-
-  min-height: calc(100vh - 64px);
-  background: var(--surface);
+.landing-page {
+  --green: var(--accent-primary);
+  --green-dk: #008f45;
+  --bg: var(--bg-primary);
+  --paper: var(--bg-secondary);
+  --ink: var(--text-primary);
+  --ink-2: var(--text-secondary);
+  --ink-3: var(--text-tertiary);
+  --rule: var(--border-color);
+  
+  background: var(--bg);
+  color: var(--ink);
   font-family: 'Source Sans 3', sans-serif;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 2rem;
+}
+
+/* ══ PARALLAX HERO ════════════════════════════════════════════ */
+.parallax-hero {
+  position: relative;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: #0d1f12;
+  color: #fff;
+  text-align: center;
+}
+
+.dark .parallax-hero {
+  background: #020617;
+}
+
+.parallax-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 120%;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.floating-shape {
+  position: absolute;
+  background: linear-gradient(135deg, var(--green) 0%, transparent 80%);
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.15;
+}
+
+.shape-1 { width: 500px; height: 500px; top: -10%; left: -10%; }
+.shape-2 { width: 400px; height: 400px; bottom: 10%; right: -5%; opacity: 0.1; }
+.shape-3 { width: 300px; height: 300px; top: 40%; left: 60%; opacity: 0.05; }
+
+.hero-content {
+  position: relative;
+  z-index: 10;
+  max-width: 900px;
+  padding: 0 2rem;
+}
+
+.hero-brand {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 2.5rem;
+  animation: brand-entrance 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.hero-title {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  font-family: 'Lora', serif;
+  font-size: clamp(3.5rem, 8vw, 6.5rem);
+  font-weight: 600;
+  margin: 0;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.brand-logo {
+  height: 1.3em;
+  width: auto;
+  filter: drop-shadow(0 0 15px rgba(0, 166, 81, 0.4));
+  animation: brand-pulse 4s ease-in-out infinite;
+  margin-right: -0.05em;
+}
+
+.title-text {
+  margin-left: -0.05em;
+  background: linear-gradient(to right, #fff 20%, var(--green) 50%, #fff 80%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shine 8s linear infinite;
+}
+
+@keyframes brand-entrance {
+  0% { transform: translateY(30px) scale(0.95); opacity: 0; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+@keyframes brand-pulse {
+  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 15px rgba(0, 166, 81, 0.4)); }
+  50% { transform: scale(1.05); filter: drop-shadow(0 0 25px rgba(0, 166, 81, 0.6)); }
+}
+
+@keyframes shine {
+  to { background-position: 200% center; }
+}
+
+.hero-subtitle {
+  font-size: clamp(1.1rem, 2vw, 1.4rem);
+  color: rgba(255, 255, 255, 0.7);
+  line-height: 1.6;
+  margin-bottom: 3rem;
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
+  opacity: 0;
+  animation: fade-in-up 1s ease-out 0.5s forwards;
+}
+
+@keyframes fade-in-up {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.hero-actions {
+  display: flex;
+  gap: 1.5rem;
+  justify-content: center;
+  opacity: 0;
+  animation: fade-in-up 1s ease-out 0.8s forwards;
+}
+
+.primary-btn {
+  background: var(--green);
+  color: #fff;
+  border: none;
+  padding: 1rem 2rem;
+  border-radius: 50px;
+  font-weight: 600;
+  font-size: 1.1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  transition: all 0.3s;
+}
+
+.primary-btn:hover {
+  background: var(--green-dk);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 20px rgba(0, 166, 81, 0.3);
+}
+
+.secondary-btn {
+  background: transparent;
+  color: #fff;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  padding: 1rem 2rem;
+  border-radius: 50px;
+  font-weight: 600;
+  font-size: 1.1rem;
+  text-decoration: none;
+  transition: all 0.3s;
+}
+
+.secondary-btn:hover {
+  border-color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.scroll-indicator {
+  position: absolute;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  transition: opacity 0.3s;
+}
+
+.scroll-indicator.hidden {
+  opacity: 0;
+}
+
+.mouse {
+  width: 26px;
+  height: 42px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 20px;
+  display: flex;
+  justify-content: center;
+  padding-top: 8px;
+}
+
+.wheel {
+  width: 4px;
+  height: 8px;
+  background: var(--green);
+  border-radius: 2px;
+  animation: scroll-anim 1.5s infinite;
+}
+
+@keyframes scroll-anim {
+  0% { transform: translateY(0); opacity: 1; }
+  100% { transform: translateY(15px); opacity: 0; }
+}
+
+/* ══ FEATURES SECTION ═════════════════════════════════════════ */
+.features-section {
+  padding: 8rem 0;
+  background: var(--paper);
+}
+
+.section-header {
+  text-align: center;
+  margin-bottom: 4rem;
+}
+
+.section-title {
+  font-family: 'Lora', serif;
+  font-size: 2.5rem;
+  margin-bottom: 1rem;
+}
+
+.section-desc {
+  font-size: 1.1rem;
+  color: var(--ink-2);
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 2rem;
+}
+
+.feature-card {
+  padding: 3rem 2rem;
+  background: var(--bg);
+  border: 1px solid var(--rule);
+  border-radius: 16px;
+  transition: all 0.3s;
+}
+
+.feature-card:hover {
+  transform: translateY(-10px);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.05);
+  border-color: var(--green);
+}
+
+.feature-icon {
+  width: 60px;
+  height: 60px;
+  background: rgba(0, 166, 81, 0.1);
+  color: var(--green);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1.5rem;
+}
+
+.feature-card h3 {
+  font-family: 'Lora', serif;
+  font-size: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.feature-card p {
+  color: var(--ink-2);
+  line-height: 1.6;
+}
+
+/* ══ SEARCH SECTION ═══════════════════════════════════════════ */
+.search-section {
+  padding: 6rem 0;
+  background: var(--bg);
+  border-top: 1px solid var(--rule);
+}
+
+.search-container {
+  max-width: 800px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.search-greeting {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--green);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 0.5rem;
+}
+
+.search-title {
+  font-family: 'Lora', serif;
+  font-size: 2.2rem;
+  margin-bottom: 3rem;
+}
+
+.search-box-wrap {
+  position: relative;
+}
+
+.search-field {
+  display: flex;
+  align-items: center;
+  background: var(--paper);
+  border: 2px solid var(--rule);
+  border-radius: 12px;
+  padding: 0.5rem 0.5rem 0.5rem 1.5rem;
+  transition: all 0.3s;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+}
+
+.search-field:focus-within {
+  border-color: var(--green);
+  box-shadow: 0 10px 30px rgba(0, 166, 81, 0.1);
+}
+
+.search-field input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 1.1rem;
+  padding: 0.75rem 1rem;
   color: var(--ink);
 }
 
-/* ══ HERO ════════════════════════════════════════════════ */
-.hero {
-  background: var(--hero-bg);
-  padding: 4.5rem 2rem 4rem;
-  position: relative;
-  border-bottom: 3px solid var(--green);
+.s-icon {
+  color: var(--ink-3);
 }
 
-/* Subtle dot-grid texture */
-.hero::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.055) 1px, transparent 1px);
-  background-size: 28px 28px;
-  pointer-events: none;
+.search-go {
+  background: var(--green);
+  color: #fff;
+  border: none;
+  padding: 0.85rem 2rem;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: background 0.2s;
 }
 
-/* Search History Popup */
+.search-go:hover {
+  background: var(--green-dk);
+}
+
+/* History Popup */
 .history-popup {
   position: absolute;
   top: 100%;
@@ -216,9 +615,9 @@ const handleSearch = () => {
   right: 0;
   background: var(--paper);
   border: 1px solid var(--rule);
-  border-radius: 8px;
-  margin-top: 0.5rem;
-  box-shadow: 0 10px 25px -5px rgba(0,0,0,0.3);
+  border-radius: 12px;
+  margin-top: 0.75rem;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
   z-index: 100;
   overflow: hidden;
   text-align: left;
@@ -227,12 +626,11 @@ const handleSearch = () => {
 .history-head {
   display: flex;
   justify-content: space-between;
-  padding: 0.6rem 0.8rem;
-  background: var(--surface);
+  padding: 0.75rem 1.25rem;
+  background: var(--bg);
   border-bottom: 1px solid var(--rule);
-  font-size: 0.65rem;
+  font-size: 0.75rem;
   font-weight: 700;
-  text-transform: uppercase;
   color: var(--ink-3);
 }
 
@@ -241,282 +639,129 @@ const handleSearch = () => {
   border: none;
   color: var(--green);
   cursor: pointer;
-  font-size: 0.65rem;
-}
-
-.history-list {
-  max-height: 250px;
-  overflow-y: auto;
 }
 
 .history-item {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0.6rem 0.8rem;
+  gap: 1rem;
+  padding: 0.85rem 1.25rem;
   cursor: pointer;
-  transition: background 0.1s;
-  font-size: 0.85rem;
-  color: var(--ink-2);
+  transition: background 0.2s;
 }
 
 .history-item:hover {
-  background: var(--surface);
+  background: var(--bg);
 }
 
-.history-item .h-remove {
+.h-remove {
   margin-left: auto;
-  opacity: 0.5;
   background: none;
   border: none;
+  color: var(--ink-3);
   cursor: pointer;
+  opacity: 0.5;
 }
 
-.history-item .h-remove:hover {
+.h-remove:hover {
   opacity: 1;
+  color: #ef4444;
 }
 
-.search-row {
-  max-width: 700px;
-  margin: 0 auto 3.5rem;
-  display: flex;
-  gap: 0.5rem;
-  position: relative;
-}
-
-.hero-inner {
-  max-width: 1200px;
-  margin: 0 auto;
-  position: relative;
-  z-index: 1;
-  text-align: center;
-}
-
-/* Masthead bar — journal-header feel */
-.hero-masthead {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  margin-bottom: 2.5rem;
-}
-
-.masthead-rule {
-  flex: 1;
-  height: 1px;
-  background: rgba(255, 255, 255, 0.14);
-}
-
-.masthead-label {
-  font-size: 0.68rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  color: rgba(255, 255, 255, 0.32);
-  white-space: nowrap;
-}
-
-/* Heading */
-.hero-heading {
-  font-family: 'Lora', Georgia, serif;
-  font-size: clamp(2.5rem, 5.5vw, 3.75rem);
-  font-weight: 600;
-  line-height: 1.1;
-  color: #fff;
-  margin: 0 auto 1.25rem;
-  letter-spacing: -0.01em;
-}
-
-/* Search */
-.search-row {
-  display: flex;
-  gap: 0.5rem;
-  max-width: 620px;
-  margin: 0 auto 1.5rem;
-}
-
-.search-field {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.13);
-  border-radius: 6px;
-  padding: 0 1rem;
-  transition: border-color 0.15s, background 0.15s;
-}
-
-.search-field:focus-within {
-  background: rgba(255, 255, 255, 0.09);
-  border-color: rgba(255, 255, 255, 0.3);
-}
-
-.s-icon {
-  color: rgba(255, 255, 255, 0.28);
-  flex-shrink: 0;
-}
-
-.search-field input {
-  flex: 1;
-  background: transparent;
-  border: none;
-  outline: none;
-  color: #fff;
-  font-family: 'Source Sans 3', sans-serif;
-  font-size: 0.95rem;
-  padding: 0.85rem 0;
-}
-
-.search-field input::placeholder {
-  color: rgba(255, 255, 255, 0.22);
-}
-
-.search-btn {
-  background: var(--green);
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  padding: 0.85rem 1.6rem;
-  font-family: 'Source Sans 3', sans-serif;
-  font-size: 0.9rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.search-btn:hover {
-  background: var(--green-dk);
-}
-
-/* ══ CONTENT ════════════════════════════════════════════ */
+/* ══ RECENT RESEARCH ══════════════════════════════════════════ */
 .content-wrap {
-  padding: 2.75rem 2rem 5rem;
+  padding: 6rem 0;
+  background: var(--paper);
 }
 
-.content-grid {
-  max-width: 1100px;
-  margin: 0 auto;
-  display: block;
-  align-items: start;
-}
-
-/* ── Feed ──────────────────────────────────────────────── */
 .feed-head {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  padding-bottom: 0.75rem;
-  border-bottom: 2px solid var(--ink);
-  margin-bottom: 0;
+  align-items: center;
+  margin-bottom: 2.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--rule);
 }
 
 .feed-head-left {
   display: flex;
   align-items: center;
-  gap: 0.45rem;
-  font-size: 0.7rem;
+  gap: 0.75rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.09em;
+  letter-spacing: 0.1em;
+  font-size: 0.85rem;
   color: var(--ink-2);
 }
 
-/* Paper list */
+.text-link {
+  color: var(--green);
+  text-decoration: none;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .paper-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+  gap: 2rem;
   list-style: none;
   padding: 0;
-  margin: 0;
 }
 
 .paper-item {
-  display: grid;
-  grid-template-columns: 38px 1fr;
-  gap: 0 1rem;
-  padding: 1.5rem 0;
-  border-bottom: 1px solid var(--rule);
+  background: var(--bg);
+  padding: 2rem;
+  border-radius: 12px;
+  border: 1px solid var(--rule);
+  transition: all 0.3s;
 }
 
-.paper-item:last-of-type {
-  border-bottom: none;
-}
-
-.item-num {
-  font-size: 0.66rem;
-  font-weight: 700;
-  color: var(--ink-3);
-  opacity: 0.45;
-  padding-top: 0.22rem;
-  font-variant-numeric: tabular-nums;
-}
-
-.item-body {
-  min-width: 0;
+.paper-item:hover {
+  border-color: var(--green);
 }
 
 .item-tags {
+  margin-bottom: 1rem;
   display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  margin-bottom: 0.38rem;
+  gap: 0.5rem;
 }
 
 .type-tag {
-  font-size: 0.61rem;
+  background: rgba(0, 166, 81, 0.1);
+  color: var(--green);
+  font-size: 0.7rem;
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--green-dk);
-  background: var(--green-dim);
-  padding: 0.14rem 0.44rem;
-  border-radius: 2px;
-}
-
-.year-tag {
-  font-size: 0.68rem;
-  color: var(--ink-3);
+  padding: 0.25rem 0.6rem;
+  border-radius: 4px;
 }
 
 .item-title {
   display: block;
-  font-family: 'Lora', Georgia, serif;
-  font-size: 1.02rem;
+  font-family: 'Lora', serif;
+  font-size: 1.25rem;
   font-weight: 600;
   color: var(--ink);
   text-decoration: none;
-  line-height: 1.45;
-  margin-bottom: 0.38rem;
-  transition: color 0.14s;
-}
-
-.item-title:hover {
-  color: var(--green-dk);
+  margin-bottom: 0.75rem;
+  line-height: 1.4;
 }
 
 .item-meta {
   display: flex;
   align-items: center;
-  gap: 0.35rem;
-  font-size: 0.77rem;
+  gap: 0.5rem;
+  font-size: 0.85rem;
   color: var(--ink-3);
-  margin-bottom: 0.65rem;
-  flex-wrap: wrap;
-}
-
-.dot {
-  opacity: 0.38;
-}
-
-.item-dept {
-  font-style: italic;
+  margin-bottom: 1rem;
 }
 
 .item-abstract {
-  font-size: 0.84rem;
+  font-size: 0.95rem;
   color: var(--ink-2);
-  line-height: 1.7;
-  margin: 0 0 0.75rem;
+  line-height: 1.6;
   display: -webkit-box;
   -webkit-line-clamp: 3;
   line-clamp: 3;
@@ -524,178 +769,22 @@ const handleSearch = () => {
   overflow: hidden;
 }
 
-.item-action {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-size: 0.77rem;
-  font-weight: 600;
-  color: var(--green-dk);
-  text-decoration: none;
-  transition: gap 0.14s;
-}
-
-.item-action:hover {
-  gap: 0.5rem;
-}
-
-/* View more */
-.view-more {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-top: 2rem;
-  font-size: 0.84rem;
-  font-weight: 600;
-  color: var(--ink);
-  border: 1.5px solid var(--ink);
-  border-radius: 5px;
-  padding: 0.6rem 1.15rem;
-  text-decoration: none;
-  transition: background 0.14s, color 0.14s;
-}
-
-.view-more:hover {
-  background: var(--ink);
-  color: #fff;
-}
-
-/* ── Skeleton ──────────────────────────────────────────── */
-@keyframes shimmer {
-  0% {
-    background-position: -500px 0;
-  }
-
-  100% {
-    background-position: 500px 0;
-  }
-}
-
+/* Skeleton */
 .skeleton {
   pointer-events: none;
 }
-
-.sk-num,
-.sk-tag,
-.sk-title,
-.sk-meta,
-.sk-abstract {
-  background: linear-gradient(90deg, var(--rule) 25%, #e8e8e3 50%, var(--rule) 75%);
-  background-size: 500px 100%;
-  animation: shimmer 1.4s infinite;
-  border-radius: 3px;
-  margin-bottom: 0.5rem;
+.sk-body div {
+  background: var(--skeleton-bg);
+  border-radius: 4px;
+  margin-bottom: 1rem;
 }
-
-.sk-num {
-  width: 22px;
-  height: 13px;
-  margin-top: 0.22rem;
-}
-
-.sk-tag {
-  width: 62px;
-  height: 15px;
-}
-
-.sk-title {
-  width: 88%;
-  height: 18px;
-}
-
-.sk-meta {
-  width: 50%;
-  height: 12px;
-}
-
-.sk-abstract {
-  width: 100%;
-  height: 50px;
-  margin-bottom: 0;
-}
-
-/* ── Empty Feed ────────────────────────────────────────── */
-.empty-feed {
-  padding: 4rem 2rem;
-  text-align: center;
-  border-radius: 8px;
-  margin: 1.5rem 0;
-}
-
-.empty-feed-title {
-  font-family: 'Lora', serif;
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: var(--ink);
-  margin-bottom: 0.25rem;
-}
-
-.empty-feed-sub {
-  font-size: 0.88rem;
-  color: var(--ink-3);
-  max-width: 320px;
-  margin: 0 auto;
-}
-
-.bar-fill.secondary {
-  background: var(--hero-bg);
-}
+.sk-tag { width: 60px; height: 20px; }
+.sk-title { width: 90%; height: 24px; }
+.sk-meta { width: 50%; height: 16px; }
 
 @media (max-width: 768px) {
-  .analytics-inner {
-    grid-template-columns: 1fr;
-    gap: 1.5rem;
-  }
-}
-
-/* ── Responsive ────────────────────────────────────────── */
-@media (max-width: 860px) {
-  .content-grid {
-    grid-template-columns: 1fr;
-    gap: 2.5rem;
-  }
-
-  .sidebar {
-    position: static;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1.5rem;
-  }
-}
-
-@media (max-width: 600px) {
-  .hero {
-    padding: 3rem 1.25rem 3rem;
-  }
-
-  .hero-heading {
-    font-size: 2.2rem;
-  }
-
-  .hero-masthead {
-    display: none;
-  }
-
-  .search-row {
-    flex-direction: column;
-  }
-
-  .search-btn {
-    width: 100%;
-    text-align: center;
-  }
-
-  .content-wrap {
-    padding: 2rem 1.25rem 4rem;
-  }
-
-  .paper-item {
-    grid-template-columns: 28px 1fr;
-    gap: 0 0.6rem;
-  }
-
-  .sidebar {
-    grid-template-columns: 1fr;
-  }
+  .hero-title { font-size: 3rem; }
+  .paper-list { grid-template-columns: 1fr; }
+  .hero-actions { flex-direction: column; }
 }
 </style>

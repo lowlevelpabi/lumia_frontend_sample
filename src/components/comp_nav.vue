@@ -1,14 +1,15 @@
 <script setup lang="ts">
-import { ref, onMounted, watch, onUnmounted, computed } from 'vue'
+import { ref, onMounted, watch, onUnmounted } from 'vue'
 import { useRouter, useRoute, RouterLink } from 'vue-router'
 import {
   Search, BookOpen, ArrowRight, LogOut, Settings,
   ChevronDown, Home, Compass, UserCircle, X, Menu, HelpCircle,
-  BookUp, Bookmark, Loader2, ArrowUpRight
+  Bookmark, Loader2, ArrowUpRight, Moon, Sun
 } from 'lucide-vue-next'
 import { api, type Paper } from '../services/api'
 import { useAuth } from '../composables/useAuth'
 import { historyService } from '../services/history'
+import { useTheme } from '../composables/useTheme'
 
 const router = useRouter()
 const route = useRoute()
@@ -17,7 +18,7 @@ const searchHistory = ref<string[]>([])
 const showHistory = ref(false)
 const historyRef = ref<HTMLElement | null>(null)
 
-const isLoggedIn = ref(false)
+
 const showMobileMenu = ref(false)
 const showMobileSearch = ref(false)
 const showProfileMenu = ref(false)
@@ -28,26 +29,12 @@ const bookmarkLoading = ref(false)
 const removeLoading = ref(false)
 const showLogoutModal = ref(false)
 
-const { isStaff, isStudent, fullName, userRole } = useAuth()
+const { isLoggedIn, isStaff, fullName, userRole, refreshAuth } = useAuth()
+const { isDark, toggleTheme, setTheme, resetTheme } = useTheme()
 
-const isGreetingPhase = ref(true)
-
-const greetingText = computed(() => {
-  if (!fullName.value) {
-    return 'Welcome to Lumia!'
-  }
-
-  const hour = new Date().getHours()
-  let timeGreeting = 'Welcome'
-  if (hour < 12) timeGreeting = 'Good morning'
-  else if (hour < 18) timeGreeting = 'Good afternoon'
-  else timeGreeting = 'Good evening'
-
-  return `${timeGreeting}, ${fullName.value.split(' ')[0]}!`
-})
-
-const checkAuth = () => {
-  isLoggedIn.value = !!localStorage.getItem('token')
+const scrolled = ref(false)
+const handleScroll = () => {
+  scrolled.value = window.scrollY > 50
 }
 
 // Click outside logic for profile dropdown
@@ -58,10 +45,23 @@ const closeProfileMenu = (e: MouseEvent) => {
   }
 }
 
-onMounted(() => {
-  checkAuth()
+onMounted(async () => {
+  refreshAuth()
   searchHistory.value = historyService.getHistory()
   window.addEventListener('click', closeProfileMenu)
+  window.addEventListener('scroll', handleScroll)
+
+  // Sync theme from database if logged in
+  if (isLoggedIn.value) {
+    try {
+      const userData = await api.getUserMe()
+      if (userData.dark_mode !== undefined) {
+        setTheme(userData.dark_mode)
+      }
+    } catch (e) {
+      console.error('Failed to sync theme preference:', e)
+    }
+  }
 
   // Close history when clicking outside
   document.addEventListener('click', (e) => {
@@ -70,19 +70,16 @@ onMounted(() => {
     }
   })
 
-  // Animation sequence: Start greeting, then transition to logo
-  setTimeout(() => {
-    isGreetingPhase.value = false
-  }, 7000)
 })
 
 onUnmounted(() => {
   window.removeEventListener('click', closeProfileMenu)
+  window.removeEventListener('scroll', handleScroll)
 })
 
 // Watch for route changes to refresh auth and close menus
 watch(() => route.path, () => {
-  checkAuth()
+  refreshAuth()
   showMobileMenu.value = false
   showProfileMenu.value = false
   showMobileSearch.value = false
@@ -122,7 +119,8 @@ const logout = () => {
 
 const confirmLogout = () => {
   api.logout()
-  isLoggedIn.value = false
+  refreshAuth()
+  resetTheme()
   window.location.href = '/login'
 }
 
@@ -155,13 +153,13 @@ const toggleSelectAll = () => {
 
 const removeSelected = async () => {
   if (selectedBookmarks.value.length === 0 || removeLoading.value) return
-  
+
   removeLoading.value = true
   try {
-    // We toggle bookmarks for each selected ID. Since they are in the list, 
+    // We toggle bookmarks for each selected ID. Since they are in the list,
     // toggling will remove them.
     await Promise.all(selectedBookmarks.value.map(id => api.bookmarkPaper(id)))
-    
+
     // Refresh list
     bookmarks.value = await api.getUserBookmarks()
     selectedBookmarks.value = []
@@ -174,23 +172,18 @@ const removeSelected = async () => {
 </script>
 
 <template>
-  <nav class="global-navbar">
+  <nav class="global-navbar" :class="{ 'is-scrolled': scrolled || route.name !== 'home' }">
     <div class="nav-container">
 
       <!-- Left: Logo (Institutional Branding) -->
       <RouterLink :to="{ name: 'home' }" class="nav-logo">
-        <div class="animation-stage">
-          <transition name="greeting-slide" appear>
-            <span v-if="isGreetingPhase" class="greeting-msg">{{ greetingText }}</span>
-          </transition>
-          <transition name="logo-appear">
-            <div v-if="!isGreetingPhase" class="logo-inner">
-              <img src="/lumia_logo.ico" style="width: 32px; height: 32px;" />
-              <div class="logo-text">
-                UMIA <span class="logo-text--sub">Retrieval</span>
-              </div>
-            </div>
-          </transition>
+        <div class="logo-inner">
+          <div class="logo-icon">
+            <img src="/lumia_logo.ico" style="width: 22px; height: 22px; object-fit: contain" />
+          </div>
+          <div class="logo-text">
+            UMIA <span class="logo-text--sub">Retrieval</span>
+          </div>
         </div>
       </RouterLink>
 
@@ -236,10 +229,18 @@ const removeSelected = async () => {
           Management
         </RouterLink>
 
+        <div class="nav-divider"></div>
+
         <template v-if="isLoggedIn">
-          <RouterLink v-if="isStudent" :to="{ name: 'upload' }" class="nav-upload-btn shadow-sm">
-            Upload Document
-          </RouterLink>
+
+          <!-- Theme Toggle -->
+          <button class="theme-toggle-btn" @click="toggleTheme"
+            :title="isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'">
+            <transition name="scale" mode="out-in">
+              <Sun v-if="isDark" :size="18" />
+              <Moon v-else :size="18" />
+            </transition>
+          </button>
 
           <div class="nav-divider"></div>
           <div class="nav-profile-container">
@@ -274,7 +275,6 @@ const removeSelected = async () => {
         </template>
 
         <template v-else>
-          <div class="nav-divider"></div>
           <RouterLink :to="{ name: 'login' }" class="get-started-btn">
             Get started
             <ArrowRight :size="14" />
@@ -339,10 +339,6 @@ const removeSelected = async () => {
 
             <template v-if="isLoggedIn">
               <div class="drawer-section">Account & Actions</div>
-              <RouterLink v-if="isStudent" :to="{ name: 'upload' }" class="drawer-item"
-                style="color: #00a651; font-weight: 600;">
-                <BookUp :size="18" /> Upload Document
-              </RouterLink>
               <RouterLink :to="{ name: 'profile' }" class="drawer-item">
                 <UserCircle :size="18" /> My Profile
               </RouterLink>
@@ -362,6 +358,13 @@ const removeSelected = async () => {
                 <ArrowRight :size="16" />
               </RouterLink>
             </template>
+
+            <div class="drawer-divider"></div>
+            <button class="drawer-item" @click="toggleTheme">
+              <Sun v-if="isDark" :size="18" />
+              <Moon v-else :size="18" />
+              {{ isDark ? 'Light Mode' : 'Dark Mode' }}
+            </button>
           </div>
         </aside>
       </transition>
@@ -437,9 +440,7 @@ const removeSelected = async () => {
                     {{ selectedBookmarks.length }} selected
                   </span>
                 </div>
-                <button v-if="selectedBookmarks.length > 0" 
-                  class="bulk-remove-btn" 
-                  :disabled="removeLoading"
+                <button v-if="selectedBookmarks.length > 0" class="bulk-remove-btn" :disabled="removeLoading"
                   @click="removeSelected">
                   <X :size="14" />
                   {{ removeLoading ? 'Removing...' : 'Remove Selected' }}
@@ -518,12 +519,19 @@ const removeSelected = async () => {
   left: 0;
   right: 0;
   height: 64px;
-  background: #ffffff;
-  border-bottom: 1.5px solid #dfe0db;
+  background: transparent;
+  border-bottom: 1px solid transparent;
   z-index: 1000;
   display: flex;
   align-items: center;
   font-family: 'Source Sans 3', sans-serif;
+  transition: all 0.3s ease;
+}
+
+.global-navbar.is-scrolled {
+  background: var(--navbar-bg);
+  border-bottom: 1.5px solid var(--border-color);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
 }
 
 /* Subtle top-border accent to match the institutional theme */
@@ -534,7 +542,13 @@ const removeSelected = async () => {
   left: 0;
   right: 0;
   height: 3px;
-  background: #00a651;
+  background: var(--accent-primary);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.global-navbar.is-scrolled::before {
+  opacity: 1;
 }
 
 .nav-container {
@@ -581,7 +595,7 @@ const removeSelected = async () => {
   /* Slightly larger Umia */
   font-weight: 700;
   /* Bolder weight */
-  color: #181c18;
+  color: var(--text-primary);
   letter-spacing: -0.01em;
   display: flex;
   flex-direction: column;
@@ -596,7 +610,7 @@ const removeSelected = async () => {
   text-transform: uppercase;
   letter-spacing: 0.22em;
   /* More tracking for Discovery */
-  color: #00a651;
+  color: var(--accent-primary);
   margin-top: 4px;
 }
 
@@ -610,25 +624,29 @@ const removeSelected = async () => {
   position: relative;
   display: flex;
   align-items: center;
-  background: #f5f5f2;
+  background: var(--bg-tertiary);
   border-radius: 6px;
   padding: 0 12px;
   height: 38px;
-  border: 1px solid #dfe0db;
+  border: 1px solid var(--border-color);
   transition: all 0.2s cubic-bezier(0.165, 0.84, 0.44, 1);
 }
 
 .nav-search:focus-within {
-  background: #ffffff;
-  border-color: #00a651;
+  background: var(--bg-secondary);
+  border-color: var(--accent-primary);
   box-shadow: 0 4px 12px -4px rgba(0, 166, 81, 0.12);
 }
 
 .search-icon {
-  color: #181c18;
+  color: var(--text-primary);
   opacity: 0.3;
   margin-right: 10px;
   flex-shrink: 0;
+}
+
+.dark .search-icon {
+  opacity: 0.55;
 }
 
 .nav-search input {
@@ -637,18 +655,18 @@ const removeSelected = async () => {
   outline: none;
   width: 100%;
   font-size: 0.9rem;
-  color: #181c18;
+  color: var(--text-primary);
 }
 
 .nav-search input::placeholder {
-  color: #7a7f75;
+  color: var(--text-tertiary);
 }
 
 .search-hint {
   font-size: 0.65rem;
   font-weight: 700;
-  color: #dfe0db;
-  border: 1px solid #dfe0db;
+  color: var(--border-color);
+  border: 1px solid var(--border-color);
   padding: 2px 5px;
   border-radius: 3px;
   pointer-events: none;
@@ -660,10 +678,10 @@ const removeSelected = async () => {
   top: calc(100% + 8px);
   left: 0;
   right: 0;
-  background: #ffffff;
-  border: 1px solid #dfe0db;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
-  box-shadow: 0 12px 32px -8px rgba(0, 0, 0, 0.15);
+  box-shadow: var(--shadow-md);
   z-index: 1100;
   overflow: hidden;
 }
@@ -673,8 +691,8 @@ const removeSelected = async () => {
   top: 100%;
   left: 0;
   right: 0;
-  background: #ffffff;
-  border-top: 1px solid #dfe0db;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
   z-index: 2200;
   max-height: 300px;
   overflow-y: auto;
@@ -684,13 +702,13 @@ const removeSelected = async () => {
   display: flex;
   justify-content: space-between;
   padding: 10px 14px;
-  background: #f5f5f2;
-  border-bottom: 1px solid #dfe0db;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-color);
   font-size: 0.65rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #7a7f75;
+  color: var(--text-tertiary);
 }
 
 .history-head button {
@@ -715,16 +733,16 @@ const removeSelected = async () => {
   cursor: pointer;
   transition: background 0.1s;
   font-size: 0.9rem;
-  color: #3d4239;
+  color: var(--text-secondary);
 }
 
 .history-item:hover {
-  background: #f5f5f2;
-  color: #00a651;
+  background: var(--bg-tertiary);
+  color: var(--accent-primary);
 }
 
 .history-item svg {
-  color: #7a7f75;
+  color: var(--text-tertiary);
   opacity: 0.5;
 }
 
@@ -764,7 +782,7 @@ const removeSelected = async () => {
 
 .nav-item {
   text-decoration: none;
-  color: #3d4239;
+  color: var(--text-primary);
   font-size: 0.8rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -778,39 +796,61 @@ const removeSelected = async () => {
   white-space: nowrap;
 }
 
+/* White text for transparent home navbar */
+.global-navbar:not(.is-scrolled) .nav-item {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.global-navbar:not(.is-scrolled) .logo-text {
+  color: #fff;
+}
+
+.global-navbar:not(.is-scrolled) .profile-name {
+  color: #fff;
+}
+
+.global-navbar:not(.is-scrolled) .theme-toggle-btn {
+  color: rgba(255, 255, 255, 0.8);
+}
+
 .nav-item:hover {
-  color: #181c18;
-  background: #f5f5f2;
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+}
+
+.global-navbar:not(.is-scrolled) .nav-item:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .nav-item.router-link-active:not(.logout-btn) {
-  color: #00a651;
+  color: var(--accent-primary);
 }
 
 .nav-item.nav-item--active {
-  color: #000000;
+  color: var(--text-primary);
 }
 
 .nav-item--mgmt {
-  color: #3b82f6 !important;
+  color: var(--accent-secondary) !important;
 }
 
 .nav-item--mgmt.router-link-active {
-  color: #00a651 !important;
+  color: var(--accent-primary) !important;
   background: rgba(0, 166, 81, 0.08) !important;
 }
 
 .nav-item--mgmt:hover:not(.router-link-active) {
-  color: #2563eb !important;
+  color: var(--accent-secondary) !important;
   background: rgba(59, 130, 246, 0.08) !important;
 }
 
 .drawer-item--mgmt {
-  color: #3b82f6 !important;
+  color: var(--accent-secondary) !important;
 }
 
 .drawer-item--mgmt.router-link-active {
-  color: #00a651 !important;
+  color: var(--accent-primary) !important;
   background: rgba(0, 166, 81, 0.08) !important;
 }
 
@@ -856,7 +896,7 @@ const removeSelected = async () => {
 }
 
 .nav-profile-trigger:hover {
-  background: #f5f5f2;
+  background: var(--bg-tertiary);
 }
 
 .profile-avatar {
@@ -864,8 +904,8 @@ const removeSelected = async () => {
   height: 34px;
   border-radius: 50%;
   overflow: hidden;
-  border: 1.5px solid #dfe0db;
-  background: #fff;
+  border: 1.5px solid var(--border-color);
+  background: var(--bg-secondary);
 }
 
 .profile-avatar img {
@@ -884,24 +924,58 @@ const removeSelected = async () => {
 .profile-name {
   font-size: 0.85rem;
   font-weight: 700;
-  color: #181c18;
+  color: var(--text-primary);
 }
 
 .profile-role {
   font-size: 0.65rem;
   font-weight: 500;
-  color: #7a7f75;
+  color: var(--text-tertiary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
 
 .dropdown-arrow {
-  color: #7a7f75;
+  color: var(--text-tertiary);
   transition: transform 0.2s;
 }
 
 .dropdown-arrow.rotated {
   transform: rotate(180deg);
+}
+
+/* ── Theme Toggle Button ── */
+.theme-toggle-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-secondary);
+  padding: 8px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.theme-toggle-btn:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.scale-enter-active,
+.scale-leave-active {
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.scale-enter-from {
+  transform: scale(0.8);
+  opacity: 0;
+}
+
+.scale-leave-to {
+  transform: scale(1.2);
+  opacity: 0;
 }
 
 /* ── Dropdown Menu (Desktop) ─────────────────────────────────── */
@@ -910,10 +984,10 @@ const removeSelected = async () => {
   top: calc(100% + 12px);
   right: 0;
   width: 240px;
-  background: #ffffff;
-  border: 1.5px solid #dfe0db;
+  background: var(--bg-secondary);
+  border: 1.5px solid var(--border-color);
   border-radius: 8px;
-  box-shadow: 0 12px 32px -8px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--shadow-md);
   padding: 8px;
   z-index: 1001;
 }
@@ -924,7 +998,7 @@ const removeSelected = async () => {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: #7a7f75;
+  color: var(--text-tertiary);
 }
 
 .dropdown-item {
@@ -937,7 +1011,7 @@ const removeSelected = async () => {
   font-family: 'Source Sans 3', sans-serif;
   font-size: 0.85rem;
   font-weight: 500;
-  color: #181c18;
+  color: var(--text-primary);
   border-radius: 6px;
   border: none;
   background: none;
@@ -946,13 +1020,13 @@ const removeSelected = async () => {
 }
 
 .dropdown-item:hover {
-  background: #f5f5f2;
-  color: #00a651;
+  background: var(--bg-tertiary);
+  color: var(--accent-primary);
 }
 
 .dropdown-divider {
   height: 1px;
-  background: #dfe0db;
+  background: var(--border-color);
   margin: 8px 0;
 }
 
@@ -974,11 +1048,18 @@ const removeSelected = async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f5f5f2;
-  border: 1px solid #dfe0db;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
-  color: #181c18;
+  color: var(--text-primary);
   cursor: pointer;
+  transition: all 0.2s;
+}
+
+.global-navbar:not(.is-scrolled) .mobile-control-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #fff;
 }
 
 @media (max-width: 860px) {
@@ -1002,11 +1083,11 @@ const removeSelected = async () => {
   right: 0;
   bottom: 0;
   width: 280px;
-  background: #fff;
+  background: var(--bg-secondary);
   z-index: 2001;
   display: flex;
   flex-direction: column;
-  box-shadow: -10px 0 30px rgba(0, 0, 0, 0.1);
+  box-shadow: -10px 0 30px rgba(0, 0, 0, 0.2);
 }
 
 .drawer-user-card {
@@ -1062,7 +1143,7 @@ const removeSelected = async () => {
   font-size: 0.65rem;
   font-weight: 700;
   text-transform: uppercase;
-  color: #00a651;
+  color: var(--accent-primary);
   letter-spacing: 0.1em;
 }
 
@@ -1071,13 +1152,13 @@ const removeSelected = async () => {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  background: #f5f5f2;
+  background: var(--bg-tertiary);
 }
 
 .drawer-guest-card p {
   font-family: 'Lora', serif;
   font-weight: 600;
-  color: #181c18;
+  color: var(--text-primary);
 }
 
 .drawer-nav {
@@ -1091,7 +1172,7 @@ const removeSelected = async () => {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.15em;
-  color: #7a7f75;
+  color: var(--text-tertiary);
   margin: 24px 0 12px;
 }
 
@@ -1103,21 +1184,28 @@ const removeSelected = async () => {
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 12px 0;
-  color: #3d4239;
+  padding: 14px 16px;
+  color: var(--text-secondary);
   text-decoration: none;
   font-weight: 600;
   font-size: 0.95rem;
-  border-bottom: 1px solid #f5f5f2;
-  transition: color 0.2s;
+  border-radius: 8px;
+  margin-bottom: 4px;
+  transition: all 0.2s;
 }
 
-.drawer-item:hover {
-  color: #00a651;
+.drawer-item:hover,
+.drawer-item.router-link-active {
+  background: var(--bg-tertiary);
+  color: var(--accent-primary);
+}
+
+.drawer-item.router-link-active svg {
+  color: var(--accent-primary);
 }
 
 .drawer-item svg {
-  color: #7a7f75;
+  color: var(--text-tertiary);
 }
 
 .drawer-cta {
@@ -1132,10 +1220,29 @@ const removeSelected = async () => {
 
 .logout-mobile {
   width: 100%;
+  background: rgba(239, 68, 68, 0.05);
+  border: 1px solid rgba(239, 68, 68, 0.1);
+  margin-top: 12px;
+  color: #ef4444 !important;
+  justify-content: flex-start;
+  padding: 14px 16px;
+}
+
+.logout-mobile:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.logout-mobile svg {
+  color: #ef4444;
+}
+
+button.drawer-item {
   background: none;
   border: none;
+  width: 100%;
+  cursor: pointer;
   font-family: inherit;
-  color: #ef4444 !important;
+  text-align: left;
 }
 
 /* ── Mobile Search Overlay ────────────────────────────────────── */
@@ -1145,12 +1252,12 @@ const removeSelected = async () => {
   left: 0;
   right: 0;
   height: 64px;
-  background: #fff;
+  background: var(--bg-secondary);
   z-index: 2100;
   padding: 0 16px;
   display: flex;
   align-items: center;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .mobile-search-container {
@@ -1168,9 +1275,10 @@ const removeSelected = async () => {
   flex: 1;
   border: none;
   outline: none;
+  background: transparent;
   font-size: 1rem;
   font-family: inherit;
-  color: #181c18;
+  color: var(--text-primary);
 }
 
 .close-search {
@@ -1214,6 +1322,11 @@ const removeSelected = async () => {
   height: 18px;
   background: #dfe0db;
   margin: 0 8px;
+  transition: background 0.2s;
+}
+
+.global-navbar:not(.is-scrolled) .nav-divider {
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .get-started-btn {
@@ -1254,7 +1367,7 @@ const removeSelected = async () => {
   width: 90%;
   max-width: 600px;
   max-height: 80vh;
-  background: #ffffff;
+  background: var(--bg-secondary);
   border-radius: 12px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
   z-index: 1051;
@@ -1267,7 +1380,7 @@ const removeSelected = async () => {
   justify-content: space-between;
   align-items: center;
   padding: 20px 24px;
-  border-bottom: 1px solid #dfe0db;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .modal-title-section {
@@ -1284,7 +1397,7 @@ const removeSelected = async () => {
   font-family: 'Lora', serif;
   font-size: 1.3rem;
   font-weight: 600;
-  color: #181c18;
+  color: var(--text-primary);
   margin: 0;
 }
 
@@ -1302,8 +1415,8 @@ const removeSelected = async () => {
 }
 
 .modal-close-btn:hover {
-  background: #f5f5f2;
-  color: #181c18;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
 }
 
 .modal-content {
@@ -1319,7 +1432,7 @@ const removeSelected = async () => {
   justify-content: center;
   gap: 12px;
   min-height: 300px;
-  color: #7a7f75;
+  color: var(--text-tertiary);
   font-size: 0.95rem;
 }
 
@@ -1364,7 +1477,7 @@ const removeSelected = async () => {
   display: block;
   font-size: 0.9rem;
   font-weight: 600;
-  color: #181c18;
+  color: var(--text-primary);
   line-height: 1.3;
   margin-bottom: 4px;
   overflow: hidden;
@@ -1421,7 +1534,7 @@ const removeSelected = async () => {
 .empty-title {
   font-size: 1rem;
   font-weight: 700;
-  color: #181c18;
+  color: var(--text-primary);
   margin: 0;
 }
 
@@ -1457,8 +1570,8 @@ const removeSelected = async () => {
   align-items: center;
   justify-content: space-between;
   padding: 0.75rem 1.5rem;
-  background: #f8f9f8;
-  border-bottom: 1px solid #dfe0db;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-color);
   position: sticky;
   top: 0;
   z-index: 10;
@@ -1546,12 +1659,12 @@ const removeSelected = async () => {
   transition: all 0.2s;
 }
 
-.bookmark-check input:checked + .check-custom {
+.bookmark-check input:checked+.check-custom {
   background: #00a651;
   border-color: #00a651;
 }
 
-.bookmark-check input:checked + .check-custom::after {
+.bookmark-check input:checked+.check-custom::after {
   content: '✓';
   position: absolute;
   top: 50%;
@@ -1570,7 +1683,8 @@ const removeSelected = async () => {
   padding: 1.25rem 1.5rem;
   gap: 1.25rem;
   transition: background 0.2s;
-  border-bottom: none !important; /* Managed by row */
+  border-bottom: none !important;
+  /* Managed by row */
 }
 
 /* ── Transitions ─────────────────────────────────────────────── */
@@ -1606,57 +1720,81 @@ const removeSelected = async () => {
   transform: translateY(-8px);
 }
 
-/* ── Greeting & Logo Animation ── */
-.animation-stage {
-  position: relative;
-  display: flex;
-  align-items: center;
-  min-height: 40px;
-  min-width: 180px;
-}
-
-.greeting-msg {
-  position: absolute;
-  left: 0;
-  white-space: nowrap;
-  font-family: 'Lora', serif;
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: #00a651;
-  letter-spacing: -0.01em;
-  text-shadow: 0 0 20px rgba(0, 166, 81, 0.1);
-}
 
 .logo-inner {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
-/* Greeting slide: Fade in from Right, Fade out to Left */
-.greeting-slide-enter-active {
-  transition: all 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-.greeting-slide-leave-active {
-  transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.greeting-slide-enter-from {
-  opacity: 0;
-  transform: translateX(30px);
-}
-.greeting-slide-leave-to {
-  opacity: 0;
-  transform: translateX(-30px);
+.logo-icon {
+  width: 36px;
+  height: 36px;
+  background: var(--logo-bg);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+  position: relative;
+  z-index: 2;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--logo-border);
+  animation: logo-entrance 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards,
+    logo-breathe 3s ease-in-out infinite 0.8s;
 }
 
-/* Logo: Smooth fade in during greeting fade out */
-.logo-appear-enter-active {
-  transition: all 1.2s cubic-bezier(0.16, 1, 0.3, 1) 0.3s;
-}
-.logo-appear-enter-from {
+.logo-text {
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--ink);
   opacity: 0;
-  transform: translateY(4px) scale(0.98);
+  z-index: 1;
+  animation: text-reveal 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards 1s;
 }
+
+@keyframes logo-entrance {
+  from {
+    opacity: 0;
+    transform: translateX(-15px) rotate(-8deg);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0) rotate(0);
+  }
+}
+
+@keyframes text-reveal {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+    filter: blur(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+    filter: blur(0);
+  }
+}
+
+@keyframes logo-breathe {
+
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.92;
+    transform: scale(0.97);
+  }
+}
+
 
 /* ── Logout Modal Specifics ── */
 .logout-modal-sm {

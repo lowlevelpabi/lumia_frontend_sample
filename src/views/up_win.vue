@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import {
   FileUp, Loader2, CheckCircle, AlertCircle,
   FileText, Check, Plus, Trash2, X,
-  Eye, RefreshCw, ShieldAlert, AlertTriangle
+  Eye, RefreshCw, ShieldAlert, AlertTriangle, ShieldCheck
 } from 'lucide-vue-next'
 import { api, type PartialPaperMetadata, type SampleDocument } from '../services/api'
 import { useAuth } from '../composables/useAuth'
@@ -19,6 +19,8 @@ const processingDoc = ref(false)
 const uploadingPaper = ref(false)
 const uploadError = ref('')
 const showUploadMessage = ref(false)
+const showPendingWarningModal = ref(false)
+const pendingPaperId = ref('')
 const uploadNotification = ref('')
 let uploadMsgTimer: number | null = null
 
@@ -225,8 +227,9 @@ watch(missingSections, (list) => {
   }
 })
 
-// ── Zoom modal ───────────────────────────────────────────────────────
+// ── Modals ───────────────────────────────────────────────────────────
 const showZoomModal = ref(false)
+const showAcknowledgeModal = ref(false)
 const zoomedPage = ref<PageData | null>(null)
 const openZoom = (page: PageData) => { zoomedPage.value = page; showZoomModal.value = true }
 const closeZoom = () => { showZoomModal.value = false; zoomedPage.value = null }
@@ -350,7 +353,15 @@ const startInitialExtraction = async (autoExtract: boolean = true) => {
     setTimeout(() => { step.value = 2; processingDoc.value = false }, 400)
   } catch (err) {
     stopProgressListening()
-    uploadError.value = (err as Error).message || 'Failed to parse PDF.'
+    const errMsg = (err as Error).message || ''
+    if (errMsg.includes('awaiting approval')) {
+      const idMatch = errMsg.match(/\(ID: (.*?)\)/)
+      if (idMatch && idMatch[1]) pendingPaperId.value = idMatch[1]
+      showPendingWarningModal.value = true
+      processingDoc.value = false
+      return
+    }
+    uploadError.value = errMsg || 'Failed to parse PDF.'
     processingDoc.value = false
   }
 }
@@ -397,7 +408,15 @@ const triggerFallback = async () => {
     setTimeout(() => { step.value = 2; processingDoc.value = false }, 400)
   } catch (err) {
     stopProgressListening()
-    uploadError.value = (err as Error).message || 'Failed to trigger fallback.'
+    const errMsg = (err as Error).message || ''
+    if (errMsg.includes('awaiting approval')) {
+      const idMatch = errMsg.match(/\(ID: (.*?)\)/)
+      if (idMatch && idMatch[1]) pendingPaperId.value = idMatch[1]
+      showPendingWarningModal.value = true
+      processingDoc.value = false
+      return
+    }
+    uploadError.value = errMsg || 'Failed to trigger fallback.'
     step.value = prevStep
     processingDoc.value = false
   }
@@ -437,8 +456,16 @@ const removeAuthor = (index: number) => {
 }
 
 // ── Confirm upload ───────────────────────────────────────────────────
-const handleFinalConfirm = async () => {
-  if (selectedPages.value.length === 0) { uploadError.value = 'Please select at least one page to index.'; return }
+const handleFinalConfirm = () => {
+  if (selectedPages.value.length === 0) {
+    uploadError.value = 'Please select at least one page to index.'
+    return
+  }
+  showAcknowledgeModal.value = true
+}
+
+const executeFinalUpload = async () => {
+  showAcknowledgeModal.value = false
   uploadingPaper.value = true
   uploadError.value = ''
   try {
@@ -455,7 +482,7 @@ const handleFinalConfirm = async () => {
       introduction: rawImradSections.introduction || imradSections.introduction,
       methods: rawImradSections.methods || imradSections.methods,
       results: rawImradSections.results || imradSections.results,
-      discussion: rawImradSections.results || imradSections.results,
+      discussion: rawImradSections.discussion || imradSections.discussion,
       references: rawImradSections.references || imradSections.references,
       media: uploadMetadata.media,
     })
@@ -466,7 +493,9 @@ const handleFinalConfirm = async () => {
     }, 2000)
   } catch (err) {
     uploadError.value = (err as Error).message || 'Failed to finalize upload.'
-  } finally { uploadingPaper.value = false }
+  } finally {
+    uploadingPaper.value = false
+  }
 }
 
 // ── Sample Documents ──────────────────────────────────────────────
@@ -561,7 +590,7 @@ onMounted(loadSampleDocs)
           </div>
           <div class="notif-body">
             <strong>{{ uploadNotification.includes('Upload Terminated') ? 'Upload Rejected' : 'Error Detected'
-            }}</strong>
+              }}</strong>
             <p>{{ uploadNotification }}</p>
           </div>
           <button class="notif-close" @click="closeUploadMessage">
@@ -666,7 +695,7 @@ onMounted(loadSampleDocs)
         <header class="review-bar">
           <div class="review-bar-left">
             <div class="review-bar-icon">
-              <FileText :size="20" color="#00a651" />
+              <FileText :size="20" color="var(--primary)" />
             </div>
             <div>
               <h1 class="review-bar-title">Review & Index Document</h1>
@@ -928,27 +957,98 @@ onMounted(loadSampleDocs)
       </div>
     </Teleport>
 
+    <!-- Research Acknowledgement Modal -->
+    <Teleport to="body">
+      <div v-if="showAcknowledgeModal" class="modal-overlay" @click.self="showAcknowledgeModal = false">
+        <div class="modal-card acknowledge-modal">
+          <div class="modal-head">
+            <div class="modal-head-icon green">
+              <ShieldCheck :size="20" />
+            </div>
+            <div>
+              <h3>Research Acknowledgement</h3>
+              <p>Final verification before indexing</p>
+            </div>
+            <button @click="showAcknowledgeModal = false" class="modal-close">
+              <X :size="18" />
+            </button>
+          </div>
+          <div class="modal-body acknowledge-body">
+            <p>Please note the following before final indexing:</p>
+            <div class="ack-notice">
+              <div class="ack-check">
+                <Check :size="14" />
+              </div>
+              <span>The paper that will be indexed will undergo a review process before it gets accepted/approved and
+                becomes visible in the repository.</span>
+            </div>
+            <div class="ack-warning">
+              <AlertTriangle :size="16" />
+              <span>Indexing is final. Once confirmed, the document will be submitted for institutional review.</span>
+            </div>
+          </div>
+          <div class="modal-foot">
+            <button @click="showAcknowledgeModal = false" class="ghost-btn">Review Again</button>
+            <button @click="executeFinalUpload" class="save-btn success">
+              <Check :size="14" />
+              <span>I Acknowledge</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+    
+    <!-- Pending Request Warning Modal -->
+    <Teleport to="body">
+      <div v-if="showPendingWarningModal" class="modal-overlay" @click.self="showPendingWarningModal = false">
+        <div class="modal-card acknowledge-modal">
+          <div class="modal-head">
+            <div class="modal-head-icon amber">
+              <ShieldAlert :size="20" />
+            </div>
+            <div>
+              <h3>Pending Request Detected</h3>
+              <p>This document is already awaiting review</p>
+            </div>
+            <button @click="showPendingWarningModal = false" class="modal-close">
+              <X :size="18" />
+            </button>
+          </div>
+          <div class="modal-body acknowledge-body">
+            <p>Our system has detected that this study (ID: <strong>{{ pendingPaperId }}</strong>) has already been
+              uploaded and is currently in the <strong>Pending Request</strong> queue.</p>
+            <div class="ack-notice">
+              <div class="ack-check amber" style="background: var(--amber-dim); color: var(--amber-dk); border-radius: 50%; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;">
+                <AlertTriangle :size="14" />
+              </div>
+              <span>Duplicate uploads for the same research are not permitted to ensure repository integrity.</span>
+            </div>
+            <div class="ack-warning" style="background: var(--amber-dim); border-color: var(--amber-rule); color: var(--amber-dk); margin-top: 1rem; padding: 0.75rem; border-radius: 6px; display: flex; align-items: center; gap: 0.75rem;">
+              <ShieldAlert :size="16" />
+              <span>Please wait for the administrator or faculty to approve the existing request before trying again.</span>
+            </div>
+          </div>
+          <div class="modal-foot">
+            <button @click="showPendingWarningModal = false" class="save-btn amber" style="background: var(--amber-dk); color: white; border: none; padding: 0.5rem 1rem; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 0.5rem; font-weight: 600;">
+              <Check :size="14" />
+              <span>I Understand</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+
   </div>
 </template>
 
 <style scoped>
 /* ── Tokens ──────────────────────────────────────────────────── */
 .up-page {
-  --green: #00a651;
-  --green-dk: #007d3d;
-  --green-dim: #e6f4ed;
-  --ink: #181c18;
-  --ink-2: #3d4239;
-  --ink-3: #7a7f75;
-  --rule: #e4e5e0;
-  --surface: #f5f5f2;
-  --paper: #ffffff;
-  --hero: #0d1f12;
-
   min-height: 100vh;
-  background: var(--surface);
+  background: var(--bg-primary);
   font-family: 'Source Sans 3', sans-serif;
-  color: var(--ink);
+  color: var(--text-primary);
   display: flex;
   flex-direction: column;
 }
@@ -963,8 +1063,8 @@ onMounted(loadSampleDocs)
   justify-content: space-between;
   gap: 1.5rem;
   padding: 0.75rem 2rem;
-  background: var(--paper);
-  border-bottom: 1px solid var(--rule);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .up-topbar-left {
@@ -987,7 +1087,7 @@ onMounted(loadSampleDocs)
   font-family: 'Lora', serif;
   font-size: 1rem;
   font-weight: 600;
-  color: var(--ink);
+  color: var(--text-primary);
 }
 
 @media (max-width: 480px) {
@@ -1007,7 +1107,7 @@ onMounted(loadSampleDocs)
   align-items: center;
   gap: 0.35rem;
   background: none;
-  border: 1.5px solid var(--rule);
+  border: 1.5px solid var(--border-color);
   border-radius: 6px;
   padding: 0.4rem 0.85rem;
   font-family: 'Source Sans 3', sans-serif;
@@ -1018,9 +1118,9 @@ onMounted(loadSampleDocs)
 }
 
 .cancel-btn:hover {
-  border-color: #ef4444;
-  color: #ef4444;
-  background: #fef2f2;
+  border-color: var(--red-dk);
+  color: var(--red-dk);
+  background: var(--red-dim);
 }
 
 /* ── Steps rail ──────────────────────────────────────────────── */
@@ -1034,9 +1134,9 @@ onMounted(loadSampleDocs)
   justify-content: center;
   gap: 1.5rem;
   padding: 1.5rem 0;
-  border-bottom: 1px solid var(--rule);
+  border-bottom: 1px solid var(--border-color);
   margin-bottom: 1rem;
-  background: var(--paper);
+  background: var(--bg-secondary);
 }
 
 /* Navbar version (Desktop topbar) */
@@ -1062,8 +1162,8 @@ onMounted(loadSampleDocs)
   width: 26px;
   height: 26px;
   border-radius: 50%;
-  background: var(--surface);
-  border: 2px solid var(--rule);
+  background: var(--bg-primary);
+  border: 2px solid var(--border-color);
   font-size: 0.72rem;
   font-weight: 700;
   display: flex;
@@ -1074,14 +1174,14 @@ onMounted(loadSampleDocs)
 }
 
 .step-item.active .step-num {
-  border-color: var(--rule);
-  color: var(--green);
-  background: var(--paper);
+  border-color: var(--border-color);
+  color: var(--accent-primary);
+  background: var(--bg-secondary);
 }
 
 .step-item.done .step-num {
-  background: var(--green);
-  border-color: var(--green);
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
   color: #fff;
 }
 
@@ -1099,7 +1199,7 @@ onMounted(loadSampleDocs)
 .step-line {
   width: 28px;
   height: 2px;
-  background: var(--rule);
+  background: var(--border-color);
   margin: 0 0.4rem;
   position: relative;
   overflow: hidden;
@@ -1107,9 +1207,9 @@ onMounted(loadSampleDocs)
 
 .step-line.loading {
   background: linear-gradient(90deg,
-      var(--rule) 0%,
-      var(--green) 50%,
-      var(--rule) 100%);
+      var(--border-color) 0%,
+      var(--accent-primary) 50%,
+      var(--border-color) 100%);
   background-size: 200% 100%;
   animation: step-line-sweep 1.2s infinite linear;
 }
@@ -1133,8 +1233,10 @@ onMounted(loadSampleDocs)
 /* ── Main content ────────────────────────────────────────────── */
 .up-content {
   flex: 1;
-  padding: 1.5rem 2rem 4rem; /* reduce gutter to fit more content */
-  max-width: 1600px; /* allow wider review content */
+  padding: 1.5rem 2rem 4rem;
+  /* reduce gutter to fit more content */
+  max-width: 1600px;
+  /* allow wider review content */
   width: calc(100% - 4rem);
   margin: 0 auto;
   box-sizing: border-box;
@@ -1149,12 +1251,13 @@ onMounted(loadSampleDocs)
 }
 
 .upload-card {
-  background: var(--paper);
-  border: 1px solid var(--rule);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
   border-radius: 10px;
   padding: 2.5rem;
   width: 100%;
-  max-width: 520px; /* keep upload card compact for step 1 */
+  max-width: 520px;
+  /* keep upload card compact for step 1 */
 }
 
 .upload-card-head {
@@ -1197,7 +1300,7 @@ onMounted(loadSampleDocs)
 }
 
 .drop-zone {
-  border: 2px dashed var(--rule);
+  border: 2px dashed var(--border-color);
   border-radius: 8px;
   padding: 2.5rem 1.5rem;
   cursor: pointer;
@@ -1211,7 +1314,7 @@ onMounted(loadSampleDocs)
 
 .drop-zone.dragging,
 .drop-zone:hover:not(.processing) {
-  border-color: var(--green);
+  border-color: var(--accent-primary);
   background: var(--green-dim);
 }
 
@@ -1230,16 +1333,16 @@ onMounted(loadSampleDocs)
 }
 
 .drop-text strong {
-  color: var(--ink);
+  color: var(--text-primary);
   font-weight: 700;
 }
 
 /* ── Sample Documents Panel (Evaluation Feature) ────────────────── */
 .sample-docs-panel {
   margin-top: 1.5rem;
-  border: 1.5px solid var(--rule);
+  border: 1.5px solid var(--border-color);
   border-radius: 10px;
-  background: var(--paper);
+  background: var(--bg-secondary);
   overflow: hidden;
 }
 
@@ -1249,8 +1352,8 @@ onMounted(loadSampleDocs)
   justify-content: space-between;
   gap: 0.75rem;
   padding: 0.85rem 1rem;
-  border-bottom: 1px solid var(--rule);
-  background: var(--surface);
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-primary);
 }
 
 .sample-docs-header-left {
@@ -1274,7 +1377,7 @@ onMounted(loadSampleDocs)
   margin: 0 0 0.1rem;
   font-size: 0.82rem;
   font-weight: 700;
-  color: var(--ink);
+  color: var(--text-primary);
 }
 
 .sample-docs-subtitle {
@@ -1296,7 +1399,7 @@ onMounted(loadSampleDocs)
   gap: 0.65rem;
   padding: 0.7rem 1rem;
   cursor: pointer;
-  border-bottom: 1px solid var(--rule);
+  border-bottom: 1px solid var(--border-color);
   transition: background 0.12s, border-left-color 0.12s;
   border-left: 3px solid transparent;
   user-select: none;
@@ -1308,7 +1411,7 @@ onMounted(loadSampleDocs)
 
 .sample-doc-row:hover:not(.is-loading) {
   background: var(--green-dim);
-  border-left-color: var(--green);
+  border-left-color: var(--accent-primary);
 }
 
 .sample-doc-row.is-loading {
@@ -1329,7 +1432,7 @@ onMounted(loadSampleDocs)
   flex: 1;
   font-size: 0.82rem;
   font-weight: 600;
-  color: var(--ink);
+  color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1353,7 +1456,7 @@ onMounted(loadSampleDocs)
   display: none;
   align-items: center;
   gap: 0.35rem;
-  background: var(--green);
+  background: var(--accent-primary);
   color: #fff;
   font-size: 0.7rem;
   font-weight: 700;
@@ -1394,9 +1497,9 @@ onMounted(loadSampleDocs)
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  color: #dc2626;
+  background: var(--red-dim);
+  border: 1px solid var(--red-rule);
+  color: var(--red-dk);
   font-size: 0.84rem;
   padding: 0.65rem 0.85rem;
   border-radius: 6px;
@@ -1404,9 +1507,9 @@ onMounted(loadSampleDocs)
 }
 
 .terminal-error {
-  background: #fff1f2 !important;
-  border-color: #e11d48 !important;
-  color: #9f1239 !important;
+  background: var(--red-dim) !important;
+  border-color: var(--red-dk) !important;
+  color: var(--red-dk) !important;
   padding: 1.5rem !important;
 }
 
@@ -1436,8 +1539,8 @@ onMounted(loadSampleDocs)
 }
 
 .review-bar {
-  background: var(--paper);
-  border: 1px solid var(--rule);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 1rem 1.25rem;
   display: flex;
@@ -1488,8 +1591,8 @@ onMounted(loadSampleDocs)
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  background: var(--surface);
-  border: 1px solid var(--rule);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
   border-radius: 5px;
   padding: 0.35rem 0.75rem;
   font-size: 0.76rem;
@@ -1504,7 +1607,7 @@ onMounted(loadSampleDocs)
 }
 
 .file-pill-name {
-  color: var(--ink);
+  color: var(--text-primary);
   font-weight: 600;
   max-width: 180px;
   overflow: hidden;
@@ -1520,7 +1623,7 @@ onMounted(loadSampleDocs)
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  background: var(--green);
+  background: var(--accent-primary);
   color: #fff;
   border: none;
   border-radius: 6px;
@@ -1554,13 +1657,13 @@ onMounted(loadSampleDocs)
 }
 
 .notice-banner.amber {
-  background: #fffbeb;
-  border-color: #fde68a;
+  background: var(--amber-dim);
+  border-color: var(--amber-rule);
 }
 
 .notice-banner.blue {
-  background: #eff6ff;
-  border-color: #bfdbfe;
+  background: var(--blue-dim);
+  border-color: var(--blue-rule);
 }
 
 .notice-icon {
@@ -1605,13 +1708,13 @@ onMounted(loadSampleDocs)
   font-size: 0.76rem;
   font-weight: 600;
   cursor: pointer;
-  background: #b45309;
+  background: var(--amber-dk);
 }
 
 .notice-btn.ghost {
   background: transparent;
-  border: 1.5px solid #b45309;
-  color: #b45309;
+  border: 1.5px solid var(--amber-dk);
+  color: var(--amber-dk);
 }
 
 .missing-list {
@@ -1625,9 +1728,9 @@ onMounted(loadSampleDocs)
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  background: #fef9c3;
-  color: #78350f;
-  border: 1px solid #fde68a;
+  background: var(--amber-dim);
+  color: var(--amber-dk);
+  border: 1px solid var(--amber-rule);
   padding: 0.2rem 0.55rem;
   border-radius: 4px;
   font-size: 0.72rem;
@@ -1640,14 +1743,15 @@ onMounted(loadSampleDocs)
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: #f59e0b;
+  background: var(--amber-dk);
   flex-shrink: 0;
 }
 
 /* ── Review grid ─────────────────────────────────────────────── */
 .review-grid {
   display: grid;
-  grid-template-columns: 480px 1fr; /* increase left column to maximize content area */
+  grid-template-columns: 480px 1fr;
+  /* increase left column to maximize content area */
   gap: 1.25rem;
   align-items: start;
 }
@@ -1680,10 +1784,10 @@ onMounted(loadSampleDocs)
 .fg textarea {
   width: 100%;
   padding: 0.65rem 0.8rem;
-  border: 1.5px solid var(--rule);
+  border: 1.5px solid var(--border-color);
   border-radius: 3px;
-  background: var(--paper);
-  color: var(--ink);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
   font-family: 'Source Sans 3', sans-serif;
   font-size: 0.9rem;
   transition: border-color 0.14s;
@@ -1694,7 +1798,7 @@ onMounted(loadSampleDocs)
 .fg select:focus,
 .fg textarea:focus {
   outline: none;
-  border-color: var(--green);
+  border-color: var(--accent-primary);
 }
 
 .fg textarea {
@@ -1733,23 +1837,23 @@ onMounted(loadSampleDocs)
 
 .author-row input {
   flex: 1;
-  background: var(--surface);
-  border: 1px solid var(--rule);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
   border-radius: 5px;
   padding: 0.45rem 0.65rem;
   font-family: 'Source Sans 3', sans-serif;
   font-size: 0.86rem;
-  color: var(--ink);
+  color: var(--text-primary);
   outline: none;
 }
 
 .author-row input:focus {
-  border-color: var(--green);
+  border-color: var(--accent-primary);
 }
 
 .icon-btn {
   background: none;
-  border: 1px solid var(--rule);
+  border: 1px solid var(--border-color);
   border-radius: 5px;
   padding: 0.35rem;
   cursor: pointer;
@@ -1760,9 +1864,9 @@ onMounted(loadSampleDocs)
 }
 
 .icon-btn.red:hover {
-  border-color: #ef4444;
-  color: #ef4444;
-  background: #fef2f2;
+  border-color: var(--red-dk);
+  color: var(--red-dk);
+  background: var(--red-dim);
 }
 
 .add-btn {
@@ -1770,7 +1874,7 @@ onMounted(loadSampleDocs)
   align-items: center;
   gap: 0.35rem;
   background: none;
-  border: 1.5px dashed var(--rule);
+  border: 1.5px dashed var(--border-color);
   border-radius: 5px;
   padding: 0.4rem 0.7rem;
   font-family: 'Source Sans 3', sans-serif;
@@ -1781,7 +1885,7 @@ onMounted(loadSampleDocs)
 }
 
 .add-btn:hover {
-  border-color: var(--green);
+  border-color: var(--accent-primary);
   color: var(--green-dk);
 }
 
@@ -1789,8 +1893,8 @@ onMounted(loadSampleDocs)
 .meta-panel,
 .imrad-panel,
 .page-panel {
-  background: var(--paper);
-  border: 1px solid var(--rule);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 1.25rem;
 }
@@ -1805,14 +1909,14 @@ onMounted(loadSampleDocs)
   gap: 0.5rem;
   margin-bottom: 1.25rem;
   padding-bottom: 0.75rem;
-  border-bottom: 1px solid var(--rule);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .meta-panel-head h4 {
   margin: 0;
   font-size: 0.9rem;
   font-weight: 700;
-  color: var(--ink);
+  color: var(--text-primary);
 }
 
 .step-badge {
@@ -1863,14 +1967,14 @@ onMounted(loadSampleDocs)
 }
 
 .sub-tag-results {
-  background: #fff7ed;
-  color: #c2410c;
+  background: var(--amber-dim);
+  color: var(--amber-dk);
 }
 
 .imrad-tabs {
   display: flex;
   gap: 0.25rem;
-  background: var(--surface);
+  background: var(--bg-primary);
   padding: 0.25rem;
   border-radius: 8px;
   margin-bottom: 1rem;
@@ -1899,11 +2003,11 @@ onMounted(loadSampleDocs)
 
 .imrad-tab-btn:hover {
   background: rgba(0, 0, 0, 0.03);
-  color: var(--ink);
+  color: var(--text-primary);
 }
 
 .imrad-tab-btn.active {
-  background: var(--paper);
+  background: var(--bg-secondary);
   color: var(--green-dk);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
@@ -1918,7 +2022,7 @@ onMounted(loadSampleDocs)
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  background: #fffbeb;
+  background: var(--amber-dim);
   border: 1px solid #fde68a;
   color: #92400e;
   padding: 0.75rem 1rem;
@@ -1935,8 +2039,8 @@ onMounted(loadSampleDocs)
   width: 100%;
   min-height: 480px;
   max-height: 600px;
-  background: var(--paper);
-  border: 1.5px solid var(--rule);
+  background: var(--bg-secondary);
+  border: 1.5px solid var(--border-color);
   border-radius: 8px;
   padding: 1rem;
   font-size: 0.9rem;
@@ -1949,7 +2053,7 @@ onMounted(loadSampleDocs)
 
 .imrad-textarea:focus {
   outline: none;
-  border-color: var(--green);
+  border-color: var(--accent-primary);
   box-shadow: 0 0 0 3px var(--green-dim);
 }
 
@@ -1979,7 +2083,7 @@ onMounted(loadSampleDocs)
   letter-spacing: 0.07em;
   color: var(--ink-3);
   padding-bottom: 0.4rem;
-  border-bottom: 1px solid var(--rule);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .ref-pane-hint {
@@ -2001,8 +2105,8 @@ onMounted(loadSampleDocs)
 }
 
 .ref-preview-list {
-  background: var(--paper);
-  border: 1.5px solid var(--rule);
+  background: var(--bg-secondary);
+  border: 1.5px solid var(--border-color);
   border-radius: 8px;
   padding: 1rem;
   max-height: 560px;
@@ -2017,7 +2121,7 @@ onMounted(loadSampleDocs)
   color: #2a2a2a;
   padding: 0.65rem 0 0.65rem 1.75rem;
   text-indent: -1.75rem;
-  border-bottom: 1px solid var(--rule);
+  border-bottom: 1px solid var(--border-color);
   word-break: break-word;
 }
 
@@ -2058,8 +2162,8 @@ onMounted(loadSampleDocs)
 }
 
 .ref-preview-empty {
-  background: var(--surface);
-  border: 1.5px dashed var(--rule);
+  background: var(--bg-primary);
+  border: 1.5px dashed var(--border-color);
   border-radius: 8px;
   padding: 2rem 1rem;
   text-align: center;
@@ -2079,7 +2183,7 @@ onMounted(loadSampleDocs)
 .page-panel-head {
   margin-bottom: 1rem;
   padding-bottom: 0.75rem;
-  border-bottom: 1px solid var(--rule);
+  border-bottom: 1px solid var(--border-color);
 }
 
 .page-panel-title {
@@ -2093,7 +2197,7 @@ onMounted(loadSampleDocs)
   margin: 0;
   font-size: 0.9rem;
   font-weight: 700;
-  color: var(--ink);
+  color: var(--text-primary);
 }
 
 .page-panel-actions {
@@ -2135,7 +2239,7 @@ onMounted(loadSampleDocs)
   width: 3px;
   height: 3px;
   border-radius: 50%;
-  background: var(--rule);
+  background: var(--border-color);
 }
 
 .thumbs-grid {
@@ -2148,12 +2252,12 @@ onMounted(loadSampleDocs)
   cursor: pointer;
   border-radius: 6px;
   overflow: hidden;
-  border: 2px solid var(--rule);
+  border: 2px solid var(--border-color);
   transition: border-color 0.14s;
 }
 
 .thumb-card.selected {
-  border-color: var(--green);
+  border-color: var(--accent-primary);
 }
 
 .thumb-wrap {
@@ -2268,8 +2372,8 @@ onMounted(loadSampleDocs)
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  background: #fff;
-  color: var(--green);
+  background: var(--bg-secondary);
+  color: var(--accent-primary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2293,7 +2397,7 @@ onMounted(loadSampleDocs)
   flex-direction: column;
   align-items: center;
   gap: 0.75rem;
-  background: #fff;
+  background: var(--bg-secondary);
   border-radius: 16px;
   padding: 2rem 3rem;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
@@ -2331,8 +2435,8 @@ onMounted(loadSampleDocs)
   position: absolute;
   top: 0.75rem;
   right: 0.75rem;
-  background: var(--surface);
-  border: 1px solid var(--rule);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
   border-radius: 6px;
   padding: 0.3rem;
   cursor: pointer;
@@ -2446,9 +2550,9 @@ onMounted(loadSampleDocs)
   display: flex;
   gap: 0.75rem;
   align-items: flex-start;
-  background: #fff1f2;
-  border: 1px solid #fecaca;
-  color: #9f1239;
+  background: var(--red-dim);
+  border: 1px solid var(--red-rule);
+  color: var(--red-dk);
   font-size: 0.94rem;
   padding: 0.85rem 1rem;
   border-radius: 8px;
@@ -2467,7 +2571,7 @@ onMounted(loadSampleDocs)
 .upload-notification .notif-body p {
   margin: 0;
   font-size: 0.9rem;
-  color: rgba(159, 18, 57, 0.95)
+  color: var(--red-dk);
 }
 
 .upload-notification .notif-body strong {
@@ -2475,11 +2579,216 @@ onMounted(loadSampleDocs)
   margin-bottom: 0.25rem
 }
 
-.notif-close {
-  background: transparent;
+/* ── Modals ─────────────────────────────────────────────────── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  backdrop-filter: blur(4px);
+}
+
+.modal-card {
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  width: 100%;
+  max-width: 480px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--border-color);
+  overflow: hidden;
+  animation: modal-pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes modal-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.modal-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 1.5rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.modal-head-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.modal-head-icon.green {
+  background: var(--green-dim);
+  color: var(--green-dk);
+}
+
+.modal-head-icon.amber {
+  background: var(--amber-dim);
+  color: var(--amber-dk);
+}
+
+.modal-head h3 {
+  margin: 0 0 0.15rem;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-family: 'Lora', serif;
+}
+
+.modal-head p {
+  margin: 0;
+  font-size: 0.84rem;
+  color: var(--ink-3);
+}
+
+.modal-close {
+  background: none;
   border: none;
+  color: var(--ink-3);
+  cursor: pointer;
+  padding: 0.3rem;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
   margin-left: auto;
-  color: inherit;
-  cursor: pointer
+  transition: background 0.2s;
+}
+
+.modal-close:hover {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.modal-body {
+  padding: 1.5rem;
+}
+
+.modal-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 1.25rem 1.5rem;
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-primary);
+}
+
+/* ── Research Acknowledgement Modal ──────────────────────────── */
+.acknowledge-modal {
+  max-width: 520px;
+}
+
+.acknowledge-body p {
+  font-size: 0.9rem;
+  color: var(--ink-2);
+  margin-bottom: 1.25rem;
+}
+
+.ack-notice {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  margin-bottom: 1.75rem;
+  padding: 0.5rem;
+}
+
+.ack-check {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--green-dim);
+  color: var(--green-dk);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.ack-notice span {
+  font-family: 'Lora', serif;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.ack-warning {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  background: var(--amber-dim);
+  border: 1px solid var(--amber-rule);
+  color: var(--amber-dk);
+  padding: 1rem;
+  border-radius: 10px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+/* ── Shared Modal Buttons ───────────────────────────────────── */
+.ghost-btn {
+  background: none;
+  border: 1.5px solid var(--border-color);
+  border-radius: 8px;
+  padding: 0.6rem 1.2rem;
+  font-family: inherit;
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.ghost-btn:hover {
+  background: var(--bg-primary);
+  border-color: var(--ink-3);
+  color: var(--text-primary);
+}
+
+.save-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--text-primary);
+  color: var(--bg-secondary);
+  border: none;
+  border-radius: 8px;
+  padding: 0.6rem 1.4rem;
+  font-family: inherit;
+  font-size: 0.86rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s, opacity 0.15s;
+}
+
+.save-btn.success {
+  background: var(--accent-primary);
+  color: #fff;
+}
+
+.save-btn:hover:not(:disabled) {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.save-btn:active {
+  transform: translateY(0);
 }
 </style>

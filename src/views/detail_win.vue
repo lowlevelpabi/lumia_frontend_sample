@@ -349,8 +349,14 @@ const hasStructured = (key: string): boolean => getStructuredBlocks(key).length 
 
 // Strip any [[TABLE_IMAGE:X]] or [TABLE_IMAGE:X] markers from raw text
 // Used in the fallback path for older papers without structured data
-const stripMarkers = (text: string): string =>
-  text.replace(/\[{1,2}(?:TABLE|FIGURE)_IMAGE:.*?\]{1,2}/gi, '').replace(/\s{2,}/g, ' ').trim()
+const stripMarkers = (text: string): string => {
+  if (!text) return ''
+  return text
+    .replace(/\[{1,2}(?:TABLE|FIGURE)_IMAGE:.*?\]{1,2}/gi, '')
+    .replace(/[^\S\n]{2,}/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
 
 // ── References helpers ────────────────────────────────────────────────────────
 
@@ -473,6 +479,73 @@ const formatReferenceEntry = (raw: string): string => {
   return linkify(escapedRaw)
 }
 
+// ── Inverted Pyramid Title ─────────────────────────────────────────────────────
+// Splits a title into lines where each line is shorter than the previous,
+// producing a top-heavy inverted pyramid shape regardless of title length.
+const pyramidTitleLines = computed((): string[] => {
+  const title = paper.value?.title
+  if (!title) return []
+
+  const words = title.trim().split(/\s+/)
+  const total = words.length
+
+  // Very short titles: single line
+  if (total <= 3) return [words.join(' ')]
+
+  const charLen = title.length
+
+  // FIX: Base the number of lines on character length instead of word count.
+  // This breaks longer titles into more lines, preventing the top line
+  // from exceeding the container width and triggering a CSS wrap.
+  const numLines = charLen <= 45 ? 2 : charLen <= 80 ? 3 : charLen <= 115 ? 4 : 5
+
+  // Strategy: greedily fill each line up to a shrinking character budget.
+  const shareWeights: number[] = []
+  for (let i = numLines; i >= 1; i--) shareWeights.push(i)
+  const shareSum = shareWeights.reduce((a, b) => a + b, 0)
+
+  // Character budgets per line (descending)
+  const budgets = shareWeights.map(w => Math.floor((w / shareSum) * charLen))
+
+  const lines: string[] = []
+  let wi = 0 // word index
+
+  for (let li = 0; li < numLines; li++) {
+    if (wi >= total) break
+    const remaining = numLines - li - 1
+    const wordsLeft = total - wi
+
+    // Last line: take all remaining words
+    if (li === numLines - 1 || wordsLeft <= remaining) {
+      lines.push(words.slice(wi).join(' '))
+      wi = total
+      break
+    }
+
+    const budget = budgets[li]
+    if (budget === undefined) break
+
+    // Greedily add words while under budget, but always leave at least
+    // 1 word per remaining line
+    let count = 0
+    let len = 0
+    while (wi + count < total - remaining) {
+      const word = words[wi + count]
+      if (!word) break
+
+      const wordLen = word.length + (count > 0 ? 1 : 0)
+      if (count > 0 && len + wordLen > budget) break
+      len += wordLen
+      count++
+    }
+    count = Math.max(1, count)
+    lines.push(words.slice(wi, wi + count).join(' '))
+    wi += count
+  }
+
+  return lines.filter(l => l.length > 0)
+})
+
 </script>
 
 <template>
@@ -528,7 +601,7 @@ const formatReferenceEntry = (raw: string): string => {
               <button @click="goBack" class="bc-link">Results</button>
               <ChevronRight :size="12" class="bc-sep" />
               <span class="bc-active">{{ paper.title.length > 55 ? paper.title.substring(0, 55) + '…' : paper.title
-              }}</span>
+                }}</span>
             </nav>
 
             <article class="imrad-journal-page">
@@ -543,7 +616,9 @@ const formatReferenceEntry = (raw: string): string => {
                     paper.degree_program }}</span>
                 </div>
 
-                <h1 class="journal-title">{{ paper.title }}</h1>
+                <h1 class="journal-title">
+                  <span v-for="(line, i) in pyramidTitleLines" :key="i" class="journal-title-line">{{ line }}</span>
+                </h1>
 
                 <div class="journal-authors">
                   <span v-for="(author, idx) in authorList" :key="idx" class="journal-author">
@@ -717,7 +792,9 @@ const formatReferenceEntry = (raw: string): string => {
                 <h4 class="rec-card-title">{{ rec.payload?.title }}</h4>
 
                 <div class="rec-card-meta">
-                  <span class="rec-author">{{ rec.payload?.author ? rec.payload.author.split('|').map(a => (a.split(',')[0] || '').trim()).join(', ') : '' }}</span>
+                  <span class="rec-author">{{rec.payload?.author ? rec.payload.author.split('|').map(a =>
+                    (a.split(',')[0] ||
+                      '').trim()).join(', ') : ''}}</span>
                   <span class="rec-dot"></span>
                   <span class="rec-year">{{ rec.payload?.year }}</span>
                 </div>
@@ -949,15 +1026,15 @@ const formatReferenceEntry = (raw: string): string => {
 <style scoped>
 /* ── Tokens ──────────────────────────────────────────────── */
 .detail-page {
-  --ink: #181c18;
-  --ink-2: #3d4239;
-  --ink-3: #7a7f75;
-  --rule: #dfe0db;
-  --surface: #f0f0ec;
-  --paper: #ffffff;
-  --green: #00a651;
-  --green-dk: #007d3d;
-  --green-dim: #e6f4ed;
+  --ink: var(--text-primary);
+  --ink-2: var(--text-secondary);
+  --ink-3: var(--text-tertiary);
+  --rule: var(--border-color);
+  --surface: var(--bg-primary);
+  --paper: var(--bg-secondary);
+  --green: var(--accent-primary);
+  --green-dk: var(--accent-primary);
+  --green-dim: rgba(16, 185, 129, 0.1);
   --hero-bg: #0d1f12;
 
   background: var(--surface);
@@ -968,6 +1045,10 @@ const formatReferenceEntry = (raw: string): string => {
   color: var(--ink);
   /* Prevent horizontal scroll without breaking sticky */
   width: 100%;
+}
+
+.dark .detail-container {
+  --hero-bg: #050505;
 }
 
 /* Breadcrumb - Improved visibility */
@@ -1098,7 +1179,7 @@ const formatReferenceEntry = (raw: string): string => {
 }
 
 .citation-modal {
-  background: #fff;
+  background: var(--bg-secondary);
   width: 100%;
   max-width: 540px;
   border-radius: 2px;
@@ -1259,8 +1340,8 @@ const formatReferenceEntry = (raw: string): string => {
 .m-select {
   appearance: none;
   -webkit-appearance: none;
-  background: #fff;
-  border: 1.5px solid #c8cdc4;
+  background: var(--bg-primary);
+  border: 1.5px solid var(--border-color);
   border-radius: 3px;
   padding: 0.4rem 2.2rem 0.4rem 0.75rem;
   font-size: 0.84rem;
@@ -1302,8 +1383,8 @@ const formatReferenceEntry = (raw: string): string => {
 }
 
 .citation-area-inner {
-  background: #f8faf8;
-  border: 1px solid #dfe8e2;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
   border-radius: 3px;
   border-left: 3px solid var(--green);
   padding: 1rem 1.1rem;
@@ -1338,8 +1419,8 @@ const formatReferenceEntry = (raw: string): string => {
   align-items: center;
   justify-content: space-between;
   padding: 0.75rem 1.4rem;
-  border-top: 1px solid var(--rule);
-  background: #fafbfa;
+  border-top: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
   gap: 1rem;
 }
 
@@ -1444,8 +1525,8 @@ const formatReferenceEntry = (raw: string): string => {
   object-fit: contain;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  background: #fff;
-  /* White background for transparent table PNGs */
+  background: var(--bg-secondary);
+  /* Use theme bg instead of pure white */
 }
 
 .zoom-close {
@@ -1883,8 +1964,8 @@ const formatReferenceEntry = (raw: string): string => {
   font-size: 0.78rem;
   font-weight: 600;
   font-style: italic;
-  color: #92400e;
-  background: #fffbeb;
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.1);
   border-left: 3px solid #f59e0b;
   padding: 0.25rem 0.75rem;
   border-radius: 0 4px 4px 0;
@@ -1932,8 +2013,8 @@ const formatReferenceEntry = (raw: string): string => {
   font-size: 0.75rem;
   font-weight: 600;
   font-style: italic;
-  color: #92400e;
-  background: #fffbeb;
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.1);
   border-left: 3px solid #f59e0b;
   padding: 0.2rem 0.6rem;
   border-radius: 0 4px 4px 0;
@@ -2152,14 +2233,14 @@ const formatReferenceEntry = (raw: string): string => {
 .skeleton-badge {
   width: 60px;
   height: 18px;
-  background: #e2e8f0;
+  background: var(--skeleton-bg);
   border-radius: 3px;
 }
 
 .skeleton-title {
   width: 70%;
   height: 34px;
-  background: #cbd5e1;
+  background: var(--skeleton-highlight);
   margin: 0 auto 0.6rem;
   border-radius: 6px;
 }
@@ -2172,7 +2253,7 @@ const formatReferenceEntry = (raw: string): string => {
 .skeleton-authors {
   width: 40%;
   height: 16px;
-  background: #e2e8f0;
+  background: var(--skeleton-bg);
   margin: 0 auto 1.5rem;
   border-radius: 4px;
 }
@@ -2180,7 +2261,7 @@ const formatReferenceEntry = (raw: string): string => {
 .skeleton-stats {
   width: 30%;
   height: 32px;
-  background: #e2e8f0;
+  background: var(--skeleton-bg);
   margin: 0 auto;
   border-radius: 6px;
 }
@@ -2189,7 +2270,7 @@ const formatReferenceEntry = (raw: string): string => {
 .skeleton-nav-label {
   width: 80%;
   height: 12px;
-  background: #e2e8f0;
+  background: var(--skeleton-bg);
   margin-bottom: 1rem;
   border-radius: 4px;
 }
@@ -2197,9 +2278,10 @@ const formatReferenceEntry = (raw: string): string => {
 .skeleton-nav-item {
   width: 100%;
   height: 28px;
-  background: #f1f5f9;
+  background: var(--skeleton-bg);
   margin-bottom: 0.4rem;
   border-radius: 4px;
+  opacity: 0.6;
 }
 
 /* Main Content Skeleton */
@@ -2214,14 +2296,14 @@ const formatReferenceEntry = (raw: string): string => {
 .skeleton-tab {
   width: 80px;
   height: 20px;
-  background: #e2e8f0;
+  background: var(--skeleton-bg);
   border-radius: 4px;
 }
 
 .skeleton-section-title {
   width: 150px;
   height: 16px;
-  background: #cbd5e1;
+  background: var(--skeleton-highlight);
   margin-bottom: 1rem;
   border-radius: 4px;
 }
@@ -2233,9 +2315,10 @@ const formatReferenceEntry = (raw: string): string => {
 .skeleton-text-block {
   width: 100%;
   height: 14px;
-  background: #f1f5f9;
+  background: var(--skeleton-bg);
   margin-bottom: 0.6rem;
   border-radius: 4px;
+  opacity: 0.7;
 }
 
 .skeleton-text-block.short {
@@ -2247,7 +2330,7 @@ const formatReferenceEntry = (raw: string): string => {
 .skeleton-sidebar-title {
   width: 140px;
   height: 14px;
-  background: #cbd5e1;
+  background: var(--skeleton-highlight);
   margin-bottom: 0.5rem;
   border-radius: 4px;
 }
@@ -2255,7 +2338,7 @@ const formatReferenceEntry = (raw: string): string => {
 .skeleton-sidebar-sub {
   width: 180px;
   height: 12px;
-  background: #e2e8f0;
+  background: var(--skeleton-bg);
   margin-bottom: 1.5rem;
   border-radius: 4px;
 }
@@ -2281,24 +2364,26 @@ const formatReferenceEntry = (raw: string): string => {
 .skeleton-card-header {
   width: 100%;
   height: 22px;
-  background: #f1f5f9;
+  background: var(--skeleton-bg);
   border-radius: 20px;
   margin-bottom: 0.2rem;
+  opacity: 0.8;
 }
 
 .skeleton-card-title {
   width: 100%;
   height: 14px;
-  background: #e2e8f0;
+  background: var(--skeleton-bg);
   border-radius: 4px;
 }
 
 .skeleton-card-meta {
   width: 60%;
   height: 12px;
-  background: #f1f5f9;
+  background: var(--skeleton-bg);
   border-radius: 4px;
   margin-top: auto;
+  opacity: 0.6;
 }
 
 /* ── Responsive ────────────────────────────────────────── */
@@ -2525,7 +2610,7 @@ const formatReferenceEntry = (raw: string): string => {
   font-size: 0.95rem;
   line-height: 1.85;
   /* Reverted to preferred spacing */
-  color: #334155;
+  color: var(--text-secondary);
   margin: 0;
   text-align: justify;
 }
@@ -2535,7 +2620,7 @@ const formatReferenceEntry = (raw: string): string => {
   /* Continuous flow */
   font-size: 0.98rem;
   line-height: 1.85;
-  color: #334155;
+  color: var(--text-secondary);
 }
 
 /* No summary fallback */
@@ -2579,11 +2664,17 @@ const formatReferenceEntry = (raw: string): string => {
    ═══════════════════════════════════════════════════════════ */
 
 .imrad-journal-page {
-  background: #fff;
+  background: var(--bg-secondary);
   border-radius: 6px;
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08), 0 1px 4px rgba(0, 0, 0, 0.05);
   overflow: hidden;
   margin-bottom: 2rem;
+  transition: background-color 0.3s ease;
+}
+
+.dark .imrad-journal-page {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
 }
 
 /* ── Journal Header (Title / Authors / Abstract) ── */
@@ -2630,15 +2721,26 @@ const formatReferenceEntry = (raw: string): string => {
   font-size: clamp(1.35rem, 2.5vw, 1.95rem);
   font-weight: 700;
   line-height: 1.3;
-  color: #111;
+  color: var(--text-primary);
   margin: 0 auto 1.1rem;
   max-width: 820px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+}
+
+.journal-title-line {
+  display: block;
+  white-space: normal;
+  text-align: center;
 }
 
 .journal-authors {
   font-family: 'Source Sans 3', sans-serif;
   font-size: 0.9rem;
-  color: #555;
+  color: var(--text-secondary);
   margin-bottom: 0.65rem;
   display: flex;
   flex-wrap: wrap;
@@ -2754,7 +2856,7 @@ const formatReferenceEntry = (raw: string): string => {
   font-family: 'Lora', Georgia, serif;
   font-size: 0.9rem;
   line-height: 1.8;
-  color: #2a2a2a;
+  color: var(--text-primary);
   margin: 0 0 0.75rem;
   text-align: justify;
   text-indent: 2rem;
@@ -2819,7 +2921,7 @@ const formatReferenceEntry = (raw: string): string => {
   font-family: 'Source Sans 3', sans-serif;
   font-size: 0.85rem;
   font-weight: 700;
-  color: #111;
+  color: var(--text-primary);
   margin: 1.25rem 0 0.5rem;
   break-after: avoid;
   display: flex;
@@ -2838,7 +2940,7 @@ const formatReferenceEntry = (raw: string): string => {
   font-family: 'Lora', Georgia, serif;
   font-size: 0.92rem;
   line-height: 1.85;
-  color: #333;
+  color: var(--text-secondary);
   margin: 0 0 0.75rem;
   padding-left: 2rem;
   /* Academic indentation */
@@ -2850,7 +2952,7 @@ const formatReferenceEntry = (raw: string): string => {
 .journal-references-section {
   padding: 2.5rem 4rem 3.5rem;
   border-top: 2.5px solid var(--green);
-  background: #fafafa;
+  background: var(--bg-tertiary);
   /* Explicitly single-column — must NOT inherit the parent's column layout */
   columns: 1 !important;
   column-rule: none !important;
@@ -2885,7 +2987,7 @@ const formatReferenceEntry = (raw: string): string => {
   font-family: 'Source Sans 3', sans-serif;
   font-size: 0.86rem;
   line-height: 1.7;
-  color: #2a2a2a;
+  color: var(--text-secondary);
   /* APA hanging indent */
   padding-left: 2.5rem;
   text-indent: -2.5rem;
@@ -2897,20 +2999,20 @@ const formatReferenceEntry = (raw: string): string => {
 /* Bold author block */
 .ref-authors {
   font-weight: 700;
-  color: #1a1a1a;
+  color: var(--text-primary);
 }
 
 /* Year in parentheses — slightly muted */
 .ref-year {
   font-weight: 600;
-  color: #444;
+  color: var(--text-secondary);
 }
 
 /* Title in italics */
 .ref-title {
   font-style: italic;
   font-weight: 400;
-  color: #222;
+  color: var(--text-secondary);
 }
 
 /* IEEE / numbered citation marker */
@@ -2963,7 +3065,7 @@ const formatReferenceEntry = (raw: string): string => {
 .journal-figure-caption {
   font-family: 'Source Sans 3', sans-serif;
   font-size: 0.73rem;
-  color: #777;
+  color: var(--text-tertiary);
   text-align: center;
   font-style: italic;
   margin: 0.3rem 0 0.7rem;
@@ -3089,11 +3191,11 @@ const formatReferenceEntry = (raw: string): string => {
 }
 
 .authors-card-page {
-  background: #fff;
+  background: var(--bg-secondary);
   border-radius: 8px;
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
   padding: 3rem;
-  border: 1px solid var(--rule);
+  border: 1px solid var(--border-color);
 }
 
 .authors-header {
@@ -3125,8 +3227,8 @@ const formatReferenceEntry = (raw: string): string => {
   align-items: center;
   gap: 1.25rem;
   padding: 1.5rem;
-  background: #fafafa;
-  border: 1px solid var(--rule);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
   border-radius: 12px;
   transition: transform 0.2s;
 }
@@ -3289,8 +3391,8 @@ const formatReferenceEntry = (raw: string): string => {
   display: flex;
   width: 260px;
   /* Base width matching sidebar */
-  background: white;
-  border: 1px solid var(--rule);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
@@ -3358,8 +3460,8 @@ const formatReferenceEntry = (raw: string): string => {
 }
 
 .rec-match-score.badge-good {
-  background: #f0fdf4;
-  color: #166534;
+  background: rgba(16, 185, 129, 0.1);
+  color: #10b981;
 }
 
 .rec-program-tag {
@@ -3449,8 +3551,8 @@ const formatReferenceEntry = (raw: string): string => {
   width: 220px;
   flex-shrink: 0;
   padding: 1.25rem;
-  background: #fafafa;
-  border-left: 1px dashed var(--rule);
+  background: var(--bg-tertiary);
+  border-left: 1px dashed var(--border-color);
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -3493,10 +3595,10 @@ const formatReferenceEntry = (raw: string): string => {
   align-items: center;
   gap: 0.75rem;
   text-align: center;
-  background: rgba(255, 255, 255, 0.5);
+  background: var(--bg-secondary);
   backdrop-filter: blur(8px);
   border-radius: 12px;
-  border: 1px dashed rgba(0, 0, 0, 0.08);
+  border: 1px dashed var(--border-color);
   width: 100%;
   box-sizing: border-box;
 }
@@ -3517,8 +3619,8 @@ const formatReferenceEntry = (raw: string): string => {
 }
 
 .rec-empty-insight {
-  background: #f8fafc;
-  border: 1px solid rgba(148, 163, 184, 0.15);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 1rem;
   text-align: left;

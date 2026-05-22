@@ -132,14 +132,14 @@ const handleRegister = async () => {
 <style scoped>
 
 .auth-page {
-  --ink: #181c18;
-  --ink-2: #3d4239;
-  --ink-3: #7a7f75;
-  --rule: #dfe0db;
-  --surface: #f5f5f2;
-  --paper: #ffffff;
-  --green: #00a651;
-  --green-dk: #007d3d;
+  --ink: var(--text-primary);
+  --ink-2: var(--text-secondary);
+  --ink-3: var(--text-tertiary);
+  --rule: var(--border-color);
+  --surface: var(--bg-primary);
+  --paper: var(--bg-secondary);
+  --green: var(--accent-primary);
+  --green-dk: var(--accent-primary);
 
   min-height: 100vh;
   display: flex;

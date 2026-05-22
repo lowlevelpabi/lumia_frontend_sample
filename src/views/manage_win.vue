@@ -60,10 +60,12 @@ import {
   type RepositoryStats,
 } from '../services/api'
 import { useAuth } from '../composables/useAuth'
+import { useTheme } from '../composables/useTheme'
 import BookLoader from '../components/BookLoader.vue'
 
 const router = useRouter()
 const { isAdmin, isFaculty } = useAuth()
+const { isDark, toggleTheme } = useTheme()
 const canEdit = computed(() => isAdmin.value || isFaculty.value)
 
 // ── Sidebar collapse ────────────────────────────────────────────
@@ -191,7 +193,6 @@ const setSection = (s: Section) => {
 
   // Reset navigation-blocking states
   showCreateUserModal.value = false
-  showPurgeModal.value = false
   showApproveModal.value = false
   showDetailsModal.value = false
   roleTarget.value = null
@@ -264,7 +265,7 @@ const fetchStats = async () => {
 const fetchPapers = async () => {
   loading.value = true
   try {
-    papers.value = await api.listAllPapers()
+    papers.value = await api.listAllPapers('all')
     await fetchStats()
   } catch (e) {
     console.error(e)
@@ -286,6 +287,7 @@ const filteredPapers = computed(() => {
     (p) =>
       p.title.toLowerCase().includes(q) ||
       p.author.toLowerCase().includes(q) ||
+      p.id.toLowerCase().includes(q) ||
       (p.department ?? '').toLowerCase().includes(q),
   )
 })
@@ -341,6 +343,20 @@ const handleDelete = async (id: string) => {
   }
 }
 
+// ── Bulk Actions for Repository ──────────────────────────────────────
+const selectedRepoIds = ref<string[]>([])
+const allRepoSelected = computed({
+  get: () => filteredPapers.value.length > 0 && selectedRepoIds.value.length === filteredPapers.value.length,
+  set: (val) => {
+    selectedRepoIds.value = val ? filteredPapers.value.map(p => p.id) : []
+  }
+})
+
+const handleBulkDelete = () => {
+  if (selectedRepoIds.value.length === 0) return
+  openBulkModal('delete')
+}
+
 const handleApprove = (paper: Paper) => {
   approveTarget.value = paper
   showApproveModal.value = true
@@ -361,12 +377,12 @@ const confirmApprove = async () => {
 const handleEdit = (paper: Paper) => {
   editTarget.value = paper
   editForm.title = paper.title
-  
+
   // Split authors by pipe and trim
   const authorStr = paper.author || ''
   editForm.authors = authorStr.split('|').map(a => a.trim()).filter(a => a !== '')
   if (editForm.authors.length === 0) editForm.authors = [''] // Ensure at least one input
-  
+
   editForm.department = paper.department || ''
   editForm.project_type = paper.project_type || ''
   editForm.degree_program = paper.degree_program || ''
@@ -395,7 +411,7 @@ const confirmEdit = async () => {
       .filter(a => a !== '')
       .join(' | ')
 
-    await api.updatePaper(editTarget.value.id, { 
+    await api.updatePaper(editTarget.value.id, {
       ...editForm,
       author: authorString
     })
@@ -464,9 +480,18 @@ watch(activeSection, (s) => {
 // ── Trash / Recycle Bin ───────────────────────────────────────────
 const trashedPapers = ref<Paper[]>([])
 const loadingTrash = ref(false)
-const showPurgeModal = ref(false)
-const purgeTarget = ref<Paper | null>(null)
 const purging = ref(false)
+const showBulkModal = ref(false)
+const bulkActionType = ref<'delete' | 'purge'>('delete')
+
+const openBulkModal = (type: 'delete' | 'purge') => {
+  bulkActionType.value = type
+  showBulkModal.value = true
+}
+
+const closeBulkModal = () => {
+  showBulkModal.value = false
+}
 
 const fetchTrashedPapers = async () => {
   loadingTrash.value = true
@@ -504,31 +529,48 @@ const handleRestore = async (paper: Paper) => {
   }
 }
 
-const openPurgeModal = (paper: Paper) => {
-  purgeTarget.value = paper
-  showPurgeModal.value = true
+
+// ── Bulk Actions for Trash ───────────────────────────────────────────
+const selectedTrashIds = ref<string[]>([])
+const allTrashSelected = computed({
+  get: () => trashedPapers.value.length > 0 && selectedTrashIds.value.length === trashedPapers.value.length,
+  set: (val) => {
+    selectedTrashIds.value = val ? trashedPapers.value.map(p => p.id) : []
+  }
+})
+
+const handleBulkPurge = () => {
+  if (selectedTrashIds.value.length === 0) return
+  openBulkModal('purge')
 }
 
-const closePurgeModal = () => {
-  showPurgeModal.value = false
-  purgeTarget.value = null
-}
+const handleBulkConfirm = async () => {
+  const isPurge = bulkActionType.value === 'purge'
+  const ids = isPurge ? selectedTrashIds.value : selectedRepoIds.value
+  if (ids.length === 0) return
 
-const handlePurgeConfirm = async () => {
-  if (!purgeTarget.value) return
   purging.value = true
   try {
-    await api.purgePaper(purgeTarget.value.id)
-    await fetchTrashedPapers()
-    closePurgeModal()
-  } catch {
-    alert('Failed to purge paper.')
+    if (isPurge) {
+      await Promise.all(ids.map(id => api.purgePaper(id)))
+      selectedTrashIds.value = []
+      await fetchTrashedPapers()
+    } else {
+      await Promise.all(ids.map(id => api.deletePaper(id)))
+      selectedRepoIds.value = []
+      await fetchPapers()
+    }
+    closeBulkModal()
+  } catch (e) {
+    alert(`Failed to ${isPurge ? 'purge' : 'delete'} some documents.`)
+    console.error(e)
   } finally {
     purging.value = false
   }
 }
 
 watch(activeSection, (s) => {
+  selectedTrashIds.value = [] // Clear selection when switching tabs
   if (s === 'trash') fetchTrashedPapers()
   if (s === 'repository') fetchStats()
 })
@@ -1036,13 +1078,6 @@ const triggerFallback = async () => {
   }
 }
 
-const cancelUpload = () => {
-  step.value = 1
-  file.value = null
-  pages.value = []
-  selectedPages.value = []
-  uploadMetadata.title = ''
-}
 
 const showZoomModal = ref(false)
 const zoomedPage = ref<PageData | null>(null)
@@ -1180,6 +1215,19 @@ const startInitialExtraction = async (autoExtract: boolean = true) => {
   }
 }
 
+const handleCancelParsing = () => {
+  stopProgressListening()
+  processingDoc.value = false
+  step.value = 1
+  file.value = null
+  sessionId.value = ''
+  extractionProgress.value = 0
+  extractionMessage.value = ''
+  uploadError.value = ''
+  // Reset input so the same file can be re-selected
+  if (fileInput.value) fileInput.value.value = ''
+}
+
 const togglePage = (pageNum: number, event: Event) => {
   // if a zoom-trigger/button or the image itself was clicked, do nothing
   const tgt = event.target as HTMLElement
@@ -1237,7 +1285,7 @@ const handleFinalConfirm = async () => {
       introduction: rawImradSections.introduction || imradSections.introduction,
       methods: rawImradSections.methods || imradSections.methods,
       results: rawImradSections.results || imradSections.results,
-      discussion: rawImradSections.results || imradSections.results, // Combined RAD
+      discussion: rawImradSections.discussion || imradSections.discussion,
       references: rawImradSections.references || imradSections.references,
       media: uploadMetadata.media,
     })
@@ -1315,6 +1363,11 @@ watch(
       </nav>
 
       <div class="sb-footer">
+        <button class="sb-theme-btn" @click="toggleTheme" :title="isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'">
+          <Sun v-if="isDark" :size="14" />
+          <Moon v-else :size="14" />
+          <span>{{ isDark ? 'Light' : 'Dark' }} Mode</span>
+        </button>
         <div class="sb-footer-badge">
           <ShieldAlert :size="12" />
           <span>Staff access only</span>
@@ -1364,6 +1417,11 @@ watch(
               </div>
               <span class="step-label">Done</span>
             </div>
+            <button v-if="step === 2" class="cancel-btn" @click="handleCancelParsing" :disabled="uploadingPaper"
+              style="margin-left: 1.5rem;">
+              <X :size="14" />
+              <span>Cancel</span>
+            </button>
           </div>
           <div v-else-if="!isMobile" class="live-clock">
             <Clock :size="13" stroke-width="2.5" />
@@ -1383,7 +1441,7 @@ watch(
             </div>
             <div class="notif-body">
               <strong>{{ uploadNotification.includes('Upload Terminated') ? 'Upload Rejected' : 'Error Detected'
-                }}</strong>
+              }}</strong>
               <p>{{ uploadNotification }}</p>
             </div>
             <button class="notif-close" @click="closeUploadMessage">
@@ -1541,23 +1599,20 @@ watch(
 
               <div v-if="isManuscript" class="notice-banner blue">
                 <div class="notice-icon">
-                  <AlertCircle :size="18" color="#3b82f6" />
+                  <AlertCircle :size="18" class="notice-icon-svg" />
                 </div>
                 <div class="notice-body">
-                  <p class="notice-title" style="color: #1e40af">
+                  <p class="notice-title">
                     Manuscript / In-Progress Document
                   </p>
-                  <p class="notice-desc" style="color: #3b82f6">
+                  <p class="notice-desc">
                     No IMRAD section headings were detected. The first 10 pages are shown for
                     preview. Fill in sections manually or browse all pages.
                   </p>
                 </div>
                 <div class="notice-actions">
-                  <button @click="triggerFallback" class="notice-btn" style="background: #1d4ed8">
+                  <button @click="triggerFallback" class="notice-btn primary-btn">
                     <RefreshCw :size="13" /> Browse All Pages
-                  </button>
-                  <button @click="cancelUpload" class="notice-btn ghost">
-                    Decline &amp; Reset
                   </button>
                 </div>
               </div>
@@ -1638,7 +1693,8 @@ watch(
                       <!-- Abstract moved here from Verify Metadata -->
                       <div class="fg" style="margin-bottom:0.85rem">
                         <label>Abstract</label>
-                        <textarea v-model="uploadMetadata.abstract" class="abstract-area" placeholder="Enter abstract…" />
+                        <textarea v-model="uploadMetadata.abstract" class="abstract-area"
+                          placeholder="Enter abstract…" />
                       </div>
                       <template v-if="
                         uploadMetadata.detected_subheadings.some((s) =>
@@ -1701,7 +1757,7 @@ watch(
                               <span>Preview</span>
                               <span class="ref-count-badge">{{ parsedReferencesPreview.length }} entr{{
                                 parsedReferencesPreview.length === 1 ? 'y' : 'ies'
-                                }}
+                              }}
                                 detected</span>
                             </div>
                             <div v-if="parsedReferencesPreview.length > 0" class="ref-preview-list">
@@ -1883,6 +1939,10 @@ watch(
               <Search :size="13" class="search-ico" />
               <input v-model="searchQuery" type="text" placeholder="Search by title, author, or department…" />
             </div>
+            <button class="repo-upload-btn" @click="setSection('upload')">
+              <Plus :size="14" />
+              Upload Document
+            </button>
             <div class="filter-chips">
               <button class="chip" :class="{ active: activeFilter === 'all' }" @click="activeFilter = 'all'">
                 All
@@ -1897,113 +1957,147 @@ watch(
             </div>
           </div>
 
-          <div class="tbl-card">
-            <div class="tbl-card-head">
-              <span class="tbl-count">Overall record: {{ filteredPapers.length }} paper{{
-                filteredPapers.length !== 1 ? 's' : ''
-                }}<span v-if="searchQuery || activeFilter !== 'all'" class="tbl-hint">
-                  · filtered</span></span>
+          <!-- Bulk Action Bar -->
+          <div v-if="selectedRepoIds.length > 0" class="bulk-action-bar">
+            <span class="selection-count">
+              <strong>{{ selectedRepoIds.length }}</strong> selected
+            </span>
+            <div class="bulk-btns">
+              <button @click="handleBulkDelete" class="bulk-btn delete" :disabled="loading">
+                <Trash2 :size="13" /> Move to Trash
+              </button>
+              <button @click="selectedRepoIds = []" class="bulk-btn cancel">Cancel</button>
             </div>
-            <div class="tbl-scroll">
-              <table class="tbl">
-                <thead>
-                  <tr>
-                    <th style="width: 50%">Research Paper</th>
-                    <th style="width: 80px">Status</th>
-                    <th style="width: 15%">Department</th>
-                    <th style="width: 80px">Type</th>
-                    <th style="width: 120px">Uploaded By</th>
-                    <th style="width: 80px">Upload Date</th>
-                    <th style="width: 110px; text-align: center;">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <template v-if="loading">
-                    <tr v-for="i in 5" :key="'sk' + i" class="skel-row">
-                      <td>
-                        <div class="skel-paper">
-                          <div class="skel skel-av" />
-                          <div>
-                            <div class="skel skel-t1" />
-                            <div class="skel skel-t2" />
-                          </div>
-                        </div>
-                      </td>
-                      <td><div class="skel skel-chip" /></td>
-                      <td><div class="skel skel-dept" /></td>
-                      <td><div class="skel skel-type" /></td>
-                      <td><div class="skel skel-dept" /></td>
-                      <td><div class="skel skel-chip" /></td>
-                      <td />
-                    </tr>
-                  </template>
-                  <tr v-else-if="filteredPapers.length === 0">
-                    <td colspan="8">
-                      <div class="tbl-empty">
-                        <FolderOpen :size="40" />
-                        <h3>No papers found</h3>
-                        <p>
-                          {{
-                            searchQuery || activeFilter !== 'all'
-                              ? 'Try a different search or filter.'
-                              : 'Upload the first researchpaper to get started.'
-                          }}
-                        </p>
-                        <button v-if="!searchQuery && activeFilter === 'all'" @click="setSection('upload')"
-                          class="empty-cta">
-                          <Plus :size="13" /> Upload Now
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                   <tr v-for="paper in filteredPapers" :key="paper.id" class="tbl-row">
-                    <td class="td-paper">
-                      <div class="paper-cell">
-                        <div class="paper-av" :data-t="typeColor(paper.project_type)">
-                          {{ initials(paper.title) }}
-                        </div>
-                        <div class="paper-info">
-                          <span class="paper-name clickable" @click="viewDetails(paper)" :title="paper.title">{{ paper.title }}</span>
-                          <span class="paper-author">{{ (paper.author || '').replace(/\|/g, ', ') }}</span>
+          </div>
+
+          <div class="tbl-card-head">
+            <span class="tbl-count">Overall record: {{ filteredPapers.length }} paper{{
+              filteredPapers.length !== 1 ? 's' : ''
+              }}<span v-if="searchQuery || activeFilter !== 'all'" class="tbl-hint">
+                · filtered</span></span>
+          </div>
+          <div class="tbl-scroll">
+            <table class="tbl">
+              <thead>
+                <tr>
+                  <th class="trash-check-col">
+                    <label class="custom-check">
+                      <input type="checkbox" v-model="allRepoSelected" />
+                      <span class="check-box"></span>
+                    </label>
+                  </th>
+                  <th style="width: 50%">Research Paper</th>
+                  <th style="width: 80px">Status</th>
+                  <th style="width: 15%">Department</th>
+                  <th style="width: 80px">Type</th>
+                  <th style="width: 120px">Uploaded By</th>
+                  <th style="width: 80px">Upload Date</th>
+                  <th style="width: 110px; text-align: center;">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <template v-if="loading">
+                  <tr v-for="i in 5" :key="'sk' + i" class="skel-row">
+                    <td></td>
+                    <td>
+                      <div class="skel-paper">
+                        <div class="skel skel-av" />
+                        <div>
+                          <div class="skel skel-t1" />
+                          <div class="skel skel-t2" />
                         </div>
                       </div>
                     </td>
                     <td>
-                      <span class="type-badge" :class="paper.status === 'Approved' ? 'green' : 'amber'">
-                        {{ paper.status ?? 'Approved' }}
-                      </span>
+                      <div class="skel skel-chip" />
                     </td>
                     <td>
-                      <span class="dept-chip">{{ paper.department }}</span>
+                      <div class="skel skel-dept" />
                     </td>
                     <td>
-                      <span class="type-badge" :class="typeColor(paper.project_type)">{{
-                        paper.project_type
+                      <div class="skel skel-type" />
+                    </td>
+                    <td>
+                      <div class="skel skel-dept" />
+                    </td>
+                    <td>
+                      <div class="skel skel-chip" />
+                    </td>
+                    <td />
+                  </tr>
+                </template>
+                <tr v-else-if="filteredPapers.length === 0">
+                  <td colspan="8">
+                    <div class="tbl-empty">
+                      <FolderOpen :size="40" />
+                      <h3>No papers found</h3>
+                      <p>
+                        {{
+                          searchQuery || activeFilter !== 'all'
+                            ? 'Try a different search or filter.'
+                            : 'Upload the first researchpaper to get started.'
+                        }}
+                      </p>
+                      <button v-if="!searchQuery && activeFilter === 'all'" @click="setSection('upload')"
+                        class="empty-cta">
+                        <Plus :size="13" /> Upload Now
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+                <tr v-for="paper in filteredPapers" :key="paper.id" class="tbl-row"
+                  :class="{ 'row-selected': selectedRepoIds.includes(paper.id) }">
+                  <td class="trash-check-col">
+                    <label class="custom-check">
+                      <input type="checkbox" :value="paper.id" v-model="selectedRepoIds" />
+                      <span class="check-box"></span>
+                    </label>
+                  </td>
+                  <td class="td-paper">
+                    <div class="paper-cell">
+                      <div class="paper-av" :data-t="typeColor(paper.project_type)">
+                        {{ initials(paper.title) }}
+                      </div>
+                      <div class="paper-info">
+                        <span class="paper-name clickable" @click="viewDetails(paper)" :title="paper.title">{{
+                          paper.title }}</span>
+                        <span class="paper-author">{{ (paper.author || '').replace(/\|/g, ', ') }}</span>
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    <span class="type-badge" :class="paper.status === 'Approved' ? 'green' : 'amber'">
+                      {{ paper.status ?? 'Approved' }}
+                    </span>
+                  </td>
+                  <td>
+                    <span class="dept-chip">{{ paper.department }}</span>
+                  </td>
+                  <td>
+                    <span class="type-badge" :class="typeColor(paper.project_type)">{{
+                      paper.project_type
                       }}</span>
-                    </td>
-                    <td>
-                      <div class="uploader-cell">
-                        <span class="uploader-name">{{ paper.uploaded_by ?? '—' }}</span>
-                        <span class="uploader-role-tag" :class="paper.uploader_role?.toLowerCase()">{{ paper.uploader_role }}</span>
-                      </div>
-                    </td>
-                    <td>
-                      <span class="upload-time-mini">{{ formatRelativeTime(paper.created_at) }}</span>
-                    </td>
-                    <td style="text-align: center;">
-                      <div class="action-group">
-                        <button @click="handleEdit(paper)" class="row-btn" title="Edit Metadata">
-                          <Edit3 :size="13" />
-                        </button>
-                        <button v-if="isAdmin || isFaculty" @click="handleDelete(paper.id)" class="row-btn danger" title="Delete">
-                          <Trash2 :size="13" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+                  </td>
+                  <td>
+                    <div class="uploader-cell">
+                      <span class="uploader-name">{{ paper.uploaded_by ?? '—' }}</span>
+                      <span class="uploader-role-tag" :class="paper.uploader_role?.toLowerCase()">{{
+                        paper.uploader_role }}</span>
+                    </div>
+                  </td>
+                  <td>
+                    <span class="upload-time-mini">{{ formatRelativeTime(paper.created_at) }}</span>
+                  </td>
+                  <td style="text-align: center;">
+                    <div class="action-group">
+                      <button @click="handleEdit(paper)" class="row-btn" title="Edit Metadata">
+                        <Edit3 :size="13" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </template>
 
@@ -2036,7 +2130,7 @@ watch(
             <div class="tbl-card-head">
               <span class="tbl-count">Queue: {{ pendingPapers.length }} paper{{
                 pendingPapers.length !== 1 ? 's' : ''
-                }} awaiting approval</span>
+              }} awaiting approval</span>
             </div>
             <div class="tbl-scroll">
               <table class="tbl">
@@ -2054,10 +2148,12 @@ watch(
                 <tbody>
                   <template v-if="loading">
                     <tr v-for="i in 3" :key="'psk' + i" class="skel-row">
-                      <td colspan="6"><div class="skel skel-t1" /></td>
+                      <td colspan="6">
+                        <div class="skel skel-t1" />
+                      </td>
                     </tr>
                   </template>
-                   <tr v-else-if="pendingPapers.length === 0">
+                  <tr v-else-if="pendingPapers.length === 0">
                     <td colspan="7">
                       <div class="tbl-empty">
                         <CheckCircle :size="40" />
@@ -2073,7 +2169,8 @@ watch(
                           {{ initials(paper.title) }}
                         </div>
                         <div class="paper-info">
-                          <span class="paper-name clickable" @click="viewDetails(paper)" :title="paper.title">{{ paper.title }}</span>
+                          <span class="paper-name clickable" @click="viewDetails(paper)" :title="paper.title">{{
+                            paper.title }}</span>
                           <span class="paper-author">{{ (paper.author || '').replace(/\|/g, ', ') }}</span>
                         </div>
                       </div>
@@ -2087,12 +2184,13 @@ watch(
                     <td>
                       <span class="type-badge" :class="typeColor(paper.project_type)">{{
                         paper.project_type
-                      }}</span>
+                        }}</span>
                     </td>
                     <td>
                       <div class="uploader-cell">
                         <span class="uploader-name">{{ paper.uploaded_by ?? '—' }}</span>
-                        <span class="uploader-role-tag" :class="paper.uploader_role?.toLowerCase()">{{ paper.uploader_role }}</span>
+                        <span class="uploader-role-tag" :class="paper.uploader_role?.toLowerCase()">{{
+                          paper.uploader_role }}</span>
                       </div>
                     </td>
                     <td>
@@ -2105,7 +2203,8 @@ watch(
                           <span>Approve</span>
                         </button>
                         <div class="action-sep" />
-                        <button v-if="isAdmin || isFaculty" @click="handleDelete(paper.id)" class="icon-action-btn danger" title="Reject/Delete">
+                        <button v-if="isAdmin || isFaculty" @click="handleDelete(paper.id)"
+                          class="icon-action-btn danger" title="Reject/Delete">
                           <Trash2 :size="14" />
                         </button>
                       </div>
@@ -2358,109 +2457,130 @@ watch(
             </div>
           </div>
 
-          <div class="tbl-card">
-            <div class="tbl-card-head" style="display: flex; align-items: center; justify-content: space-between">
-              <span class="tbl-count">{{ trashedPapers.length }} document{{ trashedPapers.length !== 1 ? 's' : '' }} in
-                Trash</span>
-              <div style="display: flex; align-items: center; gap: 0.75rem">
-                <span v-if="loadingTrash" class="sync-text">
-                  <RefreshCw :size="11" class="spin" /> Syncing with system clock...
-                </span>
-                <button @click="fetchTrashedPapers" class="ghost-btn" title="Refresh" :disabled="loadingTrash">
-                  <RefreshCw :size="13" :class="{ spin: loadingTrash }" />
-                </button>
-              </div>
+          <!-- Bulk Action Bar -->
+          <div v-if="selectedTrashIds.length > 0" class="bulk-action-bar">
+            <span class="selection-count">
+              <strong>{{ selectedTrashIds.length }}</strong> selected
+            </span>
+            <div class="bulk-btns">
+              <button @click="handleBulkPurge" class="bulk-btn delete" :disabled="purging">
+                <Trash2 :size="13" /> Erase Selected
+              </button>
+              <button @click="selectedTrashIds = []" class="bulk-btn cancel">Cancel</button>
             </div>
-            <div class="tbl-scroll">
-              <table class="tbl">
-                <thead>
-                  <tr>
-                    <th style="width: 50%">Research Paper</th>
-                    <th style="width: 15%">Department</th>
-                    <th style="width: 80px">Type</th>
-                    <th style="width: 120px">Deleted By</th>
-                    <th style="width: 80px">Days Remaining</th>
-                    <th style="width: 110px; text-align: center;">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <template v-if="loadingTrash">
-                    <tr v-for="i in 4" :key="'tr-sk' + i" class="skel-row">
-                      <td>
-                        <div class="skel skel-t1" />
-                      </td>
-                      <td>
-                        <div class="skel skel-chip" />
-                      </td>
-                      <td>
-                        <div class="skel skel-type" />
-                      </td>
-                      <td>
-                        <div class="skel skel-chip" />
-                      </td>
-                      <td>
-                        <div class="skel skel-chip" />
-                      </td>
-                      <td>
-                        <div class="skel skel-chip" />
-                      </td>
-                    </tr>
-                  </template>
-                  <tr v-else-if="trashedPapers.length === 0">
-                    <td colspan="6">
-                      <div class="tbl-empty">
-                        <Trash2 :size="40" />
-                        <h3>Trash is empty</h3>
-                        <p>
-                          Deleted documents will appear here for 15 days before being permanently
-                          removed.
-                        </p>
-                      </div>
-                    </td>
-                  </tr>
-                  <tr v-else v-for="paper in trashedPapers" :key="paper.id" class="tbl-row">
-                    <td class="td-paper">
-                      <div class="paper-cell">
-                        <div class="paper-av" :data-t="typeColor(paper.project_type)">
-                          {{ initials(paper.title) }}
-                        </div>
-                        <div class="paper-info">
-                          <span class="paper-name">{{ paper.title }}</span>
-                          <span class="paper-author">{{ (paper.author || '').replace(/\|/g, ', ') }}</span>
-                        </div>
-                      </div>
+          </div>
+
+          <div class="tbl-card-head" style="display: flex; align-items: center; justify-content: space-between">
+            <span class="tbl-count">{{ trashedPapers.length }} document{{ trashedPapers.length !== 1 ? 's' : '' }} in
+              Trash</span>
+            <div style="display: flex; align-items: center; gap: 0.75rem">
+              <span v-if="loadingTrash" class="sync-text">
+                <RefreshCw :size="11" class="spin" /> Syncing with system clock...
+              </span>
+              <button @click="fetchTrashedPapers" class="ghost-btn" title="Refresh" :disabled="loadingTrash">
+                <RefreshCw :size="13" :class="{ spin: loadingTrash }" />
+              </button>
+            </div>
+          </div>
+          <div class="tbl-scroll">
+            <table class="tbl">
+              <thead>
+                <tr>
+                  <th class="trash-check-col">
+                    <label class="custom-check">
+                      <input type="checkbox" v-model="allTrashSelected" />
+                      <span class="check-box"></span>
+                    </label>
+                  </th>
+                  <th style="width: 50%">Research Paper</th>
+                  <th style="width: 15%">Department</th>
+                  <th style="width: 80px">Type</th>
+                  <th style="width: 120px">Deleted By</th>
+                  <th style="width: 80px">Days Remaining</th>
+                  <th style="width: 110px; text-align: center;">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                <template v-if="loadingTrash">
+                  <tr v-for="i in 4" :key="'tr-sk' + i" class="skel-row">
+                    <td></td>
+                    <td>
+                      <div class="skel skel-t1" />
                     </td>
                     <td>
-                      <span class="dept-text">{{ paper.department }}</span>
+                      <div class="skel skel-chip" />
                     </td>
                     <td>
-                      <span class="type-badge" :class="typeColor(paper.project_type)">{{
-                        paper.project_type
+                      <div class="skel skel-type" />
+                    </td>
+                    <td>
+                      <div class="skel skel-chip" />
+                    </td>
+                    <td>
+                      <div class="skel skel-chip" />
+                    </td>
+                    <td>
+                      <div class="skel skel-chip" />
+                    </td>
+                  </tr>
+                </template>
+                <tr v-else-if="trashedPapers.length === 0">
+                  <td colspan="7">
+                    <div class="tbl-empty">
+                      <Trash2 :size="40" />
+                      <h3>Trash is empty</h3>
+                      <p>
+                        Deleted documents will appear here for 15 days before being permanently
+                        removed.
+                      </p>
+                    </div>
+                  </td>
+                </tr>
+                <tr v-else v-for="paper in trashedPapers" :key="paper.id" class="tbl-row"
+                  :class="{ 'row-selected': selectedTrashIds.includes(paper.id) }">
+                  <td class="trash-check-col">
+                    <label class="custom-check">
+                      <input type="checkbox" :value="paper.id" v-model="selectedTrashIds" />
+                      <span class="check-box"></span>
+                    </label>
+                  </td>
+                  <td class="td-paper">
+                    <div class="paper-cell">
+                      <div class="paper-av" :data-t="typeColor(paper.project_type)">
+                        {{ initials(paper.title) }}
+                      </div>
+                      <div class="paper-info">
+                        <span class="paper-name">{{ paper.title }}</span>
+                        <span class="paper-author">{{ (paper.author || '').replace(/\|/g, ', ') }}</span>
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    <span class="dept-text">{{ paper.department }}</span>
+                  </td>
+                  <td>
+                    <span class="type-badge" :class="typeColor(paper.project_type)">{{
+                      paper.project_type
                       }}</span>
-                    </td>
-                    <td>
-                      <span class="uploader-chip">{{ paper.deleted_by ?? '—' }}</span>
-                    </td>
-                    <td>
-                      <span class="days-badge" :class="daysBadgeClass(daysRemaining(paper.deleted_at!))">
-                        {{ daysRemaining(paper.deleted_at!) }}d left
-                      </span>
-                    </td>
-                    <td style="text-align: center;">
-                      <div class="action-group">
-                        <button @click="handleRestore(paper)" class="row-btn restore-btn" title="Restore paper">
-                          <ArchiveRestore :size="13" />
-                        </button>
-                        <div class="action-sep" />
-                        <button @click="openPurgeModal(paper)" class="row-btn danger" title="Purge permanently">
-                          <Trash2 :size="13" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+                  </td>
+                  <td>
+                    <span class="uploader-chip">{{ paper.deleted_by ?? '—' }}</span>
+                  </td>
+                  <td>
+                    <span class="days-badge" :class="daysBadgeClass(daysRemaining(paper.deleted_at!))">
+                      {{ daysRemaining(paper.deleted_at!) }}d left
+                    </span>
+                  </td>
+                  <td style="text-align: center;">
+                    <div class="action-group">
+                      <button @click="handleRestore(paper)" class="row-btn restore-btn" title="Restore paper">
+                        <ArchiveRestore :size="13" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </template>
 
@@ -2626,47 +2746,46 @@ watch(
               </div>
             </div>
           </div>
-
-          <!-- ── PURGE CONFIRM MODAL ──────────────────────────────── -->
-          <div v-if="showPurgeModal" class="modal-overlay" @click.self="closePurgeModal">
+          <!-- ── BULK ACTION MODAL ────────────────────────────────── -->
+          <div v-if="showBulkModal" class="modal-overlay" @click.self="closeBulkModal">
             <div class="modal-card purge-modal">
               <div class="modal-head">
                 <div class="modal-head-icon red">
                   <Trash2 :size="20" />
                 </div>
                 <div>
-                  <h3>Permanently Delete</h3>
-                  <p>This action cannot be undone.</p>
+                  <h3>{{ bulkActionType === 'purge' ? 'Permanent Erase' : 'Move to Trash' }}</h3>
+                  <p>{{ bulkActionType === 'purge' ? 'Documents will be removed forever.' : 'Selected items will be moved to recycle bin.' }}</p>
                 </div>
-                <button @click="closePurgeModal" class="modal-close">
+                <button @click="closeBulkModal" class="modal-close">
                   <X :size="18" />
                 </button>
               </div>
               <div class="modal-body purge-body">
-                <p class="purge-warning">
-                  You are about to permanently remove this document from the system. All vectors and
-                  the original PDF will be deleted.
-                </p>
-                <div class="purge-paper-box">
-                  <div class="paper-av" :data-t="typeColor(purgeTarget?.project_type ?? '')">
-                    {{ initials(purgeTarget?.title ?? '') }}
-                  </div>
-                  <div>
-                    <span class="paper-name">{{ purgeTarget?.title }}</span>
-                    <span class="paper-author">{{ purgeTarget?.author }} · {{ purgeTarget?.year }}</span>
-                  </div>
+                <div class="bulk-confirm-msg">
+                  You are about to {{ bulkActionType === 'purge' ? 'permanently erase' : 'move to trash' }}
+                  <strong>{{ bulkActionType === 'purge' ? selectedTrashIds.length : selectedRepoIds.length }}</strong>
+                  document{{ (bulkActionType === 'purge' ? selectedTrashIds.length : selectedRepoIds.length) !== 1 ? 's'
+                  : ''
+                  }}.
                 </div>
+                <p v-if="bulkActionType === 'purge'" class="purge-warning"
+                  style="margin-top: 1rem; font-size: 0.85rem; color: #ef4444; background: rgba(239, 68, 68, 0.05); padding: 0.75rem; border-radius: 6px; border-left: 3px solid #ef4444;">
+                  <AlertCircle :size="14" style="display: inline; margin-right: 4px; vertical-align: text-bottom;" />
+                  This action is irreversible. All associated data and files will be wiped from the system.
+                </p>
               </div>
               <div class="modal-foot">
-                <button @click="closePurgeModal" class="ghost-btn">Cancel</button>
-                <button @click="handlePurgeConfirm" class="purge-confirm-btn" :disabled="purging">
+                <button @click="closeBulkModal" class="ghost-btn" :disabled="purging">Cancel</button>
+                <button @click="handleBulkConfirm" class="purge-confirm-btn" :disabled="purging">
                   <Loader2 v-if="purging" :size="13" class="spin" />
                   <Trash2 v-else :size="13" />
-                  {{ purging ? 'Deleting...' : 'Hard Delete' }}
+                  {{ purging ? 'Processing...' : (bulkActionType === 'purge' ? 'Confirm Erase' : 'Confirm Delete') }}
                 </button>
               </div>
             </div>
           </div>
+
         </Teleport>
       </div>
 
@@ -2804,38 +2923,45 @@ watch(
               <div class="details-content-wrap">
                 <!-- Status Row -->
                 <div class="status-ribbon">
-                   <div class="ribbon-item">
-                     <label>Verification Status</label>
-                     <span class="type-badge" :class="detailsTarget.status === 'Approved' ? 'green' : 'amber'">
-                       <CheckCircle v-if="detailsTarget.status === 'Approved'" :size="12" />
-                       <Clock v-else :size="12" />
-                       {{ detailsTarget.status }}
-                     </span>
-                   </div>
-                   <div class="ribbon-item">
-                     <label>Project Classification</label>
-                     <span class="type-badge" :class="typeColor(detailsTarget.project_type)">
-                       <Bookmark :size="12" />
-                       {{ detailsTarget.project_type }}
-                     </span>
-                   </div>
+                  <div class="ribbon-item">
+                    <label>Verification Status</label>
+                    <span class="type-badge" :class="detailsTarget.status === 'Approved' ? 'green' : 'amber'">
+                      <CheckCircle v-if="detailsTarget.status === 'Approved'" :size="12" />
+                      <Clock v-else :size="12" />
+                      {{ detailsTarget.status }}
+                    </span>
+                  </div>
+                  <div class="ribbon-item">
+                    <label>Project Classification</label>
+                    <span class="type-badge" :class="typeColor(detailsTarget.project_type)">
+                      <Bookmark :size="12" />
+                      {{ detailsTarget.project_type }}
+                    </span>
+                  </div>
                 </div>
 
                 <!-- Main Info Grid -->
                 <div class="info-grid-v2">
                   <div class="info-card">
-                    <div class="ic-head"><Building2 :size="14" /><span>Department</span></div>
+                    <div class="ic-head">
+                      <Building2 :size="14" /><span>Department</span>
+                    </div>
                     <div class="ic-body">{{ detailsTarget.department }}</div>
                   </div>
                   <div class="info-card">
-                    <div class="ic-head"><GraduationCap :size="14" /><span>Program</span></div>
+                    <div class="ic-head">
+                      <GraduationCap :size="14" /><span>Program</span>
+                    </div>
                     <div class="ic-body">{{ detailsTarget.degree_program || '—' }}</div>
                   </div>
                   <div class="info-card">
-                    <div class="ic-head"><Hash :size="14" /><span>Keywords</span></div>
+                    <div class="ic-head">
+                      <Hash :size="14" /><span>Keywords</span>
+                    </div>
                     <div class="ic-body">
                       <div v-if="detailsTarget.keywords" class="kw-flex">
-                        <span v-for="kw in detailsTarget.keywords.split(',')" :key="kw" class="kw-pill-v2">{{ kw.trim() }}</span>
+                        <span v-for="kw in detailsTarget.keywords.split(',')" :key="kw" class="kw-pill-v2">{{ kw.trim()
+                          }}</span>
                       </div>
                       <span v-else class="val-empty">No keywords defined</span>
                     </div>
@@ -2855,14 +2981,15 @@ watch(
                         <div class="node-avatar">{{ initials(detailsTarget.uploaded_by || '') }}</div>
                         <div class="node-info">
                           <span class="node-name">{{ detailsTarget.uploaded_by }}</span>
-                          <span class="node-role" :class="detailsTarget.uploader_role?.toLowerCase()">{{ detailsTarget.uploader_role }}</span>
+                          <span class="node-role" :class="detailsTarget.uploader_role?.toLowerCase()">{{
+                            detailsTarget.uploader_role }}</span>
                         </div>
                       </div>
                       <div class="node-time">{{ formatLogDate(detailsTarget.created_at || '') }}</div>
                     </div>
 
                     <div class="audit-sep">
-                       <ArrowRight :size="16" />
+                      <ArrowRight :size="16" />
                     </div>
 
                     <div class="audit-node">
@@ -2877,7 +3004,9 @@ watch(
                       <div v-else class="node-card empty">
                         <span class="node-placeholder">Auto-approved / System</span>
                       </div>
-                      <div class="node-time" v-if="detailsTarget.approved_at">{{ formatLogDate(detailsTarget.approved_at) }}</div>
+                      <div class="node-time" v-if="detailsTarget.approved_at">{{
+                        formatLogDate(detailsTarget.approved_at) }}
+                      </div>
                       <div class="node-time" v-else>—</div>
                     </div>
                   </div>
@@ -2904,29 +3033,41 @@ watch(
 <style scoped>
 /* ── Design Tokens ───────────────────────────────────────────── */
 .mgmt {
-  --ink: #181c18;
-  --ink-2: #3d4239;
-  --ink-3: #7a7f75;
-  --rule: #dfe0db;
-  --surface: #f5f5f2;
-  --paper: #ffffff;
-  --green: #00a651;
-  --green-dk: #007d3d;
-  --green-deep: #06402b;
-  --green-dim: #e6f4ed;
+  --ink: var(--text-primary);
+  --ink-2: var(--text-secondary);
+  --ink-3: var(--text-tertiary);
+  --rule: var(--border-color);
+  --surface: var(--bg-primary);
+  --paper: var(--bg-secondary);
+  --green: var(--accent-primary);
+  --green-dk: var(--accent-primary);
+  --green-dim: rgba(16, 185, 129, 0.1);
   --hero: #0d1f12;
   --sb-w: 240px;
   --blue: #2563eb;
   --orange: #c2410c;
   --purple: #7c3aed;
   --sb-bg: #008a44;
-  /* Clean solid forest green */
+  --sb-text: #ffffff;
+  --sb-text-dim: rgba(255, 255, 255, 0.5);
+  --sb-rule: rgba(255, 255, 255, 0.06);
+  --sb-hover: rgba(0, 0, 0, 0.08);
 
   display: flex;
   min-height: calc(100vh - 64px);
   background: var(--surface);
   font-family: 'Source Sans 3', sans-serif;
   color: var(--ink);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.dark .mgmt {
+  --sb-bg: #000000;
+  --sb-text-dim: var(--text-tertiary);
+  --sb-rule: var(--rule);
+  --sb-hover: #111111;
+  --sb-active-text: var(--green);
+  --green-dim: rgba(52, 211, 153, 0.1);
 }
 
 /* ══ SIDEBAR ════════════════════════════════════════════════════ */
@@ -3003,7 +3144,7 @@ watch(
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.12em;
-  color: rgba(255, 255, 255, 0.25);
+  color: var(--sb-text-dim);
   padding: 1.2rem 1rem 0.4rem;
   margin: 0;
   overflow: hidden;
@@ -3051,17 +3192,17 @@ watch(
 }
 
 .sb-item:hover:not(.active) {
-  background: rgba(0, 0, 0, 0.08);
+  background: var(--sb-hover);
   transform: translateX(4px);
 }
 
 .sidebar.collapsed .sb-item:hover:not(.active) {
   transform: none;
-  background: rgba(0, 0, 0, 0.1);
+  background: var(--sb-hover);
 }
 
 .sb-item.active {
-  background: #fff;
+  background: var(--bg-secondary);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
 }
 
@@ -3071,16 +3212,16 @@ watch(
 }
 
 .sb-item.active .sb-item-label {
-  color: var(--sb-bg);
+  color: var(--sb-active-text, var(--sb-bg));
 }
 
 .sb-item.active .sb-item-desc {
-  color: rgba(0, 138, 68, 0.5);
-  /* 50% opacity of --sb-bg */
+  color: var(--sb-active-text, var(--sb-bg));
+  opacity: 0.6;
 }
 
 .sb-item.active .sb-arrow {
-  color: var(--sb-bg);
+  color: var(--sb-active-text, var(--sb-bg));
   opacity: 0.6;
 }
 
@@ -3096,7 +3237,7 @@ watch(
   width: 44px;
   /* Slightly smaller for better proportions */
   height: 44px;
-  background: #fff;
+  background: var(--bg-secondary);
   border-radius: 12px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   z-index: 0;
@@ -3124,7 +3265,8 @@ watch(
   position: absolute;
   top: -5px;
   right: -5px;
-  background: #ef4444; /* Vibrant red */
+  background: #ef4444;
+  /* Vibrant red */
   color: white;
   font-size: 0.62rem;
   font-weight: 800;
@@ -3136,14 +3278,19 @@ watch(
   justify-content: center;
   padding: 0 2px;
   border: 2px solid var(--sb-bg);
-  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
   z-index: 10;
   animation: badge-pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
 @keyframes badge-pop {
-  0% { transform: scale(0); }
-  100% { transform: scale(1); }
+  0% {
+    transform: scale(0);
+  }
+
+  100% {
+    transform: scale(1);
+  }
 }
 
 .uploader-meta {
@@ -3202,7 +3349,7 @@ watch(
 }
 
 .sb-arrow {
-  color: rgba(255, 255, 255, 0.2);
+  color: var(--sb-text-dim);
   flex-shrink: 0;
 }
 
@@ -3514,8 +3661,10 @@ watch(
 
 .content {
   flex: 1;
-  padding: 1.5rem 2rem 4rem; /* reduce gutter to fit more content */
-  max-width: 1600px; /* allow wider review content */
+  padding: 1.5rem 2rem 4rem;
+  /* reduce gutter to fit more content */
+  max-width: 1600px;
+  /* allow wider review content */
   width: calc(100% - 4rem);
   margin: 0 auto;
   box-sizing: border-box;
@@ -3575,22 +3724,22 @@ watch(
 }
 
 .stat-ico.blue {
-  background: #eff6ff;
+  background: rgba(37, 99, 235, 0.1);
   color: #2563eb;
 }
 
 .stat-ico.orange {
-  background: #fff7ed;
+  background: rgba(194, 65, 12, 0.1);
   color: #c2410c;
 }
 
 .stat-ico.purple {
-  background: #f5f3ff;
+  background: rgba(124, 58, 237, 0.1);
   color: #7c3aed;
 }
 
 .stat-ico.amber {
-  background: #fffbeb;
+  background: rgba(180, 83, 9, 0.1);
   color: #b45309;
 }
 
@@ -3678,7 +3827,13 @@ watch(
 .chip.active {
   background: var(--ink);
   border-color: var(--ink);
-  color: #fff;
+  color: var(--bg-secondary);
+}
+
+.dark .chip.active {
+  background: var(--green);
+  border-color: var(--green);
+  color: #000;
 }
 
 /* Table */
@@ -3707,6 +3862,142 @@ watch(
 
 .tbl-scroll {
   overflow-x: auto;
+}
+
+.bulk-action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem 1.25rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--rule);
+  animation: slideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+@keyframes slideDown {
+  from {
+    transform: translateY(-10px);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.selection-count {
+  font-size: 0.82rem;
+  color: var(--ink-2);
+}
+
+.selection-count strong {
+  color: var(--accent-primary);
+}
+
+.bulk-btns {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.bulk-btn {
+  padding: 0.4rem 0.8rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  transition: all 0.2s;
+  border: 1px solid transparent;
+}
+
+.bulk-btn.delete {
+  background: #fee2e2;
+  color: #ef4444;
+  border-color: #fecaca;
+}
+
+.bulk-btn.delete:hover:not(:disabled) {
+  background: #fecaca;
+}
+
+.dark .bulk-btn.delete {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.2);
+}
+
+.bulk-btn.cancel {
+  background: transparent;
+  color: var(--ink-3);
+  border-color: var(--rule);
+}
+
+.bulk-btn.cancel:hover {
+  background: var(--surface);
+  color: var(--ink-2);
+}
+
+.trash-check-col {
+  width: 45px;
+  text-align: center;
+  padding: 0 !important;
+}
+
+.custom-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 10px;
+}
+
+.custom-check input {
+  display: none;
+}
+
+.check-box {
+  width: 17px;
+  height: 17px;
+  border: 2px solid var(--rule);
+  border-radius: 4px;
+  background: var(--paper);
+  position: relative;
+  transition: all 0.2s;
+}
+
+.custom-check:hover .check-box {
+  border-color: var(--ink-3);
+}
+
+.custom-check input:checked+.check-box {
+  background: var(--green);
+  border-color: var(--green);
+}
+
+.custom-check input:checked+.check-box::after {
+  content: '✓';
+  position: absolute;
+  top: 48%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: white;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.row-selected td {
+  background: rgba(0, 166, 81, 0.03) !important;
+}
+
+.dark .row-selected td {
+  background: rgba(0, 166, 81, 0.05) !important;
 }
 
 .tbl {
@@ -3745,7 +4036,7 @@ watch(
 }
 
 .tbl-row:hover td {
-  background: #fafaf8;
+  background: var(--surface);
 }
 
 .td-muted {
@@ -3779,12 +4070,12 @@ watch(
 }
 
 .paper-av[data-t='blue'] {
-  background: #eff6ff;
+  background: rgba(37, 99, 235, 0.1);
   color: #2563eb;
 }
 
 .paper-av[data-t='orange'] {
-  background: #fff7ed;
+  background: rgba(194, 65, 12, 0.1);
   color: #c2410c;
 }
 
@@ -3864,10 +4155,9 @@ watch(
 
 .row-btn {
   background: none;
-  border: 1px solid var(--rule);
+  border: none;
   color: var(--ink-3);
   cursor: pointer;
-  border-radius: 5px;
   padding: 0.3rem 0.45rem;
   margin-left: 0.25rem;
   display: inline-flex;
@@ -3891,7 +4181,8 @@ watch(
 }
 
 .pending-row .paper-name {
-  text-transform: uppercase; /* Keeping it bold but clean */
+  text-transform: uppercase;
+  /* Keeping it bold but clean */
   font-size: 0.88rem;
   letter-spacing: 0.01em;
   display: -webkit-box;
@@ -3935,28 +4226,26 @@ watch(
   color: var(--ink-3);
 }
 
-.uploader-role-tag.admin { color: var(--purple); }
-.uploader-role-tag.faculty { color: var(--green-dk); }
-.uploader-role-tag.student { color: var(--blue); }
-
-.action-group {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--surface);
-  padding: 0.25rem;
-  border-radius: 10px;
-  border: 1px solid var(--rule);
-  width: max-content;
-  margin: 0 auto;
+.uploader-role-tag.admin {
+  color: var(--purple);
 }
+
+.uploader-role-tag.faculty {
+  color: var(--green-dk);
+}
+
+.uploader-role-tag.student {
+  color: var(--blue);
+}
+
+
 
 .approve-pill {
   display: flex;
   align-items: center;
   gap: 0.4rem;
   padding: 0.4rem 0.8rem;
-  background: #fff;
+  background: var(--paper);
   border: 1px solid var(--green);
   border-radius: 8px;
   color: var(--green-dk);
@@ -3995,7 +4284,7 @@ watch(
 .icon-action-btn:hover {
   background: #fff;
   color: var(--ink);
-  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
 }
 
 .icon-action-btn.danger:hover {
@@ -4049,7 +4338,7 @@ watch(
 
 /* Skeleton */
 .skel {
-  background: linear-gradient(90deg, #f0f0ec 25%, #e8e8e4 50%, #f0f0ec 75%);
+  background: linear-gradient(90deg, var(--skeleton-bg) 25%, var(--skeleton-highlight) 50%, var(--skeleton-bg) 75%);
   background-size: 200% 100%;
   animation: shimmer 1.4s infinite;
   border-radius: 4px;
@@ -4306,7 +4595,8 @@ watch(
   border-radius: 10px;
   padding: 2.5rem;
   width: 100%;
-  max-width: 520px; /* keep upload card compact for step 1 */
+  max-width: 520px;
+  /* keep upload card compact for step 1 */
 }
 
 .upload-card-head {
@@ -4580,7 +4870,7 @@ watch(
   justify-content: center;
   font-size: 0.65rem;
   font-weight: 800;
-  color: var(--ink-3);
+  color: var(--ink);
 }
 
 .remove-author-btn {
@@ -4606,9 +4896,9 @@ watch(
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  background: #f0fdf4;
-  color: var(--green);
-  border: 1px solid #d1fae5;
+  background: var(--green-dim);
+  color: var(--green-dk);
+  border: 1px solid rgba(0, 166, 81, 0.2);
   padding: 0.5rem 0.75rem;
   border-radius: 6px;
   font-size: 0.75rem;
@@ -4617,8 +4907,15 @@ watch(
   transition: all 0.2s;
 }
 
+.dark .add-author-btn {
+  background: rgba(52, 211, 153, 0.1);
+  border-color: rgba(52, 211, 153, 0.25);
+  color: #34d399;
+}
+
 .add-author-btn:hover {
-  background: #d1fae5;
+  background: var(--green);
+  color: #fff;
   transform: translateY(-1px);
 }
 
@@ -4882,16 +5179,37 @@ watch(
 .notice-banner.amber {
   background: #fffbeb;
   border-color: #fde68a;
+  color: #92400e;
+}
+
+.dark .notice-banner.amber {
+  background: #1c1917;
+  border-color: #44403c;
+  color: #fbbf24;
 }
 
 .notice-banner.blue {
   background: #eff6ff;
   border-color: #bfdbfe;
+  color: #1e40af;
+}
+
+.dark .notice-banner.blue {
+  background: #172554;
+  border-color: #1e3a8a;
+  color: #60a5fa;
 }
 
 .notice-banner.green {
   background: var(--green-dim);
   border-color: #d1fae5;
+  color: #065f46;
+}
+
+.dark .notice-banner.green {
+  background: #064e3b;
+  border-color: #065f46;
+  color: #34d399;
 }
 
 .notice-banner.flat-notice {
@@ -4902,6 +5220,13 @@ watch(
   gap: 1rem;
   box-shadow: none;
   border: 1px solid #d1fae5;
+  color: #065f46;
+}
+
+.dark .notice-banner.flat-notice {
+  background: rgba(52, 211, 153, 0.05);
+  border-color: rgba(52, 211, 153, 0.2);
+  color: #34d399;
 }
 
 .notice-banner.flat-notice .notice-icon {
@@ -5007,7 +5332,8 @@ watch(
 
 .review-grid {
   display: grid;
-  grid-template-columns: 480px 1fr; /* increase left column to maximize content area */
+  grid-template-columns: 480px 1fr;
+  /* increase left column to maximize content area */
   gap: 1.25rem;
   align-items: start;
 }
@@ -5426,7 +5752,7 @@ watch(
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  background: #fff;
+  background: var(--paper);
   color: var(--green);
   display: flex;
   align-items: center;
@@ -5450,10 +5776,11 @@ watch(
   flex-direction: column;
   align-items: center;
   gap: 0.75rem;
-  background: #fff;
+  background: var(--paper);
   border-radius: 16px;
   padding: 2rem 3rem;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+  border: 1px solid var(--rule);
 }
 
 .drag-overlay-inner p {
@@ -5513,7 +5840,7 @@ watch(
 .edit-form-minimal textarea:focus {
   border-color: var(--green);
   outline: none;
-  background: #fff;
+  background: var(--surface);
 }
 
 .edit-form-minimal .authors-stack {
@@ -5540,15 +5867,15 @@ watch(
 
 /* ══ MODALS ════════════════════════════════════════════════════ */
 .modal-overlay {
-  --ink: #181c18;
-  --ink-2: #3d4239;
-  --ink-3: #7a7f75;
-  --rule: #dfe0db;
-  --surface: #f5f5f2;
-  --paper: #ffffff;
-  --green: #00a651;
-  --green-dk: #007d3d;
-  --green-dim: #e6f4ed;
+  --ink: var(--text-primary);
+  --ink-2: var(--text-secondary);
+  --ink-3: var(--text-tertiary);
+  --rule: var(--border-color);
+  --surface: var(--bg-primary);
+  --paper: var(--bg-secondary);
+  --green: var(--accent-primary);
+  --green-dk: var(--accent-primary);
+  --green-dim: rgba(16, 185, 129, 0.1);
   --hero: #0d1f12;
 
   position: fixed;
@@ -5566,13 +5893,14 @@ watch(
 }
 
 .modal-card {
-  background: #ffffff;
+  background: var(--paper);
   border-radius: 10px;
   width: 100%;
   max-width: 460px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
   overflow: hidden;
   opacity: 1;
+  border: 1px solid var(--rule);
 }
 
 .modal-head {
@@ -5580,8 +5908,8 @@ watch(
   align-items: flex-start;
   gap: 0.85rem;
   padding: 1.25rem;
-  border-bottom: 1px solid #e5e7eb;
-  background: #ffffff;
+  border-bottom: 1px solid var(--rule);
+  background: var(--paper);
 }
 
 .modal-head-icon {
@@ -5630,8 +5958,8 @@ watch(
   justify-content: flex-end;
   gap: 0.6rem;
   padding: 1rem 1.25rem;
-  border-top: 1px solid #e5e7eb;
-  background: #ffffff;
+  border-top: 1px solid var(--rule);
+  background: var(--paper);
 }
 
 /* ── Creation Modal ─────────────────────────────────────────── */
@@ -5795,9 +6123,9 @@ watch(
 }
 
 .log-badge.green {
-  background: #ecfdf5;
-  color: #059669;
-  border: 1px solid #a7f3d0;
+  background: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.2);
 }
 
 .log-badge.blue {
@@ -5830,7 +6158,7 @@ watch(
   flex-wrap: wrap;
   gap: 1.5rem;
   padding: 0.75rem 1.25rem;
-  background: #fafaf9;
+  background: var(--surface);
   border-bottom: 1px solid var(--rule);
   justify-content: center;
 }
@@ -5850,6 +6178,16 @@ watch(
   font-size: 0.8rem;
   font-weight: 600;
   color: var(--ink-2);
+}
+
+@media (max-width: 640px) {
+  .logs-legend {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+    padding: 1.25rem;
+    justify-content: flex-start;
+  }
 }
 
 /* Success display */
@@ -5980,7 +6318,7 @@ watch(
   display: flex;
   flex-direction: column;
   padding: 1rem 1.25rem;
-  background: #ffffff;
+  background: transparent;
   gap: 0.5rem;
 }
 
@@ -5991,8 +6329,8 @@ watch(
   padding: 0.9rem 0.85rem;
   border-radius: 7px;
   cursor: pointer;
-  border: 2px solid #e5e7eb;
-  background: #ffffff;
+  border: 2px solid var(--rule);
+  background: var(--paper);
   transition:
     background 0.13s,
     border-color 0.13s;
@@ -6003,8 +6341,8 @@ watch(
 }
 
 .role-opt:hover {
-  background: #f9fafb;
-  border-color: #d1d5db;
+  background: var(--surface);
+  border-color: var(--ink-3);
 }
 
 .role-opt.selected {
@@ -6027,6 +6365,11 @@ watch(
   color: #2563eb;
 }
 
+.dark .role-opt-ico.blue {
+  background: rgba(37, 99, 235, 0.15);
+  color: #60a5fa;
+}
+
 .role-opt-ico.green {
   background: var(--green-dim);
   color: var(--green-dk);
@@ -6035,6 +6378,11 @@ watch(
 .role-opt-ico.purple {
   background: #f5f3ff;
   color: #7c3aed;
+}
+
+.dark .role-opt-ico.purple {
+  background: rgba(124, 58, 237, 0.15);
+  color: #a78bfa;
 }
 
 .role-opt-info {
@@ -6074,6 +6422,14 @@ watch(
   margin: 1rem 0;
   box-shadow: 0 2px 8px rgba(153, 27, 27, 0.08);
   animation: shake 0.4s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+
+.dark .role-error,
+.dark .error-banner {
+  color: #fca5a5;
+  background: rgba(153, 27, 27, 0.1);
+  border-color: rgba(153, 27, 27, 0.3);
+  box-shadow: none;
 }
 
 @keyframes shake {
@@ -6293,9 +6649,9 @@ watch(
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  background: #fffbeb;
-  border: 1px solid #fde68a;
-  color: #92400e;
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #f59e0b;
   padding: 0.75rem 1rem;
   border-radius: 8px;
   margin-bottom: 1rem;
@@ -6496,7 +6852,7 @@ watch(
 .ref-preview-entry {
   font-size: 0.82rem;
   line-height: 1.7;
-  color: #2a2a2a;
+  color: var(--text-secondary);
   /* APA hanging indent */
   padding: 0.65rem 0 0.65rem 1.75rem;
   text-indent: -1.75rem;
@@ -6952,6 +7308,7 @@ watch(
   color: inherit;
   cursor: pointer
 }
+
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -7026,6 +7383,7 @@ watch(
 .save-btn.success:hover {
   background: var(--green-dk);
 }
+
 .paper-name.clickable {
   cursor: pointer;
   transition: color 0.15s;
@@ -7086,7 +7444,7 @@ watch(
 
 .details-content-wrap {
   padding: 1.25rem 1.5rem;
-  background: #fff;
+  background: var(--bg-secondary);
 }
 
 .status-ribbon {
@@ -7150,17 +7508,17 @@ watch(
 
 .kw-pill-v2 {
   font-size: 0.6rem;
-  background: #fff;
-  border: 1px solid var(--rule);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
   padding: 0.15rem 0.45rem;
   border-radius: 4px;
-  color: var(--ink-2);
+  color: var(--text-secondary);
   font-weight: 700;
 }
 
 .audit-trail-v2 {
-  background: #f8faf8;
-  border: 1px solid #e2ece2;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
   border-radius: 12px;
   padding: 1.25rem;
 }
@@ -7198,20 +7556,20 @@ watch(
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  background: #fff;
-  border: 1px solid var(--rule);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
   padding: 0.6rem 0.75rem;
   border-radius: 8px;
   margin-bottom: 0.4rem;
 }
 
 .node-card.success {
-  border-color: var(--green);
-  background: #f0fdf4;
+  border-color: var(--accent-primary);
+  background: rgba(16, 185, 129, 0.1);
 }
 
 .node-card.empty {
-  background: #fafafa;
+  background: var(--bg-tertiary);
   border-style: dashed;
   height: 40px;
   justify-content: center;
@@ -7252,9 +7610,17 @@ watch(
   color: var(--ink-3);
 }
 
-.node-role.admin { color: #7c3aed; }
-.node-role.faculty { color: #059669; }
-.node-role.student { color: #2563eb; }
+.node-role.admin {
+  color: #7c3aed;
+}
+
+.node-role.faculty {
+  color: #059669;
+}
+
+.node-role.student {
+  color: #2563eb;
+}
 
 .node-placeholder {
   font-size: 0.75rem;
@@ -7307,5 +7673,74 @@ watch(
   font-size: 0.68rem;
   font-weight: 800;
   text-transform: uppercase;
+}
+
+.notice-icon-svg {
+  color: var(--accent-secondary);
+}
+
+.notice-btn.primary-btn {
+  background: var(--accent-secondary) !important;
+  color: #fff !important;
+}
+
+.notice-btn.primary-btn:hover {
+  filter: brightness(1.1);
+}
+
+
+
+/* Management Dashboard Local Actions */
+.sb-footer {
+  margin-top: auto;
+  padding: 1rem;
+  border-top: 1px solid var(--sb-rule);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.sb-theme-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 0.85rem;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  color: var(--ink-2);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  width: 100%;
+}
+
+.sb-theme-btn:hover {
+  background: var(--surface);
+  color: var(--green);
+  border-color: var(--green);
+}
+
+.repo-upload-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.65rem 1.25rem;
+  background: var(--green);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 12px rgba(0, 166, 81, 0.2);
+}
+
+.repo-upload-btn:hover {
+  background: var(--green-dk);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(0, 166, 81, 0.3);
 }
 </style>

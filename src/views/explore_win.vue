@@ -3,6 +3,10 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api, type SearchResult, type SearchParams } from '../services/api'
 import { historyService } from '../services/history'
+import {
+  Search, SlidersHorizontal, X, ArrowRight, Filter,
+  Award, User, Calendar
+} from 'lucide-vue-next'
 
 // ── Confidence badge helper ────────────────────────────────────────────────────────
 // Section weights in vector_db.py can push cosine scores above 1.0
@@ -68,6 +72,7 @@ const displayResults = computed(() => results.value)
 const performSearch = async (resetPage: boolean = true) => {
   if (resetPage) currentPage.value = 1
   loading.value = true
+  if (resetPage) results.value = []
   try {
     const params: SearchParams = {
       query: query.value,
@@ -485,15 +490,15 @@ const openMobileSearch = () => {
 
 /* ── Design tokens ───────────────────────────────────────── */
 .results-page {
-  --ink: #181c18;
-  --ink-2: #3d4239;
-  --ink-3: #7a7f75;
-  --rule: #dfe0db;
-  --surface: #f5f5f2;
-  --paper: #ffffff;
-  --green: #00a651;
-  --green-dk: #007d3d;
-  --green-dim: #e6f4ed;
+  --ink: var(--text-primary);
+  --ink-2: var(--text-secondary);
+  --ink-3: var(--text-tertiary);
+  --rule: var(--border-color);
+  --surface: var(--bg-primary);
+  --paper: var(--bg-secondary);
+  --green: var(--accent-primary);
+  --green-dk: var(--accent-primary);
+  --green-dim: rgba(16, 185, 129, 0.1);
 
   min-height: 100vh;
   background: var(--surface);
@@ -579,20 +584,25 @@ const openMobileSearch = () => {
   align-items: center;
   justify-content: center;
   background: transparent;
-  border: 1.5px solid var(--ink);
+  border: 1.5px solid var(--rule);
   border-radius: 4px;
   width: 32px;
   height: 32px;
-  color: var(--ink);
+  color: var(--ink-2);
   cursor: pointer;
-  transition: background 0.14s, color 0.14s;
+  transition: all 0.14s;
   flex-shrink: 0;
 }
 
-.mobile-search-btn:hover,
+.mobile-search-btn:hover {
+  background: var(--surface);
+  border-color: var(--ink-2);
+}
+
 .mobile-search-btn.active {
-  background: var(--ink);
-  color: var(--paper);
+  background: var(--green);
+  border-color: var(--green);
+  color: #fff;
 }
 
 .filter-toggle-btn {
@@ -600,22 +610,27 @@ const openMobileSearch = () => {
   align-items: center;
   gap: 0.4rem;
   background: transparent;
-  border: 1.5px solid var(--ink);
+  border: 1.5px solid var(--rule);
   border-radius: 4px;
   padding: 0.3rem 0.7rem;
   font-family: 'Source Sans 3', sans-serif;
   font-size: 0.72rem;
   font-weight: 600;
-  color: var(--ink);
+  color: var(--ink-2);
   cursor: pointer;
-  transition: background 0.14s, color 0.14s;
+  transition: all 0.14s;
   flex-shrink: 0;
 }
 
-.filter-toggle-btn:hover,
+.filter-toggle-btn:hover {
+  background: var(--surface);
+  border-color: var(--ink-2);
+}
+
 .filter-toggle-btn.active {
-  background: var(--ink);
-  color: var(--paper);
+  background: var(--green);
+  border-color: var(--green);
+  color: #fff;
 }
 
 /* Mobile search bar */
@@ -765,7 +780,9 @@ const openMobileSearch = () => {
 }
 
 .pg-btn:disabled {
-  opacity: 0.4;
+  background: transparent;
+  border-color: var(--border-color);
+  color: var(--text-tertiary);
   cursor: not-allowed;
 }
 
@@ -1092,7 +1109,7 @@ const openMobileSearch = () => {
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--ink-3);
-  background: #ededea;
+  background: var(--bg-tertiary);
   padding: 0.14rem 0.44rem;
   border-radius: 2px;
 }
@@ -1118,18 +1135,18 @@ const openMobileSearch = () => {
 }
 
 .badge-strong {
-  background: #d4f0e2;
-  color: #0a6639;
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
 }
 
 .badge-good {
-  background: #dceeff;
-  color: #1a5fa8;
+  background: rgba(59, 130, 246, 0.15);
+  color: #3b82f6;
 }
 
 .badge-related {
-  background: #efefed;
-  color: #6b7068;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
 }
 
 .section-target-tag {
@@ -1217,7 +1234,7 @@ const openMobileSearch = () => {
   font-size: 0.68rem;
   font-weight: 600;
   color: var(--ink-2);
-  background: #f0f0ed;
+  background: var(--bg-tertiary);
   padding: 0.25rem 0.6rem;
   border-radius: 4px;
 }
@@ -1277,7 +1294,7 @@ const openMobileSearch = () => {
 .sk-title,
 .sk-meta,
 .sk-abstract {
-  background: linear-gradient(90deg, var(--rule) 25%, #e8e8e3 50%, var(--rule) 75%);
+  background: linear-gradient(90deg, var(--skeleton-bg) 25%, var(--skeleton-highlight) 50%, var(--skeleton-bg) 75%);
   background-size: 500px 100%;
   animation: shimmer 1.4s infinite;
   border-radius: 3px;

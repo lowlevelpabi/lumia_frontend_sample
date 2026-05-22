@@ -1,12 +1,11 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useRouter, useRoute, RouterLink } from 'vue-router'
-import { LogIn, Eye, EyeOff, BookOpen, ArrowLeft } from 'lucide-vue-next'
+import { useRoute, RouterLink } from 'vue-router'
+import { LogIn, Eye, EyeOff, ArrowLeft } from 'lucide-vue-next'
 import { api } from '../services/api'
 import { useFormValidation } from '../composables/useformValidation'
 import FormError from '../components/formError.vue'
 
-const router = useRouter()
 const route = useRoute()
 const username = ref('')
 const password = ref('')
@@ -33,7 +32,7 @@ const handleLogin = async () => {
     formData.append('password', password.value)
     await api.login(formData)
     const redirect = route.query.redirect as string | undefined
-    router.push(redirect ? { path: redirect } : { name: 'home' })
+    window.location.href = redirect || '/'
   } catch {
     error.value = 'Invalid username or password.'
   } finally {
@@ -48,9 +47,9 @@ const handleLogin = async () => {
 
       <RouterLink :to="{ name: 'home' }" class="auth-logo">
         <div class="logo-icon">
-          <BookOpen :size="18" color="#fff" stroke-width="2.5" />
+          <img src="/lumia_logo.ico" style="width: 22px; height: 22px; object-fit: contain" />
         </div>
-        <span class="logo-text">LUMIA</span>
+        <span class="logo-text">UMIA</span>
       </RouterLink>
 
       <div class="auth-header">
@@ -103,16 +102,15 @@ const handleLogin = async () => {
 </template>
 
 <style scoped>
-
 .auth-page {
-  --ink: #181c18;
-  --ink-2: #3d4239;
-  --ink-3: #7a7f75;
-  --rule: #dfe0db;
-  --surface: #f5f5f2;
-  --paper: #ffffff;
-  --green: #00a651;
-  --green-dk: #007d3d;
+  --ink: var(--text-primary);
+  --ink-2: var(--text-secondary);
+  --ink-3: var(--text-tertiary);
+  --rule: var(--border-color);
+  --surface: var(--bg-primary);
+  --paper: var(--bg-secondary);
+  --green: var(--accent-primary);
+  --green-dk: var(--accent-primary);
 
   min-height: 100vh;
   display: flex;
@@ -136,27 +134,107 @@ const handleLogin = async () => {
 .auth-logo {
   display: inline-flex;
   align-items: center;
-  gap: 0.55rem;
+  gap: 0.65rem;
   text-decoration: none;
-  margin-bottom: 1.75rem;
+  margin-bottom: 2rem;
+  position: relative;
+  /* We use inline-flex so it centers via text-align: center on card */
 }
 
 .logo-icon {
-  width: 28px;
-  height: 28px;
-  background: var(--green);
-  border-radius: 5px;
+  width: 36px;
+  height: 36px;
+  background: var(--logo-bg);
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  overflow: hidden;
+  position: relative;
+  z-index: 2;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+  border: 1px solid var(--logo-border);
+  /* Stay above text during slide */
+  animation: logo-entrance 1.6s cubic-bezier(0.16, 1, 0.3, 1) forwards,
+    logo-breathe 3s ease-in-out infinite 1.6s;
+}
+
+.logo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .logo-text {
-  font-size: 0.82rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
   color: var(--ink);
+  opacity: 0;
+  z-index: 1;
+  animation: text-reveal 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards 0.8s;
+}
+
+@keyframes logo-entrance {
+  0% {
+    opacity: 0;
+    /* 200px (center) - 36px (padding) - 18px (half-width of 36px) = 146px */
+    transform: translateX(146px) scale(0.9);
+  }
+
+  35% {
+    opacity: 1;
+    transform: translateX(146px) scale(1.1);
+  }
+
+  45% {
+    opacity: 1;
+    transform: translateX(146px) scale(1);
+  }
+
+  75% {
+    transform: translateX(0);
+    /* Return to its natural left-aligned position */
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes text-reveal {
+  0% {
+    opacity: 0;
+    transform: translateX(-40px);
+    /* Hidden behind the logo */
+    filter: blur(4px);
+  }
+
+  30% {
+    opacity: 0.5;
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+    filter: blur(0);
+  }
+}
+
+@keyframes logo-breathe {
+
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 0.85;
+    transform: scale(0.96);
+  }
 }
 
 .auth-header {

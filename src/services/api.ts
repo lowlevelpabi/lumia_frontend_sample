@@ -6,7 +6,7 @@ export const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8
 export interface ImradBlock {
   type: 'subheading' | 'table-label' | 'text' | 'table-image'
   text: string
-  id?: string  // For 'table-image' type
+  id?: string // For 'table-image' type
 }
 
 export interface Paper {
@@ -151,6 +151,8 @@ export interface UserData {
 
 export interface UserResponse extends UserData {
   id: string
+  created_at?: string
+  dark_mode?: boolean
 }
 
 export interface HealthStatus {
@@ -231,8 +233,8 @@ export interface ActivityLog {
 // Returned by GET /papers/sample-documents when ENABLE_SAMPLE_DOCS=true.
 // No file bytes are included — only metadata for display.
 export interface SampleDocument {
-  id: string        // slug used in the fetch URL (e.g. "sample-1")
-  name: string      // Human-readable display label
+  id: string // slug used in the fetch URL (e.g. "sample-1")
+  name: string // Human-readable display label
   size_bytes: number
 }
 
@@ -310,8 +312,10 @@ export const api = {
   },
 
   // Management
-  async listAllPapers(): Promise<Paper[]> {
-    const response = await fetch(`${BASE_URL}/papers/`)
+  async listAllPapers(status?: string): Promise<Paper[]> {
+    const url = new URL(`${BASE_URL}/papers/`)
+    if (status) url.searchParams.append('status', status)
+    const response = await fetch(url.toString())
     if (!response.ok) throw new Error('Failed to list papers')
     return response.json()
   },
@@ -331,7 +335,7 @@ export const api = {
   async getUploadPreview(
     file: File,
     autoExtract: boolean = true,
-    sessionId?: string
+    sessionId?: string,
   ): Promise<{
     session_id: string
     metadata: PartialPaperMetadata
@@ -520,14 +524,6 @@ export const api = {
     return response.json()
   },
 
-  async getUserUploads(): Promise<Paper[]> {
-    const response = await apiFetch(`${BASE_URL}/users/me/uploads`, {
-      headers: getAuthHeaders(),
-    })
-    if (!response.ok) throw new Error('Failed to fetch user uploads')
-    return response.json()
-  },
-
   async updatePassword(data: { current_password: string; new_password: string }): Promise<void> {
     const response = await apiFetch(`${BASE_URL}/users/me/password`, {
       method: 'PATCH',
@@ -601,6 +597,18 @@ export const api = {
     return response.json()
   },
 
+  async updateThemePreference(darkMode: boolean) {
+    const response = await apiFetch(`${BASE_URL}/users/me/theme`, {
+      method: 'PATCH',
+      headers: {
+        ...getAuthHeaders(),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ dark_mode: darkMode }),
+    })
+    if (!response.ok) throw new Error('Failed to update theme preference')
+  },
+
   async getLogs(): Promise<ActivityLog[]> {
     const response = await apiFetch(`${BASE_URL}/logs/`, {
       headers: getAuthHeaders(),
@@ -663,10 +671,9 @@ export const api = {
    * or any blob URL accessible to the user.
    */
   async fetchSampleDocumentAsFile(docId: string, filename: string): Promise<File> {
-    const response = await apiFetch(
-      `${BASE_URL}/papers/sample-documents/${docId}/fetch`,
-      { headers: getAuthHeaders() },
-    )
+    const response = await apiFetch(`${BASE_URL}/papers/sample-documents/${docId}/fetch`, {
+      headers: getAuthHeaders(),
+    })
     if (!response.ok) throw new Error('Failed to fetch sample document from server.')
     const blob = await response.blob()
     return new File([blob], filename, { type: 'application/pdf' })
@@ -681,6 +688,14 @@ export const api = {
       headers: getAuthHeaders(),
     })
     if (!response.ok) throw new Error('Failed to fetch status')
+    return response.json()
+  },
+
+  async getUserUploads(): Promise<Paper[]> {
+    const response = await apiFetch(`${BASE_URL}/papers/my-uploads`, {
+      headers: getAuthHeaders(),
+    })
+    if (!response.ok) throw new Error('Failed to fetch uploads')
     return response.json()
   },
 }
