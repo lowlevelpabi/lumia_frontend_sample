@@ -102,6 +102,12 @@ const METHODOLOGY_SUBHEADING_LABELS = [
   'Testing', 'Implementation', 'Requirement Analysis', 'System Development', 'System Evaluation'
 ]
 
+const INTRODUCTION_SUBHEADING_LABELS = [
+  'Background of the Study', 'Statement of the Problem', 'Research Objectives',
+  'Objectives of the Study', 'Significance of the Study', 'Scope and Delimitation',
+  'Scope and Limitation', 'Definition of Terms', 'Conceptual Framework', 'Theoretical Framework'
+]
+
 const SECTION_KEY_MAP = {
   'Introduction': 'introduction',
   'Methodology': 'methods',
@@ -820,6 +826,17 @@ onMounted(loadSampleDocs)
                   <textarea v-model="uploadMetadata.abstract" class="abstract-area" placeholder="Enter abstract…" />
                 </div>
                 <template
+                  v-if="uploadMetadata.detected_subheadings.some(s => INTRODUCTION_SUBHEADING_LABELS.includes(s))">
+                  <label class="fg-label">Detected Introduction Components:</label>
+                  <div class="sub-tags" style="margin-bottom:0.75rem">
+                    <span
+                      v-for="sub in uploadMetadata.detected_subheadings.filter(s => INTRODUCTION_SUBHEADING_LABELS.includes(s))"
+                      :key="sub" class="sub-tag sub-tag-intro">
+                      <Check :size="12" /> {{ sub }}
+                    </span>
+                  </div>
+                </template>
+                <template
                   v-if="uploadMetadata.detected_subheadings.some(s => METHODOLOGY_SUBHEADING_LABELS.includes(s))">
                   <label class="fg-label">Detected Methodology Components:</label>
                   <div class="sub-tags" style="margin-bottom:0.75rem">
@@ -831,11 +848,11 @@ onMounted(loadSampleDocs)
                   </div>
                 </template>
                 <template
-                  v-if="uploadMetadata.detected_subheadings.some(s => !METHODOLOGY_SUBHEADING_LABELS.includes(s))">
+                  v-if="uploadMetadata.detected_subheadings.some(s => !METHODOLOGY_SUBHEADING_LABELS.includes(s) && !INTRODUCTION_SUBHEADING_LABELS.includes(s))">
                   <label class="fg-label">Detected Results Components:</label>
                   <div class="sub-tags">
                     <span
-                      v-for="sub in uploadMetadata.detected_subheadings.filter(s => !METHODOLOGY_SUBHEADING_LABELS.includes(s))"
+                      v-for="sub in uploadMetadata.detected_subheadings.filter(s => !METHODOLOGY_SUBHEADING_LABELS.includes(s) && !INTRODUCTION_SUBHEADING_LABELS.includes(s))"
                       :key="sub" class="sub-tag sub-tag-results">
                       <Check :size="12" /> {{ sub }}
                     </span>
@@ -846,7 +863,7 @@ onMounted(loadSampleDocs)
               <div class="imrad-tabs">
                 <button v-for="tab in availableImradTabs" :key="tab" type="button" class="imrad-tab-btn"
                   :class="{ active: activeImradTab === tab }" @click="activeImradTab = tab as ImradKey">
-                  {{ tab === 'results' ? 'Results and Discussion' : tab.charAt(0).toUpperCase() + tab.slice(1) }}
+                  {{ tab === 'results' ? 'Results and Discussion' : tab === 'methods' ? 'Methodology' : tab.charAt(0).toUpperCase() + tab.slice(1) }}
                 </button>
               </div>
 
@@ -1874,8 +1891,14 @@ onMounted(loadSampleDocs)
   min-height: 80px;
 }
 
-.abstract-area {
+.fg textarea.abstract-area {
   min-height: 180px !important;
+  font-family: 'Lora', Georgia, serif;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  letter-spacing: 0.01em;
+  padding: 16px 20px;
+  text-align: justify;
 }
 
 .fg-row {
@@ -2047,6 +2070,11 @@ onMounted(loadSampleDocs)
   border-radius: 4px;
 }
 
+.sub-tag-intro {
+  background: rgba(139, 92, 246, 0.1);
+  color: #8b5cf6;
+}
+
 .sub-tag-results {
   background: rgba(245, 158, 11, 0.1);
   color: #d97706;
@@ -2129,14 +2157,16 @@ onMounted(loadSampleDocs)
   background: var(--surface);
   border: 1.5px solid var(--rule);
   border-radius: 10px;
-  padding: 1rem;
-  font-size: 0.9rem;
-  line-height: 1.65;
-  font-family: inherit;
+  padding: 16px 20px;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  font-family: 'Lora', Georgia, serif;
   resize: vertical;
   overflow-y: auto;
   color: var(--ink-2);
   box-sizing: border-box;
+  letter-spacing: 0.01em;
+  text-align: justify;
 }
 
 .imrad-textarea:focus {
@@ -2209,13 +2239,15 @@ onMounted(loadSampleDocs)
 }
 
 .ref-preview-entry {
-  font-size: 0.82rem;
+  font-family: 'Lora', Georgia, serif;
+  font-size: 0.86rem;
   line-height: 1.7;
   color: var(--ink);
   padding: 0.65rem 0 0.65rem 1.75rem;
   text-indent: -1.75rem;
   border-bottom: 1px solid var(--rule);
   word-break: break-word;
+  letter-spacing: 0.01em;
 }
 
 .dark .ref-preview-entry {
@@ -2420,7 +2452,8 @@ onMounted(loadSampleDocs)
   background: #7c3aed;
 }
 
-.sec-badge.methods {
+.sec-badge.methods,
+.sec-badge.methodology {
   background: #2563eb;
 }
 

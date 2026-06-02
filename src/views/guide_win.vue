@@ -50,7 +50,7 @@
               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-green"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
               <h2>Introduction to Lumia</h2>
             </div>
-            <p>Lumia is a next-generation <strong>Research Retrieval and Management System</strong> specifically engineered for academic institutions. Unlike traditional repositories, Lumia uses advanced Natural Language Processing (NLP) to parse complex thesis and capstone documents into structured <strong>IMRAD</strong> (Introduction, Methods, Results, and Discussion) sections.</p>
+            <p>Lumia is a next-generation <strong>Research Retrieval and Management System</strong> specifically engineered for academic institutions. Unlike traditional repositories, Lumia uses advanced Natural Language Processing (NLP) to parse complex thesis and capstone documents into structured <strong>IMRAD</strong> (Introduction, Methodology, Results, and Discussion) sections.</p>
             
             <div class="feature-pills">
               <div class="pill">

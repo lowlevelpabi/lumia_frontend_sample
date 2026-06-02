@@ -100,13 +100,41 @@ const copyToClipboard = async (text: string, key: string) => {
 }
 
 // ── RAD combined detection ────────────────────────────────────────────────────
-// The backend stores identical text in both results + discussion when combined.
+// The backend stores identical (or near-identical) text in both results +
+// discussion when they are a single combined section in the PDF.
+// We detect this via raw-text comparison OR structured-block comparison.
 // Must be defined BEFORE IMRAD_SECTION_CONFIGS which depends on it.
 const isRadCombined = computed(() => {
   if (!paper.value) return false
-  const r = paper.value.results
-  const d = paper.value.discussion
-  return !!(r && d && r.trim() === d.trim())
+
+  // 1. Raw text equality check (fast path)
+  const rawR = paper.value.results ?? ''
+  const rawD = paper.value.discussion ?? ''
+  if (rawR && rawD && rawR.trim() === rawD.trim()) return true
+
+  // 2. Structured blocks equality check (catches cases where raw text differs
+  //    slightly due to whitespace/extraction variance)
+  const imrad = paper.value.imrad_structured
+  if (imrad) {
+    const r = imrad.results ?? []
+    const d = imrad.discussion ?? []
+    // If both non-empty AND the first text block of each matches → combined
+    if (r.length > 0 && d.length > 0) {
+      const rKey = r.map(b => b.text).join('|')
+      const dKey = d.map(b => b.text).join('|')
+      if (rKey === dKey) return true
+      // Also: if discussion blocks are a suffix-subset of results blocks
+      // (backend appended discussion into results), treat as combined
+      if (rKey.endsWith(dKey) || dKey.endsWith(rKey)) return true
+    }
+    // If discussion is empty but results has content → effectively combined
+    if (r.length > 0 && d.length === 0 && rawD === '') return true
+  }
+
+  // 3. If only one side has data at all → treat as effectively combined
+  if (rawR && !rawD) return true
+
+  return false
 })
 
 // Resolve virtual 'rad' key → actual Paper field key ('results')
@@ -319,18 +347,80 @@ const authorList = computed(() => {
 // ── IMRAD structured rendering ────────────────────────────────────────────────
 import type { ImradBlock } from '../services/api'
 
+/**
+ * Normalizes a flat list of ImradBlocks so that:
+ * 1. Each table-label is immediately followed by its table-image (keeps the pair together).
+ * 2. Orphan table-image blocks that appear before their label are moved to follow the label.
+ * 3. Exact consecutive duplicate blocks are removed.
+ *
+ * This fixes backend-side ordering issues where the image block may be emitted
+ * out of sequence relative to its caption, causing body text to appear "cut off".
+ */
+const normalizeBlocks = (blocks: ImradBlock[]): ImradBlock[] => {
+  if (!blocks.length) return blocks
+
+  // Step 1: Remove exact consecutive duplicates
+  const deduped: ImradBlock[] = blocks.filter((block: ImradBlock, idx: number) => {
+    if (idx === 0) return true
+    const prev: ImradBlock = blocks[idx - 1] as ImradBlock
+    return !(prev.type === block.type && prev.text === block.text)
+  })
+
+  // Step 2: Pair table-label with its following table-image
+  // Pattern from backend can be:
+  //   A) label → image  (correct, keep as-is)
+  //   B) image → label  (wrong order, swap)
+  //   C) label → text → image  (image drifted away, pull it back)
+  const result: ImradBlock[] = []
+  let i = 0
+  while (i < deduped.length) {
+    const block: ImradBlock = deduped[i] as ImradBlock
+
+    if (block.type === 'table-label') {
+      // Look ahead: find the matching table-image within the next few blocks
+      result.push(block)
+      i++
+      // Collect non-image blocks immediately after the label
+      const pending: ImradBlock[] = []
+      while (i < deduped.length && (deduped[i] as ImradBlock).type !== 'table-image' && (deduped[i] as ImradBlock).type !== 'table-label') {
+        pending.push(deduped[i] as ImradBlock)
+        i++
+      }
+      // If the next block (after skipped non-image blocks) is a table-image, attach it directly
+      if (i < deduped.length && (deduped[i] as ImradBlock).type === 'table-image') {
+        result.push(deduped[i] as ImradBlock) // image immediately after its label
+        i++
+        result.push(...pending) // text continuation after the table
+      } else {
+        // No image found — just emit pending text and continue
+        result.push(...pending)
+      }
+    } else if (block.type === 'table-image') {
+      // Orphan image with no preceding label — just render it
+      result.push(block)
+      i++
+    } else {
+      result.push(block)
+      i++
+    }
+  }
+
+  return result
+}
+
 // Get structured blocks for a section key, falling back to an empty array.
 const getStructuredBlocks = (key: string): ImradBlock[] => {
   if (!paper.value?.imrad_structured) return []
   if (key === 'rad') {
     const r = paper.value.imrad_structured.results ?? []
     const d = paper.value.imrad_structured.discussion ?? []
-    // If they are identical (backend combined them), just return one
-    if (isRadCombined.value) return r
-    // Otherwise concatenate
-    return [...r, ...d]
+    // If combined (backend duplicated content), only use results blocks
+    if (isRadCombined.value) return normalizeBlocks(r)
+    // Separate sections: merge, then normalize
+    return normalizeBlocks([...r, ...d])
   }
-  return paper.value.imrad_structured[key as keyof typeof paper.value.imrad_structured] ?? []
+  const raw = paper.value.imrad_structured[key as keyof typeof paper.value.imrad_structured] ?? []
+  return normalizeBlocks(raw)
 }
 
 // Whether a section has structured blocks available from the backend

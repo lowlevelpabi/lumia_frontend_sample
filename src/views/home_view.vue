@@ -15,7 +15,7 @@ const searchQuery = ref('')
 const recentPapers = ref<Paper[]>([])
 const loading = ref(true)
 
-const { fullName, isLoggedIn, isStaff, isAdmin, isFaculty, refreshAuth } = useAuth()
+const { fullName, isAdmin, isFaculty } = useAuth()
 const scrollY = ref(0)
 
 const handleScroll = () => {

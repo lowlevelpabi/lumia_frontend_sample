@@ -314,7 +314,7 @@ const openMobileSearch = () => {
                   class="filter-tag"
                   :class="{ active: (s === 'Full Text' && selectedSection === '') || selectedSection === s }"
                   @click="selectedSection = s === 'Full Text' ? '' : s">{{ s === 'Full Text' ? 'Full Text' :
-                    s.charAt(0).toUpperCase() + s.slice(1) }}</button>
+                    s === 'methods' ? 'Methodology' : s.charAt(0).toUpperCase() + s.slice(1) }}</button>
               </div>
             </div>
           </div>

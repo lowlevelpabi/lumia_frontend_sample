@@ -43,6 +43,47 @@ function stripMarkers(text: string): string {
 }
 
 /**
+ * Mirrors normalizeBlocks() in detail_win.vue.
+ * Ensures table-label is always immediately followed by its table-image,
+ * and removes exact consecutive duplicate blocks.
+ */
+function normalizeBlocks(blocks: ImradBlock[]): ImradBlock[] {
+  if (!blocks.length) return blocks
+  // Step 1: Remove exact consecutive duplicates
+  const deduped: ImradBlock[] = blocks.filter((block: ImradBlock, idx: number) => {
+    if (idx === 0) return true
+    const prev: ImradBlock = blocks[idx - 1] as ImradBlock
+    return !(prev.type === block.type && prev.text === block.text)
+  })
+  // Step 2: Pair table-label with its immediately following table-image
+  const result: ImradBlock[] = []
+  let i = 0
+  while (i < deduped.length) {
+    const block: ImradBlock = deduped[i] as ImradBlock
+    if (block.type === 'table-label') {
+      result.push(block)
+      i++
+      const pending: ImradBlock[] = []
+      while (i < deduped.length && (deduped[i] as ImradBlock).type !== 'table-image' && (deduped[i] as ImradBlock).type !== 'table-label') {
+        pending.push(deduped[i] as ImradBlock)
+        i++
+      }
+      if (i < deduped.length && (deduped[i] as ImradBlock).type === 'table-image') {
+        result.push(deduped[i] as ImradBlock)
+        i++
+        result.push(...pending)
+      } else {
+        result.push(...pending)
+      }
+    } else {
+      result.push(block)
+      i++
+    }
+  }
+  return result
+}
+
+/**
  * Unicode sanitiser for jsPDF
  * Even with custom fonts, some complex combining characters (like x-bar)
  * are better handled as readable ASCII to ensure perfect alignment.
@@ -392,11 +433,24 @@ export const pdfExportService = {
     //   Methods/RAD  → imrad_structured typed blocks or stripMarkers(raw)
     // This is the same cleaned data the web view uses — no boilerplate can leak in.
 
-    const isRadCombined = !!(
-      paper.results &&
-      paper.discussion &&
-      paper.results.trim() === paper.discussion.trim()
-    )
+    // Robust combined R&D detection — mirrors isRadCombined in detail_win.vue
+    const rawR = paper.results ?? ''
+    const rawD = paper.discussion ?? ''
+    let isRadCombined = !!(rawR && rawD && rawR.trim() === rawD.trim())
+    if (!isRadCombined) {
+      const imradCheck = paper.imrad_structured
+      if (imradCheck) {
+        const rBlocks: ImradBlock[] = imradCheck.results ?? []
+        const dBlocks: ImradBlock[] = imradCheck.discussion ?? []
+        if (rBlocks.length > 0 && dBlocks.length > 0) {
+          const rKey = rBlocks.map(b => b.text).join('|')
+          const dKey = dBlocks.map(b => b.text).join('|')
+          if (rKey === dKey || rKey.endsWith(dKey) || dKey.endsWith(rKey)) isRadCombined = true
+        }
+        if (!isRadCombined && rBlocks.length > 0 && dBlocks.length === 0 && rawD === '') isRadCombined = true
+      }
+      if (!isRadCombined && rawR && !rawD) isRadCombined = true
+    }
 
     const sections = [
       { label: 'INTRODUCTION', key: 'introduction' },
@@ -415,13 +469,17 @@ export const pdfExportService = {
         if (sec.key === 'rad') {
           const r: ImradBlock[] = imrad.results ?? []
           const d: ImradBlock[] = imrad.discussion ?? []
-          blocks = isRadCombined ? r : [...r, ...d]
+          if (isRadCombined) {
+            blocks = normalizeBlocks(r)
+          } else {
+            blocks = normalizeBlocks([...r, ...d])
+          }
         } else if (sec.key === 'methods') {
-          blocks = imrad.methods ?? []
+          blocks = normalizeBlocks(imrad.methods ?? [])
         } else if (sec.key === 'introduction') {
-          blocks = imrad.introduction ?? []
+          blocks = normalizeBlocks(imrad.introduction ?? [])
         } else {
-          blocks = (imrad as Record<string, ImradBlock[]>)[resolvedKey] ?? []
+          blocks = normalizeBlocks((imrad as Record<string, ImradBlock[]>)[resolvedKey] ?? [])
         }
       }
 

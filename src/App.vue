@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { RouterView, useRoute } from 'vue-router'
 import comp_nav from './components/comp_nav.vue'
 import FloatingUpload from './components/FloatingUpload.vue'
+import ToastNotification from './components/ToastNotification.vue'
 
 const route = useRoute()
 const isAuthPage = computed(() => ['login', 'register'].includes(route.name as string))
@@ -16,6 +17,7 @@ const isHomePage = computed(() => route.name === 'home')
       <RouterView />
     </main>
     <FloatingUpload />
+    <ToastNotification />
   </div>
 </template>
 

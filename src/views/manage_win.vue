@@ -70,6 +70,38 @@ const { isAdmin, isFaculty } = useAuth()
 const { isDark, toggleTheme } = useTheme()
 const canEdit = computed(() => isAdmin.value || isFaculty.value)
 
+const DEPT_ABBR: Record<string, string> = {
+  'computer science': 'CS',
+  'information technology': 'IT',
+  'information systems': 'IS',
+  'computer engineering': 'CpE',
+  'electrical engineering': 'EE',
+  'electronics engineering': 'ECE',
+  'civil engineering': 'CE',
+  'mechanical engineering': 'ME',
+  'industrial engineering': 'IE',
+  'mathematics': 'Math',
+  'physics': 'Physics',
+  'biology': 'Bio',
+  'chemistry': 'Chem',
+  'nursing': 'Nursing',
+  'education': 'Educ',
+  'business administration': 'BA',
+  'accountancy': 'Acctg',
+  'psychology': 'Psych',
+  'architecture': 'Arch',
+}
+
+const formatDept = (dept?: string) => {
+  if (!dept) return '—'
+  const cleaned = dept
+    .replace(/Department of\s+/i, '')
+    .replace(/Dept\.\s+of\s+/i, '')
+    .replace(/Department\s+/i, '')
+    .trim()
+  return DEPT_ABBR[cleaned.toLowerCase()] ?? cleaned
+}
+
 // ── Sidebar collapse ────────────────────────────────────────────
 const sidebarCollapsed = ref(false)
 const mobileSidebarOpen = ref(false)
@@ -335,14 +367,9 @@ const viewDetails = (paper: Paper) => {
 }
 
 // ── Actions ───────────────────────────────────────────────────────
-const handleDelete = async (id: string) => {
-  if (!confirm('Delete this paper? This cannot be undone.')) return
-  try {
-    await api.deletePaper(id)
-    await fetchPapers()
-  } catch {
-    alert('Failed to delete. Are you logged in as admin?')
-  }
+const handleDelete = (id: string) => {
+  selectedRepoIds.value = [id]
+  openBulkModal('delete')
 }
 
 // ── Bulk Actions for Repository ──────────────────────────────────────
@@ -353,6 +380,15 @@ const allRepoSelected = computed({
     selectedRepoIds.value = val ? filteredPapers.value.map(p => p.id) : []
   }
 })
+
+const toggleRepoSelection = (id: string) => {
+  const index = selectedRepoIds.value.indexOf(id)
+  if (index > -1) {
+    selectedRepoIds.value.splice(index, 1)
+  } else {
+    selectedRepoIds.value.push(id)
+  }
+}
 
 const handleBulkDelete = () => {
   if (selectedRepoIds.value.length === 0) return
@@ -540,6 +576,15 @@ const allTrashSelected = computed({
     selectedTrashIds.value = val ? trashedPapers.value.map(p => p.id) : []
   }
 })
+
+const toggleTrashSelection = (id: string) => {
+  const index = selectedTrashIds.value.indexOf(id)
+  if (index > -1) {
+    selectedTrashIds.value.splice(index, 1)
+  } else {
+    selectedTrashIds.value.push(id)
+  }
+}
 
 const handleBulkPurge = () => {
   if (selectedTrashIds.value.length === 0) return
@@ -827,6 +872,12 @@ const METHODOLOGY_SUBHEADING_LABELS = [
   'Statistical Treatment of Data', 'Data Analysis', 'Ethical Considerations',
   'Development Model', 'Analysis and Quick Design', 'Prototype Cycles',
   'Testing', 'Implementation', 'Requirement Analysis', 'System Development', 'System Evaluation'
+]
+
+const INTRODUCTION_SUBHEADING_LABELS = [
+  'Background of the Study', 'Statement of the Problem', 'Research Objectives',
+  'Objectives of the Study', 'Significance of the Study', 'Scope and Delimitation',
+  'Scope and Limitation', 'Definition of Terms', 'Conceptual Framework', 'Theoretical Framework'
 ]
 
 const SECTION_KEY_MAP = {
@@ -1700,6 +1751,21 @@ watch(
                       </div>
                       <template v-if="
                         uploadMetadata.detected_subheadings.some((s) =>
+                          INTRODUCTION_SUBHEADING_LABELS.includes(s),
+                        )
+                      ">
+                        <label class="fg-label">Detected Introduction Components:</label>
+                        <div class="sub-tags" style="margin-bottom: 0.75rem">
+                          <span v-for="sub in uploadMetadata.detected_subheadings.filter((s) =>
+                            INTRODUCTION_SUBHEADING_LABELS.includes(s),
+                          )" :key="sub" class="sub-tag sub-tag-intro">
+                            <Check :size="12" /> {{ sub }}
+                          </span>
+                        </div>
+                      </template>
+
+                      <template v-if="
+                        uploadMetadata.detected_subheadings.some((s) =>
                           METHODOLOGY_SUBHEADING_LABELS.includes(s),
                         )
                       ">
@@ -1715,13 +1781,13 @@ watch(
 
                       <template v-if="
                         uploadMetadata.detected_subheadings.some(
-                          (s) => !METHODOLOGY_SUBHEADING_LABELS.includes(s),
+                          (s) => !METHODOLOGY_SUBHEADING_LABELS.includes(s) && !INTRODUCTION_SUBHEADING_LABELS.includes(s),
                         )
                       ">
                         <label class="fg-label">Detected Results Components:</label>
                         <div class="sub-tags">
                           <span v-for="sub in uploadMetadata.detected_subheadings.filter(
-                            (s) => !METHODOLOGY_SUBHEADING_LABELS.includes(s),
+                            (s) => !METHODOLOGY_SUBHEADING_LABELS.includes(s) && !INTRODUCTION_SUBHEADING_LABELS.includes(s),
                           )" :key="sub" class="sub-tag sub-tag-results">
                             <Check :size="12" /> {{ sub }}
                           </span>
@@ -1734,6 +1800,8 @@ watch(
                         {{
                           tab === 'results'
                             ? 'Results and Discussion'
+                            : tab === 'methods'
+                            ? 'Methodology'
                             : tab.charAt(0).toUpperCase() + tab.slice(1)
                         }}
                       </button>
@@ -1988,13 +2056,13 @@ watch(
                       <span class="check-box"></span>
                     </label>
                   </th>
-                  <th style="width: 50%">Research Paper</th>
-                  <th style="width: 80px">Status</th>
-                  <th style="width: 15%">Department</th>
-                  <th style="width: 80px">Type</th>
-                  <th style="width: 120px">Uploaded By</th>
-                  <th style="width: 80px">Upload Date</th>
-                  <th style="width: 110px; text-align: center;">Actions</th>
+                  <th style="width: 38%">Research Paper</th>
+                  <th style="width: 80px; text-align: center;">Status</th>
+                  <th style="width: 15%; text-align: center;">Department</th>
+                  <th style="width: 80px; text-align: center;">Type</th>
+                  <th style="width: 110px">Uploaded By</th>
+                  <th style="width: 90px">Upload Date</th>
+                  <th style="width: 64px; text-align: center;">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -2048,9 +2116,10 @@ watch(
                   </td>
                 </tr>
                 <tr v-for="paper in filteredPapers" :key="paper.id" class="tbl-row"
-                  :class="{ 'row-selected': selectedRepoIds.includes(paper.id) }">
+                  :class="{ 'row-selected': selectedRepoIds.includes(paper.id) }"
+                  @click="toggleRepoSelection(paper.id)">
                   <td class="trash-check-col">
-                    <label class="custom-check">
+                    <label class="custom-check" @click.stop>
                       <input type="checkbox" :value="paper.id" v-model="selectedRepoIds" />
                       <span class="check-box"></span>
                     </label>
@@ -2061,21 +2130,21 @@ watch(
                         {{ initials(paper.title) }}
                       </div>
                       <div class="paper-info">
-                        <span class="paper-name clickable" @click="viewDetails(paper)" :title="paper.title">{{
+                        <span class="paper-name clickable" @click.stop="viewDetails(paper)" :title="paper.title">{{
                           paper.title }}</span>
                         <span class="paper-author">{{ (paper.author || '').replace(/\|/g, ', ') }}</span>
                       </div>
                     </div>
                   </td>
-                  <td>
+                  <td style="text-align: center;">
                     <span class="type-badge" :class="paper.status === 'Approved' ? 'green' : 'amber'">
                       {{ paper.status ?? 'Approved' }}
                     </span>
                   </td>
-                  <td>
-                    <span class="dept-chip">{{ paper.department }}</span>
+                  <td class="dept-td">
+                    <span class="dept-chip" :title="paper.department">{{ formatDept(paper.department) }}</span>
                   </td>
-                  <td>
+                  <td style="text-align: center;">
                     <span class="type-badge" :class="typeColor(paper.project_type)">{{
                       paper.project_type
                       }}</span>
@@ -2092,7 +2161,7 @@ watch(
                   </td>
                   <td style="text-align: center;">
                     <div class="action-group">
-                      <button @click="handleEdit(paper)" class="row-btn" title="Edit Metadata">
+                      <button @click.stop="handleEdit(paper)" class="row-btn" title="Edit Metadata">
                         <Edit3 :size="13" />
                       </button>
                     </div>
@@ -2138,13 +2207,13 @@ watch(
               <table class="tbl">
                 <thead>
                   <tr>
-                    <th style="width: 50%">Research Paper</th>
-                    <th style="width: 80px">Status</th>
-                    <th style="width: 15%">Department</th>
-                    <th style="width: 80px">Type</th>
-                    <th style="width: 120px">Uploaded By</th>
-                    <th style="width: 80px">Upload Date</th>
-                    <th style="width: 180px; text-align: center;">Actions</th>
+                    <th style="width: 38%">Research Paper</th>
+                    <th style="width: 80px; text-align: center;">Status</th>
+                    <th style="width: 15%; text-align: center;">Department</th>
+                    <th style="width: 80px; text-align: center;">Type</th>
+                    <th style="width: 110px">Uploaded By</th>
+                    <th style="width: 90px">Upload Date</th>
+                    <th style="width: 160px; text-align: center;">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2177,13 +2246,13 @@ watch(
                         </div>
                       </div>
                     </td>
-                    <td>
+                    <td style="text-align: center;">
                       <span class="type-badge amber">Pending</span>
                     </td>
-                    <td>
-                      <span class="dept-text">{{ paper.department }}</span>
+                    <td class="dept-td">
+                      <span class="dept-text" :title="paper.department">{{ formatDept(paper.department) }}</span>
                     </td>
-                    <td>
+                    <td style="text-align: center;">
                       <span class="type-badge" :class="typeColor(paper.project_type)">{{
                         paper.project_type
                         }}</span>
@@ -2265,7 +2334,7 @@ watch(
                   <tr>
                     <th>Academic Member</th>
                     <th>Role</th>
-                    <th class="th-r">Change Role</th>
+                    <th style="text-align: center; width: 120px;">Change Role</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2294,10 +2363,12 @@ watch(
                             : 'blue'
                           ">{{ user.role }}</span>
                       </td>
-                      <td class="td-r">
-                        <button @click="openRoleModal(user)" class="row-btn" title="Change role">
-                          <UserCog :size="13" />
-                        </button>
+                      <td style="text-align: center;">
+                        <div class="action-group">
+                          <button @click="openRoleModal(user)" class="row-btn" title="Change role">
+                            <UserCog :size="13" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   </template>
@@ -2494,12 +2565,12 @@ watch(
                       <span class="check-box"></span>
                     </label>
                   </th>
-                  <th style="width: 50%">Research Paper</th>
-                  <th style="width: 15%">Department</th>
-                  <th style="width: 80px">Type</th>
-                  <th style="width: 120px">Deleted By</th>
-                  <th style="width: 80px">Days Remaining</th>
-                  <th style="width: 110px; text-align: center;">Actions</th>
+                  <th style="width: 38%">Research Paper</th>
+                  <th style="width: 15%; text-align: center;">Department</th>
+                  <th style="width: 80px; text-align: center;">Type</th>
+                  <th style="width: 110px">Deleted By</th>
+                  <th style="width: 100px; text-align: center;">Days Remaining</th>
+                  <th style="width: 64px; text-align: center;">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -2539,9 +2610,10 @@ watch(
                   </td>
                 </tr>
                 <tr v-else v-for="paper in trashedPapers" :key="paper.id" class="tbl-row"
-                  :class="{ 'row-selected': selectedTrashIds.includes(paper.id) }">
+                  :class="{ 'row-selected': selectedTrashIds.includes(paper.id) }"
+                  @click="toggleTrashSelection(paper.id)">
                   <td class="trash-check-col">
-                    <label class="custom-check">
+                    <label class="custom-check" @click.stop>
                       <input type="checkbox" :value="paper.id" v-model="selectedTrashIds" />
                       <span class="check-box"></span>
                     </label>
@@ -2557,10 +2629,10 @@ watch(
                       </div>
                     </div>
                   </td>
-                  <td>
-                    <span class="dept-text">{{ paper.department }}</span>
+                  <td class="dept-td">
+                    <span class="dept-text" :title="paper.department">{{ formatDept(paper.department) }}</span>
                   </td>
-                  <td>
+                  <td style="text-align: center;">
                     <span class="type-badge" :class="typeColor(paper.project_type)">{{
                       paper.project_type
                       }}</span>
@@ -2568,14 +2640,14 @@ watch(
                   <td>
                     <span class="uploader-chip">{{ paper.deleted_by ?? '—' }}</span>
                   </td>
-                  <td>
+                  <td style="text-align: center;">
                     <span class="days-badge" :class="daysBadgeClass(daysRemaining(paper.deleted_at!))">
                       {{ daysRemaining(paper.deleted_at!) }}d left
                     </span>
                   </td>
                   <td style="text-align: center;">
                     <div class="action-group">
-                      <button @click="handleRestore(paper)" class="row-btn restore-btn" title="Restore paper">
+                      <button @click.stop="handleRestore(paper)" class="row-btn restore-btn" title="Restore paper">
                         <ArchiveRestore :size="13" />
                       </button>
                     </div>
@@ -2604,8 +2676,8 @@ watch(
           <div v-if="roleTarget" class="modal-overlay" @click.self="closeRoleModal">
             <div class="modal-card role-modal">
               <div class="modal-head">
-                <div class="modal-head-icon">
-                  <UserCog :size="20" color="#00a651" />
+                <div class="modal-head-icon green">
+                  <UserCog :size="20" />
                 </div>
                 <div>
                   <h3>Change Role</h3>
@@ -2617,46 +2689,48 @@ watch(
                   <X :size="18" />
                 </button>
               </div>
-              <div class="role-opts">
-                <label class="role-opt" :class="{ selected: roleNew === 'Student' }">
-                  <input type="radio" v-model="roleNew" value="Student" />
-                  <div class="role-opt-ico blue">
-                    <Users :size="15" />
-                  </div>
-                  <div class="role-opt-info">
-                    <span class="role-opt-name">Student</span><span class="role-opt-desc">Can search and view papers
-                      only.</span>
-                  </div>
-                  <Check v-if="roleNew === 'Student'" :size="13" class="role-check" />
-                </label>
-                <label class="role-opt" :class="{ selected: roleNew === 'Faculty' }">
-                  <input type="radio" v-model="roleNew" value="Faculty" />
-                  <div class="role-opt-ico green">
-                    <ShieldCheck :size="15" />
-                  </div>
-                  <div class="role-opt-info">
-                    <span class="role-opt-name">Faculty</span><span class="role-opt-desc">Can upload and manage research
-                      papers.</span>
-                  </div>
-                  <Check v-if="roleNew === 'Faculty'" :size="13" class="role-check" />
-                </label>
-                <label class="role-opt" :class="{ selected: roleNew === 'Admin' }">
-                  <input type="radio" v-model="roleNew" value="Admin" />
-                  <div class="role-opt-ico purple">
-                    <ShieldAlert :size="15" />
-                  </div>
-                  <div class="role-opt-info">
-                    <span class="role-opt-name">Admin</span><span class="role-opt-desc">Full access including user
-                      management.</span>
-                  </div>
-                  <Check v-if="roleNew === 'Admin'" :size="13" class="role-check" />
-                </label>
+              <div class="modal-body">
+                <div class="role-opts">
+                  <label class="role-opt student" :class="{ selected: roleNew === 'Student' }">
+                    <input type="radio" v-model="roleNew" value="Student" />
+                    <div class="role-opt-ico blue">
+                      <Users :size="15" />
+                    </div>
+                    <div class="role-opt-info">
+                      <span class="role-opt-name">Student</span>
+                      <span class="role-opt-desc">Can search and view papers only.</span>
+                    </div>
+                    <Check v-if="roleNew === 'Student'" :size="13" class="role-check" />
+                  </label>
+                  <label class="role-opt faculty" :class="{ selected: roleNew === 'Faculty' }">
+                    <input type="radio" v-model="roleNew" value="Faculty" />
+                    <div class="role-opt-ico green">
+                      <ShieldCheck :size="15" />
+                    </div>
+                    <div class="role-opt-info">
+                      <span class="role-opt-name">Faculty</span>
+                      <span class="role-opt-desc">Can upload and manage research papers.</span>
+                    </div>
+                    <Check v-if="roleNew === 'Faculty'" :size="13" class="role-check" />
+                  </label>
+                  <label class="role-opt admin" :class="{ selected: roleNew === 'Admin' }">
+                    <input type="radio" v-model="roleNew" value="Admin" />
+                    <div class="role-opt-ico purple">
+                      <ShieldAlert :size="15" />
+                    </div>
+                    <div class="role-opt-info">
+                      <span class="role-opt-name">Admin</span>
+                      <span class="role-opt-desc">Full access including user management.</span>
+                    </div>
+                    <Check v-if="roleNew === 'Admin'" :size="13" class="role-check" />
+                  </label>
+                </div>
+                <p v-if="roleError" class="role-error">{{ roleError }}</p>
               </div>
-              <p v-if="roleError" class="role-error">{{ roleError }}</p>
               <div class="modal-foot">
                 <button @click="closeRoleModal" class="ghost-btn">Cancel</button>
                 <button @click="handleRoleChange" :disabled="roleChanging || roleNew === roleTarget.role"
-                  class="save-btn">
+                  class="save-btn" :class="roleNew === 'Student' ? 'blue' : roleNew === 'Admin' ? 'purple' : 'green'">
                   <Loader2 v-if="roleChanging" :size="13" class="spin" />
                   <Check v-else :size="13" />
                   {{ roleChanging ? 'Updating…' : 'Confirm Role Change' }}
@@ -2752,7 +2826,7 @@ watch(
           <div v-if="showBulkModal" class="modal-overlay" @click.self="closeBulkModal">
             <div class="modal-card purge-modal">
               <div class="modal-head">
-                <div class="modal-head-icon red">
+                <div class="modal-head-icon" :class="bulkActionType === 'purge' ? 'red' : 'orange'">
                   <Trash2 :size="20" />
                 </div>
                 <div>
@@ -2779,7 +2853,7 @@ watch(
               </div>
               <div class="modal-foot">
                 <button @click="closeBulkModal" class="ghost-btn" :disabled="purging">Cancel</button>
-                <button @click="handleBulkConfirm" class="purge-confirm-btn" :disabled="purging">
+                <button @click="handleBulkConfirm" class="purge-confirm-btn" :class="{ delete: bulkActionType === 'delete' }" :disabled="purging">
                   <Loader2 v-if="purging" :size="13" class="spin" />
                   <Trash2 v-else :size="13" />
                   {{ purging ? 'Processing...' : (bulkActionType === 'purge' ? 'Confirm Erase' : 'Confirm Delete') }}
@@ -3065,11 +3139,12 @@ watch(
   
   font-family: 'Inter', system-ui, sans-serif;
   display: flex;
-  min-height: 100vh;
+  height: calc(100vh - 64px);
   background: var(--bg-primary);
   color: var(--text-primary);
   transition: background-color 0.3s ease, color 0.3s ease;
-  overflow-x: hidden;
+  overflow: hidden;
+  font-size: 0.88rem;
 }
 
 .dark .mgmt {
@@ -3127,13 +3202,19 @@ watch(
   border-right: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: calc(100vh - 64px);
   position: sticky;
   top: 0;
   z-index: 100;
   transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
   overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: none;
   flex-shrink: 0;
+}
+
+.sidebar::-webkit-scrollbar {
+  display: none;
 }
 
 .sidebar.collapsed {
@@ -3176,13 +3257,13 @@ watch(
 .sb-name {
   font-family: 'Lora', serif;
   font-weight: 700;
-  font-size: 1.15rem;
+  font-size: 1.05rem;
   color: var(--text-primary);
   line-height: 1.2;
 }
 
 .sb-sub {
-  font-size: 0.68rem;
+  font-size: 0.64rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--green);
@@ -3195,7 +3276,7 @@ watch(
   letter-spacing: 0.08em;
   color: var(--text-tertiary);
   font-weight: 700;
-  margin: 24px 20px 8px;
+  margin: 16px 20px 8px;
   transition: opacity 0.2s;
   white-space: nowrap;
 }
@@ -3207,7 +3288,7 @@ watch(
 .sb-nav {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   padding: 0 12px;
   flex: 1;
 }
@@ -3216,7 +3297,7 @@ watch(
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 12px;
+  padding: 8px 12px;
   border: 1px solid transparent;
   border-radius: 10px;
   background: transparent;
@@ -3280,12 +3361,12 @@ watch(
 }
 
 .sb-item-label {
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   font-weight: 600;
 }
 
 .sb-item-desc {
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   color: var(--text-tertiary);
   margin-top: 1px;
 }
@@ -3307,11 +3388,11 @@ watch(
 }
 
 .sb-footer {
-  padding: 16px;
+  padding: 12px 16px;
   border-top: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   overflow: hidden;
 }
 
@@ -3368,7 +3449,7 @@ watch(
   flex-direction: column;
   position: relative;
   /* Bound height to viewport so sidebar stays sticky — content scrolls internally */
-  height: 100vh;
+  height: calc(100vh - 64px);
   overflow-y: auto;
   overflow-x: hidden;
 }
@@ -3533,8 +3614,6 @@ watch(
   position: relative;
   z-index: 5;
   width: 100%;
-  max-width: 1400px;
-  margin: 0 auto;
   flex: 1;
 }
 
@@ -3547,14 +3626,14 @@ watch(
 }
 
 .page-title {
-  font-size: 1.75rem;
+  font-size: 1.45rem;
   font-weight: 800;
   color: var(--text-primary);
   letter-spacing: -0.02em;
 }
 
 .page-sub {
-  font-size: 0.88rem;
+  font-size: 0.8rem;
   color: var(--text-secondary);
   margin-top: 4px;
 }
@@ -3604,7 +3683,7 @@ watch(
 
 .stat-val {
   display: block;
-  font-size: 1.5rem;
+  font-size: 1.3rem;
   font-weight: 800;
   color: var(--text-primary);
   line-height: 1.1;
@@ -3613,7 +3692,7 @@ watch(
 
 .stat-lbl {
   display: block;
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   color: var(--text-secondary);
   font-weight: 600;
   margin-top: 3px;
@@ -3969,10 +4048,11 @@ watch(
   width: 100%;
   border-collapse: collapse;
   text-align: left;
+  table-layout: auto;
 }
 
 .tbl th {
-  padding: 10px 14px;
+  padding: 8px 10px;
   font-size: 0.7rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -3983,7 +4063,7 @@ watch(
 }
 
 .tbl td {
-  padding: 10px 14px;
+  padding: 8px 10px;
   font-size: 0.78rem;
   color: var(--text-primary);
   border-bottom: 1px solid var(--border-color);
@@ -4098,7 +4178,7 @@ watch(
 }
 
 .paper-name {
-  font-size: 0.88rem;
+  font-size: 0.8rem;
   font-weight: 650;
   color: var(--text-primary);
   white-space: nowrap;
@@ -4115,7 +4195,7 @@ watch(
 }
 
 .paper-author {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   color: var(--text-secondary);
   margin-top: 2px;
   white-space: nowrap;
@@ -4129,7 +4209,7 @@ watch(
   gap: 4px;
   padding: 4px 10px;
   border-radius: 20px;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.02em;
@@ -4140,14 +4220,32 @@ watch(
 .type-badge.purple { background: var(--purple-dim); color: var(--purple); }
 .type-badge.amber { background: var(--amber-dim); color: var(--amber); }
 
+.dept-td {
+  max-width: 0;
+  overflow: hidden;
+  text-align: center;
+}
+
 .dept-chip {
-  padding: 4px 8px;
-  border-radius: 6px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  font-size: 0.75rem;
+  display: inline-block;
+  font-size: 0.72rem;
   font-weight: 600;
   color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.dept-text {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .uploader-cell {
@@ -4313,6 +4411,18 @@ watch(
 .ghost-btn:hover {
   color: var(--text-primary);
   background: var(--bg-secondary);
+}
+
+.modal-foot .ghost-btn {
+  width: auto;
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 18px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .days-badge {
@@ -5057,6 +5167,11 @@ watch(
   font-weight: 700;
 }
 
+.sub-tag-intro {
+  background: var(--purple-dim);
+  color: var(--purple);
+}
+
 .sub-tag-results {
   background: var(--blue-dim);
   color: var(--blue);
@@ -5117,12 +5232,14 @@ watch(
   border: 1px solid var(--border-color);
   background: var(--bg-secondary);
   color: var(--text-primary);
-  padding: 12px;
+  padding: 16px 20px;
   font-size: 0.85rem;
-  line-height: 1.5;
+  line-height: 1.6;
   outline: none;
-  font-family: inherit;
+  font-family: 'Lora', Georgia, serif;
   resize: vertical;
+  letter-spacing: 0.01em;
+  text-align: justify;
 }
 
 .imrad-textarea:focus {
@@ -5133,8 +5250,14 @@ watch(
   min-height: 280px;
 }
 
-.abstract-area {
+.fg textarea.abstract-area {
   min-height: 100px;
+  font-family: 'Lora', Georgia, serif;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  letter-spacing: 0.01em;
+  padding: 16px 20px;
+  text-align: justify;
 }
 
 /* Reference split preview */
@@ -5190,11 +5313,13 @@ watch(
 }
 
 .ref-preview-entry {
-  font-size: 0.78rem;
-  line-height: 1.4;
+  font-family: 'Lora', Georgia, serif;
+  font-size: 0.85rem;
+  line-height: 1.6;
   color: var(--text-primary);
   border-left: 2px solid var(--green);
   padding-left: 8px;
+  letter-spacing: 0.01em;
 }
 
 .ref-preview-empty {
@@ -5372,8 +5497,10 @@ watch(
   text-transform: uppercase;
 }
 .sec-badge.introduction { background: var(--blue); }
-.sec-badge.methodology { background: var(--purple); }
-.sec-badge.results { background: var(--orange); }
+.sec-badge.methodology,
+.sec-badge.methods { background: var(--purple); }
+.sec-badge.results,
+.sec-badge.discussion { background: var(--orange); }
 .sec-badge.references { background: var(--red); }
 
 .thumb-hover-hint {
@@ -5505,6 +5632,35 @@ watch(
   justify-content: center;
   z-index: 1000;
   padding: 20px;
+
+  /* Theme variables for teleported elements */
+  --blue: #3b82f6;
+  --blue-dim: rgba(59, 130, 246, 0.1);
+  --orange: #f97316;
+  --orange-dim: rgba(249, 115, 22, 0.1);
+  --purple: #8b5cf6;
+  --purple-dim: rgba(139, 92, 246, 0.1);
+  --green: #00a651;
+  --green-dim: rgba(0, 166, 81, 0.15);
+  --amber: #f59e0b;
+  --amber-dim: rgba(245, 158, 11, 0.1);
+  --red: #ef4444;
+  --red-dim: rgba(239, 68, 68, 0.1);
+}
+
+.dark .modal-overlay {
+  --blue: #60a5fa;
+  --blue-dim: rgba(96, 165, 250, 0.15);
+  --orange: #fb923c;
+  --orange-dim: rgba(251, 146, 60, 0.15);
+  --purple: #a78bfa;
+  --purple-dim: rgba(167, 139, 250, 0.15);
+  --green: #00c853;
+  --green-dim: rgba(0, 200, 83, 0.15);
+  --amber: #fbbf24;
+  --amber-dim: rgba(251, 191, 36, 0.15);
+  --red: #f87171;
+  --red-dim: rgba(248, 113, 113, 0.15);
 }
 
 .modal-card {
@@ -5622,25 +5778,41 @@ watch(
 .save-btn.green {
   background: var(--green);
 }
+.save-btn.blue {
+  background: var(--blue);
+}
+.save-btn.blue:hover {
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
+}
+.save-btn.purple {
+  background: var(--purple);
+}
+.save-btn.purple:hover {
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.25);
+}
 
 /* Role modal styling */
+.role-modal {
+  max-width: 460px;
+}
+
 .role-opts {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 .role-opt {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 16px;
-  border-radius: 10px;
+  padding: 14px 16px;
+  border-radius: 12px;
   border: 1px solid var(--border-color);
   background: var(--bg-secondary);
   cursor: pointer;
   position: relative;
-  transition: all 0.2s;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .role-opt input {
@@ -5648,17 +5820,50 @@ watch(
   opacity: 0;
 }
 
-.role-opt:hover, .role-opt.selected {
-  border-color: var(--green);
+.role-opt:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
 }
 
-.role-opt.selected {
+/* Student (Blue) Option */
+.role-opt.student:hover,
+.role-opt.student.selected {
+  border-color: var(--blue);
+}
+.role-opt.student.selected {
+  background: var(--blue-dim);
+}
+.role-opt.student .role-check {
+  color: var(--blue);
+}
+
+/* Faculty (Green) Option */
+.role-opt.faculty:hover,
+.role-opt.faculty.selected {
+  border-color: var(--green);
+}
+.role-opt.faculty.selected {
   background: var(--green-dim);
+}
+.role-opt.faculty .role-check {
+  color: var(--green);
+}
+
+/* Admin (Purple) Option */
+.role-opt.admin:hover,
+.role-opt.admin.selected {
+  border-color: var(--purple);
+}
+.role-opt.admin.selected {
+  background: var(--purple-dim);
+}
+.role-opt.admin .role-check {
+  color: var(--purple);
 }
 
 .role-opt-ico {
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   border-radius: 8px;
   display: flex;
   align-items: center;
@@ -5676,19 +5881,16 @@ watch(
 }
 
 .role-opt-name {
-  font-size: 0.85rem;
+  font-size: 0.88rem;
   font-weight: 700;
   color: var(--text-primary);
 }
 
 .role-opt-desc {
-  font-size: 0.72rem;
+  font-size: 0.74rem;
   color: var(--text-secondary);
-  margin-top: 1px;
-}
-
-.role-check {
-  color: var(--green);
+  margin-top: 2px;
+  line-height: 1.3;
 }
 
 .role-error {
@@ -5823,6 +6025,12 @@ watch(
   line-height: 1.4;
 }
 
+.modal-card.purge-modal {
+  max-width: 440px;
+}
+
+.modal-head-icon.orange { background: var(--orange-dim); color: var(--orange); }
+
 .purge-confirm-btn {
   display: inline-flex;
   align-items: center;
@@ -5841,6 +6049,14 @@ watch(
 
 .purge-confirm-btn:hover {
   box-shadow: 0 4px 12px rgba(239, 68, 68, 0.25);
+}
+
+.purge-confirm-btn.delete {
+  background: var(--orange);
+}
+
+.purge-confirm-btn.delete:hover {
+  box-shadow: 0 4px 12px rgba(249, 115, 22, 0.25);
 }
 
 /* Mini / Approve Modal */
@@ -6380,5 +6596,19 @@ watch(
     transform: rotate(90deg);
     margin: 8px 0;
   }
+}
+</style>
+
+<style>
+/* Global override for management view layout to prevent outer body scrolling */
+body:has(.mgmt) {
+  overflow: hidden !important;
+}
+
+body:has(.mgmt) .main-content {
+  margin-top: 0 !important;
+  padding-top: 64px !important;
+  height: 100vh !important;
+  overflow: hidden !important;
 }
 </style>\n
