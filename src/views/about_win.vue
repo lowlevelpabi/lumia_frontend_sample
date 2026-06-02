@@ -221,7 +221,7 @@ const developers = [
   {
     name: "RYAN ANDREW A. REYES",
     initials: "RR",
-    image: "/authors/kumag.jpg",
+    image: "",
     course: "BS Computer Science",
     role: "Lead Developer · UI/UX · Document",
     quote: "Kung di mo kaya, wag mo gawin. Maging irregular ka na lang para welcome to the club!",
