@@ -4071,17 +4071,23 @@ watch(
 }
 
 .tbl-row {
-  transition: background-color 0.2s, transform 0.2s;
+  transition: background-color 0.15s, box-shadow 0.15s;
+  cursor: pointer;
 }
 
 .tbl-row:hover {
-  background-color: rgba(0, 166, 81, 0.015);
+  background-color: rgba(0, 166, 81, 0.04);
 }
 .dark .tbl-row:hover {
-  background-color: rgba(255, 255, 255, 0.01);
+  background-color: rgba(255, 255, 255, 0.03);
 }
 
 .tbl-row.row-selected {
+  background-color: var(--green-dim);
+  box-shadow: inset 3px 0 0 var(--green);
+}
+
+.tbl-row.row-selected:hover {
   background-color: var(--green-dim);
 }
 
@@ -5114,6 +5120,21 @@ watch(
 .add-btn:hover {
   border-color: var(--green);
   background: var(--green-dim);
+}
+
+.page-head .add-btn {
+  width: auto;
+  border: 1px solid var(--green);
+  background: var(--green);
+  color: #ffffff;
+}
+
+.page-head .add-btn:hover {
+  background: var(--green);
+  border-color: var(--green);
+  color: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 166, 81, 0.2);
 }
 
 .review-main {
