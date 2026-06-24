@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch, onUnmounted } from "vue";
+import { ref, onMounted, watch, onUnmounted, computed } from "vue";
 import { useRouter, useRoute, RouterLink } from "vue-router";
 import {
   Search,
@@ -20,7 +20,7 @@ import {
   Moon,
   Sun,
 } from "lucide-vue-next";
-import { api, type Paper } from "../services/api";
+import { api, type Paper, BASE_URL } from "../services/api";
 import { useAuth } from "../composables/useAuth";
 import { historyService } from "../services/history";
 import { useTheme } from "../composables/useTheme";
@@ -45,6 +45,38 @@ const showLogoutModal = ref(false);
 const { isLoggedIn, isStaff, fullName, userRole, refreshAuth } = useAuth();
 const { isDark, toggleTheme, setTheme, resetTheme } = useTheme();
 
+const currentUserDetails = ref<any>(null);
+
+const fetchUserDetails = async () => {
+  if (isLoggedIn.value) {
+    try {
+      const userData = await api.getUserMe();
+      currentUserDetails.value = userData;
+      if (userData.dark_mode !== undefined) {
+        setTheme(userData.dark_mode);
+      }
+    } catch (e) {
+      console.error("Failed to sync theme preference/user details:", e);
+    }
+  } else {
+    currentUserDetails.value = null;
+  }
+};
+
+const avatarSrc = computed(() => {
+  if (currentUserDetails.value?.avatar_url) {
+    const base = BASE_URL.replace('/api/v1', '');
+    return `${base}${currentUserDetails.value.avatar_url}`;
+  }
+  return '/avatar.png'; // fallback default
+});
+
+const avatarInitials = computed(() => {
+  const name = currentUserDetails.value?.full_name || currentUserDetails.value?.username || '';
+  if (!name) return 'U';
+  return name.slice(0, 2).toUpperCase();
+});
+
 const scrolled = ref(false);
 const handleScroll = () => {
   scrolled.value = window.scrollY > 50;
@@ -60,21 +92,12 @@ const closeProfileMenu = (e: MouseEvent) => {
 
 onMounted(async () => {
   refreshAuth();
+  fetchUserDetails();
   searchHistory.value = historyService.getHistory();
   window.addEventListener("click", closeProfileMenu);
   window.addEventListener("scroll", handleScroll);
-
-  // Sync theme from database if logged in
-  if (isLoggedIn.value) {
-    try {
-      const userData = await api.getUserMe();
-      if (userData.dark_mode !== undefined) {
-        setTheme(userData.dark_mode);
-      }
-    } catch (e) {
-      console.error("Failed to sync theme preference:", e);
-    }
-  }
+  window.addEventListener("avatar-update", fetchUserDetails);
+  window.addEventListener("auth-change", fetchUserDetails);
 
   // Close history when clicking outside
   document.addEventListener("click", (e) => {
@@ -87,6 +110,8 @@ onMounted(async () => {
 onUnmounted(() => {
   window.removeEventListener("click", closeProfileMenu);
   window.removeEventListener("scroll", handleScroll);
+  window.removeEventListener("avatar-update", fetchUserDetails);
+  window.removeEventListener("auth-change", fetchUserDetails);
 });
 
 // Watch for route changes to refresh auth and close menus
@@ -94,6 +119,7 @@ watch(
   () => route.path,
   () => {
     refreshAuth();
+    fetchUserDetails();
     showMobileMenu.value = false;
     showProfileMenu.value = false;
     showMobileSearch.value = false;
@@ -208,6 +234,7 @@ const removeSelected = async () => {
         v-if="
           ![
             'home',
+            'explore',
             'management',
             'login',
             'register',
@@ -289,53 +316,74 @@ const removeSelected = async () => {
         <div class="nav-divider"></div>
 
         <template v-if="isLoggedIn">
-          <!-- Theme Toggle -->
-          <button
-            class="theme-toggle-btn"
-            @click="toggleTheme"
-            :title="isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'"
-          >
-            <transition name="scale" mode="out-in">
-              <Sun v-if="isDark" :size="18" />
-              <Moon v-else :size="18" />
-            </transition>
-          </button>
-
-          <div class="nav-divider"></div>
-          <div class="nav-profile-container">
-            <button class="nav-profile-trigger" @click.stop="showProfileMenu = !showProfileMenu">
-              <div class="profile-avatar">
-                <img src="/avatar.png" alt="User Avatar" />
-              </div>
-              <div class="profile-info">
-                <span class="profile-name">{{ fullName || "Academic User" }}</span>
-                <span class="profile-role">{{ userRole }}</span>
-              </div>
-              <ChevronDown
-                :size="14"
-                class="dropdown-arrow"
-                :class="{ rotated: showProfileMenu }"
-              />
+          <div class="desktop-action-card">
+            <!-- Theme Toggle -->
+            <button
+              class="theme-toggle-btn"
+              @click="toggleTheme"
+              :title="isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'"
+            >
+              <transition name="scale" mode="out-in">
+                <Sun v-if="isDark" :size="18" />
+                <Moon v-else :size="18" />
+              </transition>
             </button>
 
-            <!-- Desktop Dropdown -->
+            <div class="card-divider"></div>
+
+            <div class="nav-profile-container">
+              <button class="nav-profile-trigger" @click.stop="showProfileMenu = !showProfileMenu">
+                <div class="profile-avatar">
+                  <img :src="avatarSrc" alt="User Avatar" />
+                </div>
+                <div class="profile-info">
+                  <span class="profile-name">{{ fullName || "Academic User" }}</span>
+                  <span class="profile-role">{{ userRole }}</span>
+                </div>
+                <ChevronDown
+                  :size="14"
+                  class="dropdown-arrow"
+                  :class="{ rotated: showProfileMenu }"
+                />
+              </button>
+
+            <!-- Desktop Dropdown (Revamped) -->
             <transition name="dropdown-slide">
               <div v-if="showProfileMenu" class="nav-dropdown">
-                <div class="dropdown-header">Account</div>
+                <!-- User details header inside dropdown -->
+                <div class="dropdown-user-header">
+                  <div class="dropdown-user-avatar">
+                    <img :src="avatarSrc" alt="User Avatar" />
+                  </div>
+                  <div class="dropdown-user-details">
+                    <span class="dropdown-user-name">{{ currentUserDetails?.full_name || fullName || "Academic User" }}</span>
+                    <span class="dropdown-user-role-badge" :class="userRole.toLowerCase()">{{ userRole }}</span>
+                  </div>
+                </div>
+                
+                <div class="dropdown-divider-accent"></div>
+                
                 <RouterLink :to="{ name: 'profile' }" class="dropdown-item">
-                  <UserCircle :size="16" /> My Account
+                  <div class="dropdown-icon-wrapper"><UserCircle :size="15" /></div>
+                  <span>My Account</span>
                 </RouterLink>
+                
                 <a href="#" @click.prevent="openBookmarkModal" class="dropdown-item">
-                  <Bookmark :size="16" /> Bookmarks
+                  <div class="dropdown-icon-wrapper"><Bookmark :size="15" /></div>
+                  <span>Bookmarks</span>
                 </a>
+                
                 <div class="dropdown-divider"></div>
+                
                 <button @click="logout" class="dropdown-item logout-btn">
-                  <LogOut :size="16" /> Sign Out
+                  <div class="dropdown-icon-wrapper"><LogOut :size="15" /></div>
+                  <span>Sign Out</span>
                 </button>
               </div>
             </transition>
           </div>
-        </template>
+        </div>
+      </template>
 
         <template v-else>
           <RouterLink :to="{ name: 'login' }" class="get-started-btn">
@@ -389,7 +437,7 @@ const removeSelected = async () => {
             <div class="drawer-user-cover"></div>
             <div class="drawer-user-info">
               <div class="drawer-avatar">
-                <img src="/avatar.png" alt="User Avatar" />
+                <img :src="avatarSrc" alt="User Avatar" />
               </div>
               <div class="drawer-text">
                 <span class="drawer-name">{{ fullName || "Academic User" }}</span>
@@ -658,9 +706,17 @@ const removeSelected = async () => {
 }
 
 .global-navbar.is-scrolled {
-  background: var(--navbar-bg);
+  background: rgba(255, 255, 255, 0.8) !important;
+  backdrop-filter: blur(20px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(180%) !important;
   border-bottom: 1.5px solid var(--border-color);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+}
+
+.dark .global-navbar.is-scrolled {
+  background: rgba(5, 5, 5, 0.75) !important;
+  backdrop-filter: blur(20px) saturate(160%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(160%) !important;
 }
 
 /* Subtle top-border accent to match the institutional theme */
@@ -923,8 +979,36 @@ const removeSelected = async () => {
   gap: 6px;
   padding: 8px 14px;
   border-radius: 4px;
-  transition: all 0.15s;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   white-space: nowrap;
+  position: relative;
+}
+
+/* Elegant slide-out active indicators */
+.nav-item::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 0;
+  height: 2px;
+  background: var(--accent-primary);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  transform: translateX(-50%);
+  border-radius: 2px;
+}
+
+.nav-item:hover::after,
+.nav-item.router-link-active::after {
+  width: 60%;
+}
+
+.nav-item--mgmt::after {
+  background: var(--accent-secondary) !important;
+}
+
+.nav-item--mgmt.router-link-active::after {
+  background: var(--accent-primary) !important;
 }
 
 /* Theme-sensitive text color for transparent home navbar */
@@ -962,16 +1046,21 @@ const removeSelected = async () => {
 
 .nav-item:hover {
   color: var(--text-primary);
-  background: var(--bg-tertiary);
+  background: rgba(0, 166, 81, 0.04);
 }
 
 .global-navbar:not(.is-scrolled) .nav-item:hover {
+  color: var(--text-primary);
+  background: rgba(24, 28, 24, 0.06);
+}
+
+.dark .global-navbar:not(.is-scrolled) .nav-item:hover {
   color: #fff;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .nav-item.router-link-active:not(.logout-btn) {
-  color: var(--accent-primary);
+  color: var(--accent-primary) !important;
 }
 
 .nav-item.nav-item--active {
@@ -984,12 +1073,47 @@ const removeSelected = async () => {
 
 .nav-item--mgmt.router-link-active {
   color: var(--accent-primary) !important;
-  background: rgba(0, 166, 81, 0.08) !important;
+  background: rgba(0, 166, 81, 0.04) !important;
 }
 
 .nav-item--mgmt:hover:not(.router-link-active) {
   color: var(--accent-secondary) !important;
-  background: rgba(59, 130, 246, 0.08) !important;
+  background: rgba(59, 130, 246, 0.04) !important;
+}
+
+/* ── Desktop Action Hub Card ── */
+.desktop-action-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  padding: 4px 12px 4px 6px;
+  border-radius: 50px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: var(--shadow-sm);
+}
+
+.dark .desktop-action-card {
+  background: rgba(30, 30, 30, 0.5);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.desktop-action-card:hover {
+  border-color: var(--accent-primary);
+  box-shadow: 0 4px 12px rgba(0, 166, 81, 0.08);
+  background: var(--bg-secondary);
+}
+
+.dark .desktop-action-card:hover {
+  background: rgba(40, 40, 40, 0.6);
+}
+
+.card-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border-color);
+  margin: 0 4px;
 }
 
 .drawer-item--mgmt {
@@ -1127,27 +1251,107 @@ const removeSelected = async () => {
   opacity: 0;
 }
 
-/* ── Dropdown Menu (Desktop) ─────────────────────────────────── */
+/* ── Dropdown Menu (Desktop - Revamped) ─────────────────────────── */
 .nav-dropdown {
   position: absolute;
   top: calc(100% + 12px);
   right: 0;
-  width: 240px;
+  width: 260px;
   background: var(--bg-secondary);
-  border: 1.5px solid var(--border-color);
-  border-radius: 8px;
-  box-shadow: var(--shadow-md);
-  padding: 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 16px -6px rgba(0, 0, 0, 0.05);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  padding: 12px;
   z-index: 1001;
+  transform-origin: top right;
 }
 
-.dropdown-header {
-  padding: 8px 12px 12px;
-  font-size: 0.65rem;
+.dark .nav-dropdown {
+  background: rgba(30, 30, 30, 0.85);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 16px -6px rgba(0, 0, 0, 0.2);
+}
+
+.dropdown-user-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 4px 10px;
+}
+
+.dropdown-user-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 2px solid var(--accent-primary);
+  background: var(--bg-tertiary);
+  flex-shrink: 0;
+}
+
+.dropdown-user-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.dropdown-user-details {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.dropdown-user-name {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 140px;
+}
+
+.dropdown-user-role-badge {
+  font-size: 0.6rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--text-tertiary);
+  letter-spacing: 0.05em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-top: 3px;
+  background: rgba(37, 99, 235, 0.1);
+  color: #3b82f6;
+}
+
+.dropdown-user-role-badge.admin {
+  background: rgba(124, 58, 237, 0.1);
+  color: #a78bfa;
+}
+
+.dropdown-user-role-badge.faculty {
+  background: rgba(0, 166, 81, 0.1);
+  color: #10b981;
+}
+
+.dropdown-divider-accent {
+  height: 1px;
+  background: linear-gradient(to right, var(--accent-primary), transparent);
+  margin: 4px 0 10px;
+  opacity: 0.4;
+}
+
+.dropdown-icon-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  transition: all 0.25s;
 }
 
 .dropdown-item {
@@ -1155,33 +1359,45 @@ const removeSelected = async () => {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 12px;
+  padding: 6px 8px;
   text-decoration: none;
   font-family: "Source Sans 3", sans-serif;
   font-size: 0.85rem;
-  font-weight: 500;
-  color: var(--text-primary);
-  border-radius: 6px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  border-radius: 8px;
   border: none;
   background: none;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: all 0.2s;
+  margin-bottom: 2px;
 }
 
 .dropdown-item:hover {
   background: var(--bg-tertiary);
-  color: var(--accent-primary);
+  color: var(--text-primary);
+}
+
+.dropdown-item:hover .dropdown-icon-wrapper {
+  background: var(--accent-primary);
+  color: #fff;
+  transform: scale(1.05);
 }
 
 .dropdown-divider {
   height: 1px;
   background: var(--border-color);
-  margin: 8px 0;
+  margin: 6px 0;
 }
 
 .logout-btn:hover {
   color: #ef4444;
-  background: #fef2f2;
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.logout-btn:hover .dropdown-icon-wrapper {
+  background: #ef4444;
+  color: #fff;
 }
 
 /* ── Mobile Controls ─────────────────────────────────────────── */
@@ -1200,15 +1416,42 @@ const removeSelected = async () => {
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
   border-radius: 8px;
-  color: var(--text-primary);
+  color: var(--text-primary) !important;
   cursor: pointer;
   transition: all 0.2s;
 }
 
+.mobile-control-btn:hover {
+  background: var(--bg-secondary);
+  border-color: var(--accent-primary);
+  color: var(--accent-primary) !important;
+}
+
+.mobile-control-btn svg {
+  color: inherit !important;
+  stroke: currentColor !important;
+}
+
 .global-navbar:not(.is-scrolled) .mobile-control-btn {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.2);
-  color: #fff;
+  background: rgba(24, 28, 24, 0.05) !important;
+  border-color: rgba(24, 28, 24, 0.1) !important;
+  color: rgba(24, 28, 24, 0.8) !important;
+}
+
+.global-navbar:not(.is-scrolled) .mobile-control-btn:hover {
+  background: rgba(24, 28, 24, 0.1) !important;
+  color: var(--accent-primary) !important;
+}
+
+.dark .global-navbar:not(.is-scrolled) .mobile-control-btn {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+.dark .global-navbar:not(.is-scrolled) .mobile-control-btn:hover {
+  background: rgba(255, 255, 255, 0.15) !important;
+  color: var(--accent-primary) !important;
 }
 
 @media (max-width: 860px) {
@@ -1891,9 +2134,15 @@ button.drawer-item {
   z-index: 2;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
   border: 1px solid var(--logo-border);
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
   animation:
     logo-entrance 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards,
     logo-breathe 3s ease-in-out infinite 0.8s;
+}
+
+.nav-logo:hover .logo-icon {
+  transform: scale(1.06) rotate(3deg);
+  filter: drop-shadow(0 0 10px rgba(0, 166, 81, 0.4));
 }
 
 /* Merged with main .logo-text definition in variables section */

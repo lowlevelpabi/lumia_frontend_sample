@@ -4,15 +4,17 @@ import { RouterLink } from 'vue-router'
 import {
   Loader2, ArrowUpRight,
   User, KeyRound,
-  ShieldCheck, BookMarked, FileUp, AlertTriangle, Clock, Trash2
+  ShieldCheck, BookMarked, FileUp, AlertTriangle, Clock, Trash2, Camera
 } from 'lucide-vue-next'
-import { api, type Paper } from '../services/api'
+import { api, type Paper, BASE_URL } from '../services/api'
+import { useToastStore } from '../stores/toast'
 
 interface UserDetails {
   id: string
   username: string
   role: string
   created_at?: string
+  avatar_url?: string
 }
 
 // ── State ─────────────────────────────────────────────────────────────────────
@@ -28,6 +30,67 @@ const uploadLoading = ref(false)
 const cancelLoading = ref<string | null>(null)
 const showCancelModal = ref(false)
 const paperToCancel = ref<Paper | null>(null)
+
+const toastStore = useToastStore()
+const fileInput = ref<HTMLInputElement | null>(null)
+const avatarUploading = ref(false)
+
+const avatarSrc = computed(() => {
+  if (!user.value?.avatar_url) return ''
+  const base = BASE_URL.replace('/api/v1', '')
+  return `${base}${user.value.avatar_url}`
+})
+
+const onAvatarFileSelected = async (event: Event) => {
+  const target = event.target as HTMLInputElement
+  const file = target.files?.[0]
+  if (!file) return
+
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+  if (!allowedTypes.includes(file.type)) {
+    toastStore.addToast({
+      title: 'Invalid File Type',
+      description: 'Please upload a JPEG, PNG, GIF, or WEBP image.',
+      type: 'error'
+    })
+    return
+  }
+
+  if (file.size > 5 * 1024 * 1024) {
+    toastStore.addToast({
+      title: 'File Too Large',
+      description: 'Maximum image size is 5MB.',
+      type: 'error'
+    })
+    return
+  }
+
+  avatarUploading.value = true
+  try {
+    const updatedUser = await api.uploadAvatar(file)
+    if (user.value) {
+      user.value.avatar_url = updatedUser.avatar_url
+    }
+    toastStore.addToast({
+      title: 'Success',
+      description: 'Profile picture updated successfully.',
+      type: 'success'
+    })
+    window.dispatchEvent(new CustomEvent('avatar-update'))
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Failed to upload image.'
+    toastStore.addToast({
+      title: 'Upload Failed',
+      description: msg,
+      type: 'error'
+    })
+  } finally {
+    avatarUploading.value = false
+    if (fileInput.value) {
+      fileInput.value.value = ''
+    }
+  }
+}
 
 // ── Credentials form ──────────────────────────────────────────────────────────
 const credForm = ref({ currentPassword: '', newPassword: '', confirmPassword: '' })
@@ -168,7 +231,18 @@ onMounted(fetchData)
         
         <div class="hero-inner">
           <div class="hero-avatar-wrap">
-            <div class="hero-avatar">{{ avatarInitials }}</div>
+            <div class="hero-avatar">
+              <img v-if="user.avatar_url" :src="avatarSrc" class="avatar-img-element" alt="User Avatar" />
+              <span v-else>{{ avatarInitials }}</span>
+              
+              <label class="avatar-upload-overlay" title="Upload profile picture">
+                <Camera :size="22" class="camera-icon" />
+                <input type="file" ref="fileInput" @change="onAvatarFileSelected" accept="image/*" class="avatar-file-input" />
+              </label>
+            </div>
+            <div v-if="avatarUploading" class="avatar-upload-spinner">
+              <Loader2 :size="20" class="spin" />
+            </div>
             <div class="hero-status-dot"></div>
           </div>
 
@@ -611,6 +685,8 @@ onMounted(fetchData)
 }
 
 .hero-avatar {
+  position: relative;
+  overflow: hidden;
   width: 110px;
   height: 110px;
   border-radius: 50%;
@@ -625,6 +701,47 @@ onMounted(fetchData)
   box-shadow: 0 10px 30px -5px rgba(0, 166, 81, 0.4);
   border: 4px solid var(--surface);
   transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.avatar-img-element {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+.avatar-upload-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 0.25s ease-in-out;
+  backdrop-filter: blur(2px);
+}
+
+.hero-avatar:hover .avatar-upload-overlay {
+  opacity: 1;
+}
+
+.avatar-file-input {
+  display: none;
+}
+
+.avatar-upload-spinner {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 15, 15, 0.7);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
 }
 
 .hero-avatar-wrap:hover .hero-avatar {

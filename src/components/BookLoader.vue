@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Loader2 } from 'lucide-vue-next'
 
 const props = defineProps<{
   progress?: number
@@ -21,10 +20,22 @@ const progressDigits = computed(() => {
 <template>
   <div class="minimal-loader">
     <div class="spinner-container">
-      <!-- Orbiting spinner -->
+      <!-- Premium SVG Orbiting Ring Spinner -->
       <div class="spinner-orbit">
         <div class="orbit-glow"></div>
-        <Loader2 :size="140" class="main-spinner" stroke-width="1.2" />
+        <svg class="ring-svg" viewBox="0 0 160 160">
+          <defs>
+            <linearGradient id="spinnerGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="var(--green-color)" stop-opacity="1" />
+              <stop offset="60%" stop-color="var(--green-color)" stop-opacity="0.7" />
+              <stop offset="100%" stop-color="var(--green-color)" stop-opacity="0.05" />
+            </linearGradient>
+          </defs>
+          <!-- Background track -->
+          <circle class="ring-track" cx="80" cy="80" r="70" stroke-width="4" fill="none" />
+          <!-- Animated gradient spinner circle -->
+          <circle class="ring-indicator" cx="80" cy="80" r="70" stroke-width="4" fill="none" stroke="url(#spinnerGradient)" />
+        </svg>
       </div>
 
       <!-- Percentage INSIDE the spinner -->
@@ -64,6 +75,17 @@ const progressDigits = computed(() => {
   width: 100%;
   margin: 0 auto;
   padding: 2rem 0;
+  --green-color: #00a651;
+  --text-main: #1e293b;
+  --text-sub: #64748b;
+  --track-stroke: rgba(0, 166, 81, 0.08);
+}
+
+:global(.dark) .minimal-loader {
+  --green-color: #00c853;
+  --text-main: #f8fafc;
+  --text-sub: #94a3b8;
+  --track-stroke: rgba(255, 255, 255, 0.06);
 }
 
 /* Spinner Container */
@@ -96,10 +118,27 @@ const progressDigits = computed(() => {
   animation: pulse-glow 3s ease-in-out infinite;
 }
 
-.main-spinner {
-  color: #00a651;
-  animation: spin 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-  filter: drop-shadow(0 0 12px rgba(0, 166, 81, 0.25));
+:global(.dark) .orbit-glow {
+  background: radial-gradient(circle, rgba(0, 200, 83, 0.12) 0%, transparent 70%);
+}
+
+.ring-svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.ring-track {
+  stroke: var(--track-stroke);
+}
+
+.ring-indicator {
+  stroke-dasharray: 440;
+  stroke-dashoffset: 140;
+  stroke-linecap: round;
+  transform-origin: center;
+  animation: spin-gradient 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  filter: drop-shadow(0 0 10px rgba(0, 166, 81, 0.3));
 }
 
 .icon-center {
@@ -118,7 +157,8 @@ const progressDigits = computed(() => {
   display: flex;
   align-items: baseline;
   justify-content: center;
-  color: #00a651;
+  color: var(--green-color);
+  text-shadow: 0 0 12px rgba(0, 166, 81, 0.15);
 }
 
 .digits-inner {
@@ -154,7 +194,7 @@ const progressDigits = computed(() => {
 .status-title {
   font-size: 1.3rem;
   font-weight: 700;
-  color: #1e293b;
+  color: var(--text-main);
   margin-bottom: 0.5rem;
   letter-spacing: -0.01em;
 }
@@ -169,7 +209,7 @@ const progressDigits = computed(() => {
 
 .status-msg {
   font-size: 0.95rem;
-  color: #64748b;
+  color: var(--text-sub);
   margin: 0;
   font-weight: 550;
 }
@@ -179,9 +219,18 @@ const progressDigits = computed(() => {
 }
 
 /* Animations */
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+@keyframes spin-gradient {
+  0% {
+    transform: rotate(0deg);
+    stroke-dashoffset: 350;
+  }
+  50% {
+    stroke-dashoffset: 120;
+  }
+  100% {
+    transform: rotate(360deg);
+    stroke-dashoffset: 350;
+  }
 }
 
 @keyframes pulse-glow {

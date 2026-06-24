@@ -103,7 +103,7 @@ const formatDept = (dept?: string) => {
 }
 
 // ── Sidebar collapse ────────────────────────────────────────────
-const sidebarCollapsed = ref(false)
+const sidebarCollapsed = ref(true)
 const mobileSidebarOpen = ref(false)
 const showApproveModal = ref(false)
 const showDetailsModal = ref(false)
@@ -134,10 +134,27 @@ const closeMobileSidebar = () => {
 
 // Reactive mobile breakpoint check
 const isMobile = ref(window.innerWidth <= 768)
+let lastWidthCategory: 'mobile' | 'tablet' | 'desktop' = window.innerWidth <= 768 ? 'mobile' : (window.innerWidth < 1024 ? 'tablet' : 'desktop')
+
 const onResize = () => {
-  isMobile.value = window.innerWidth <= 768
+  const width = window.innerWidth
+  isMobile.value = width <= 768
+  const currentCategory = width <= 768 ? 'mobile' : (width < 1024 ? 'tablet' : 'desktop')
+  
+  if (currentCategory !== lastWidthCategory) {
+    if (currentCategory === 'mobile') {
+      sidebarCollapsed.value = false
+    } else if (currentCategory === 'tablet') {
+      sidebarCollapsed.value = true
+    } else {
+      sidebarCollapsed.value = false
+    }
+    lastWidthCategory = currentCategory
+  }
 }
+
 onMounted(() => {
+  onResize() // Set correct initial state based on window size
   window.addEventListener('resize', onResize)
   window.addEventListener('dragover', handleDragOver)
   window.addEventListener('drop', handleDrop)
@@ -932,26 +949,56 @@ const availableImradTabs = computed<ImradKey[]>(() => {
   return all
 })
 
-// Auto-resize the raw textarea to fit its content
+// Auto-resize textareas to fit their content
 const imradTextarea = ref<HTMLTextAreaElement | null>(null)
 const autoResizeTextarea = (e?: Event) => {
-  const el = (e?.target as HTMLTextAreaElement) ?? imradTextarea.value
-  if (!el) return
-  el.style.height = 'auto'
-  el.style.height = Math.min(el.scrollHeight, 600) + 'px'
+  const el = (e?.target as HTMLTextAreaElement)
+  if (el) {
+    el.style.height = 'auto'
+    el.style.height = el.scrollHeight + 'px'
+  }
 }
-// Re-run resize whenever the active tab switches or content populates
-watch(activeImradTab, async () => {
-  await nextTick()
-  autoResizeTextarea()
+
+const autoResizeAllTextareas = () => {
+  nextTick(() => {
+    const textareas = document.querySelectorAll('.review-wrap textarea')
+    textareas.forEach((el) => {
+      const ta = el as HTMLTextAreaElement
+      ta.style.height = 'auto'
+      ta.style.height = ta.scrollHeight + 'px'
+    })
+  })
+}
+
+// Re-run resize whenever the active tab switches, content populates, or step transitions
+watch(activeImradTab, () => {
+  autoResizeAllTextareas()
 })
 watch(
   () => imradSections[activeImradTab.value as ImradKey],
-  async () => {
-    await nextTick()
-    autoResizeTextarea()
+  () => {
+    autoResizeAllTextareas()
   },
 )
+watch(
+  () => uploadMetadata.title,
+  () => {
+    autoResizeAllTextareas()
+  },
+)
+watch(
+  () => uploadMetadata.abstract,
+  () => {
+    autoResizeAllTextareas()
+  },
+)
+watch(step, (newStep) => {
+  if (newStep === 2) {
+    setTimeout(autoResizeAllTextareas, 50)
+    setTimeout(autoResizeAllTextareas, 300)
+    setTimeout(autoResizeAllTextareas, 600)
+  }
+})
 
 // ── References preview helpers ────────────────────────────────────────────────
 // Mirrors the logic in detail_win.vue so the upload preview shows the same
@@ -1528,6 +1575,10 @@ watch(
               <!-- Clean Processing View (Visible only during parsing) -->
               <div v-if="processingDoc" class="processing-container">
                 <BookLoader :progress="extractionProgress" :message="extractionMessage" />
+                <button class="cancel-parsing-btn" @click="handleCancelParsing">
+                  <X :size="14" />
+                  <span>Cancel Upload</span>
+                </button>
               </div>
 
               <!-- Initial Upload State -->
@@ -1679,7 +1730,7 @@ watch(
                     <h4>Verify Metadata</h4>
                   </div>
                   <div class="fg">
-                    <label>Title</label><textarea v-model="uploadMetadata.title" placeholder="Research Title" />
+                    <label>Title</label><textarea v-model="uploadMetadata.title" placeholder="Research Title" @input="autoResizeTextarea" />
                   </div>
                   <div class="fg">
                     <label>Author(s)</label>
@@ -1747,7 +1798,7 @@ watch(
                       <div class="fg" style="margin-bottom:0.85rem">
                         <label>Abstract</label>
                         <textarea v-model="uploadMetadata.abstract" class="abstract-area"
-                          placeholder="Enter abstract…" />
+                          placeholder="Enter abstract…" @input="autoResizeTextarea" />
                       </div>
                       <template v-if="
                         uploadMetadata.detected_subheadings.some((s) =>
@@ -3176,23 +3227,7 @@ watch(
   --shadow-lg: 0 20px 40px -10px rgba(0, 0, 0, 0.5);
 }
 
-/* ── Floating Backdrop Vignettes ── */
-.mgmt-main::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 500px;
-  background: radial-gradient(circle at 10% 10%, rgba(0, 166, 81, 0.05) 0%, transparent 60%);
-  z-index: 0;
-  pointer-events: none;
-  transition: opacity 0.3s;
-}
 
-.dark .mgmt-main::before {
-  background: radial-gradient(circle at 10% 10%, rgba(0, 200, 83, 0.07) 0%, transparent 60%);
-}
 
 /* ── Sidebar Layout & Collapsed State ── */
 .sidebar {
@@ -3219,6 +3254,50 @@ watch(
 
 .sidebar.collapsed {
   width: 72px;
+}
+
+.sidebar.collapsed .sb-brand {
+  justify-content: center;
+  padding: 0;
+}
+
+.sidebar.collapsed .sb-item {
+  justify-content: center;
+  padding: 10px 0;
+  margin: 4px auto;
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+}
+
+.sidebar.collapsed .sb-item.active {
+  background: var(--green);
+  box-shadow: 0 4px 12px rgba(0, 166, 81, 0.25);
+}
+
+.sidebar.collapsed .sb-icon {
+  margin: 0;
+}
+
+.sidebar.collapsed .sb-theme-btn {
+  padding: 10px;
+  width: 36px;
+  height: 36px;
+  margin: 0 auto;
+  border-radius: 50%;
+}
+
+.sidebar.collapsed .sb-theme-btn span {
+  display: none;
+}
+
+.sidebar.collapsed .sb-footer-badge {
+  width: 36px;
+  height: 36px;
+  margin: 0 auto;
+  padding: 0;
+  border-radius: 50%;
+  justify-content: center;
 }
 
 .sb-brand {
@@ -3468,6 +3547,7 @@ watch(
   top: 0;
   z-index: 90;
   transition: background-color 0.3s;
+  flex-shrink: 0;
 }
 
 .topbar-left {
@@ -3485,13 +3565,18 @@ watch(
   border-radius: 8px;
   border: 1px solid var(--border-color);
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--text-secondary) !important;
   cursor: pointer;
   transition: all 0.2s;
 }
 
+.sb-toggle svg {
+  color: inherit !important;
+  stroke: currentColor !important;
+}
+
 .sb-toggle:hover {
-  color: var(--green);
+  color: var(--green) !important;
   border-color: var(--green);
   background: var(--green-dim);
 }
@@ -3511,26 +3596,35 @@ watch(
   font-size: 0.85rem;
   color: var(--text-primary);
   font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
 }
 
 .topbar-right {
   display: flex;
   align-items: center;
   gap: 16px;
+  flex-shrink: 0;
 }
 
 .live-clock {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 0.78rem;
+  gap: 8px;
+  font-size: 0.82rem;
   color: var(--text-secondary);
   font-weight: 700;
-  padding: 6px 12px;
+  padding: 8px 16px;
   border-radius: 20px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   letter-spacing: 0.02em;
+  flex-shrink: 0;
+  white-space: nowrap;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.2s;
 }
 
 /* Steps Rail inside Navbar */
@@ -4603,13 +4697,46 @@ watch(
 }
 
 .processing-container {
-  padding: 48px;
-  background: var(--card-bg);
-  backdrop-filter: blur(20px);
-  border: 1px solid var(--border-color);
-  border-radius: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(100vh - 240px);
   text-align: center;
-  box-shadow: var(--shadow-md);
+  padding: 0;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.cancel-parsing-btn {
+  margin-top: 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 24px;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: var(--shadow-sm);
+}
+
+.cancel-parsing-btn:hover {
+  background: rgba(239, 68, 68, 0.05);
+  color: var(--red);
+  border-color: rgba(239, 68, 68, 0.2);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.1);
+}
+
+.cancel-parsing-btn:active {
+  transform: translateY(0);
 }
 
 .upload-card {
@@ -5060,8 +5187,9 @@ watch(
 }
 
 .fg textarea {
-  resize: vertical;
-  height: 60px;
+  resize: none;
+  min-height: 38px;
+  overflow-y: hidden;
   font-family: inherit;
 }
 
@@ -5248,7 +5376,7 @@ watch(
 
 .imrad-textarea {
   width: 100%;
-  min-height: 220px;
+  min-height: 120px;
   border-radius: 10px;
   border: 1px solid var(--border-color);
   background: var(--bg-secondary);
@@ -5258,7 +5386,8 @@ watch(
   line-height: 1.6;
   outline: none;
   font-family: 'Lora', Georgia, serif;
-  resize: vertical;
+  resize: none;
+  overflow-y: hidden;
   letter-spacing: 0.01em;
   text-align: justify;
 }
@@ -5268,17 +5397,19 @@ watch(
 }
 
 .imrad-textarea.maximized {
-  min-height: 280px;
+  min-height: 160px;
 }
 
 .fg textarea.abstract-area {
-  min-height: 100px;
+  min-height: 80px;
   font-family: 'Lora', Georgia, serif;
   font-size: 0.85rem;
   line-height: 1.6;
   letter-spacing: 0.01em;
   padding: 16px 20px;
   text-align: justify;
+  resize: none;
+  overflow-y: hidden;
 }
 
 /* Reference split preview */

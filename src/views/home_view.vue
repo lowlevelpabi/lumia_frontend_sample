@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, onUnmounted } from 'vue'
 import { useRouter, RouterLink } from 'vue-router'
-import { User, Clock, Search, X } from 'lucide-vue-next'
+import { User, Clock, Search, X, ArrowRight } from 'lucide-vue-next'
 import { api, type Paper } from '../services/api'
 import { historyService } from '../services/history'
 import { useAuth } from '../composables/useAuth'
@@ -130,9 +130,7 @@ const handleSearch = () => {
             autocomplete="off"
           />
           <button @click="handleSearch" class="btn-submit" aria-label="Search">
-            <svg class="icon-up-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18" />
-            </svg>
+            <ArrowRight class="btn-submit-icon" />
           </button>
 
           <!-- Search History Popup -->
@@ -615,9 +613,15 @@ const handleSearch = () => {
   color: #ffffff;
 }
 
-.icon-up-arrow {
-  width: 16px;
-  height: 16px;
+.btn-submit-icon {
+  width: 18px;
+  height: 18px;
+  stroke-width: 2.5;
+  transition: transform 0.2s ease;
+}
+
+.btn-submit:hover .btn-submit-icon {
+  transform: translateX(2px);
 }
 
 /* Search History Dropdown inside Card */
@@ -1016,8 +1020,16 @@ const handleSearch = () => {
     font-size: 16px;
   }
   .search-box {
-    height: auto;
-    gap: 16px;
+    height: 48px;
+    padding: 0 6px 0 16px;
+  }
+  .btn-submit {
+    width: 36px;
+    height: 36px;
+  }
+  .btn-submit-icon {
+    width: 15px;
+    height: 15px;
   }
   .paper-list {
     grid-template-columns: 1fr;

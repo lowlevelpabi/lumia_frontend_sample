@@ -1,8 +1,10 @@
 import { ref, onMounted } from 'vue'
 import { api } from '../services/api'
 
+// Shared global state to sync theme across all components
+const isDark = ref(false)
+
 export function useTheme() {
-  const isDark = ref(false)
 
   const toggleTheme = async () => {
     isDark.value = !isDark.value

@@ -210,6 +210,7 @@ export interface UserResponse extends UserData {
   id: string;
   created_at?: string;
   dark_mode?: boolean;
+  avatar_url?: string;
 }
 
 export interface HealthStatus {
@@ -562,6 +563,18 @@ export const api = {
       headers: getAuthHeaders(),
     });
     if (!response.ok) throw new Error("Failed to fetch user data");
+    return response.json();
+  },
+
+  async uploadAvatar(file: File): Promise<UserResponse> {
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await apiFetch(`${BASE_URL}/users/me/avatar`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: formData,
+    });
+    if (!response.ok) throw new Error("Failed to upload avatar");
     return response.json();
   },
 

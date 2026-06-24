@@ -42,4 +42,8 @@ test-results/
 playwright-report/
 
 # agy cli
-.anatigravitycli/
+.antigravitycli/
+
+# Compressed Archives
+*.rar
+*.zip
