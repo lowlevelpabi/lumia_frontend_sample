@@ -187,7 +187,7 @@
           <span class="section-eyebrow">System Information</span>
           <h2 class="section-title">Version History & Changelog</h2>
           <p class="section-sub" v-if="systemInfo">
-            Official Turnover Version: <strong>v{{ systemInfo.version }}</strong> &bull; Released on {{ systemInfo.release_date }} &bull; Department: {{ systemInfo.department }}
+            Official Turnover Version: <strong>v{{ systemInfo.version }}</strong> &bull; Released on {{ systemInfo.release_date }}
           </p>
         </div>
 
