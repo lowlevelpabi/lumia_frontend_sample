@@ -170,7 +170,6 @@
             <div class="team-card-body">
               <h3 class="dev-name">{{ dev.name }}</h3>
               <span class="dev-course">{{ dev.course }}</span>
-              <blockquote class="dev-quote">"{{ dev.quote }}"</blockquote>
               <div class="dev-role-pill">
                 <span>{{ dev.role }}</span>
               </div>
