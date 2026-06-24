@@ -180,6 +180,50 @@
       </div>
     </section>
 
+    <!-- ══ SYSTEM VERSION & CHANGELOG ═══════════════════════════════════════ -->
+    <section class="changelog-section" id="system-info">
+      <div class="about-container">
+        <div class="section-head" style="text-align: center">
+          <span class="section-eyebrow">System Information</span>
+          <h2 class="section-title">Version History & Changelog</h2>
+          <p class="section-sub" v-if="systemInfo">
+            Official Turnover Version: <strong>v{{ systemInfo.version }}</strong> &bull; Released on {{ systemInfo.release_date }} &bull; Department: {{ systemInfo.department }}
+          </p>
+        </div>
+
+        <div v-if="isLoading" class="loading-state">
+          <div class="spinner"></div>
+          <span>Fetching release details from backend...</span>
+        </div>
+
+        <div v-else-if="systemInfo && systemInfo.changelog" class="changelog-timeline">
+          <div class="timeline-item" v-for="entry in systemInfo.changelog" :key="entry.version">
+            <div class="timeline-badge-wrap">
+              <div class="timeline-version-badge">v{{ entry.version }}</div>
+              <div class="timeline-line"></div>
+            </div>
+            
+            <div class="timeline-content-card">
+              <div class="card-header-row">
+                <h3 class="changelog-title">{{ entry.title }}</h3>
+                <span class="changelog-date">{{ entry.date }}</span>
+              </div>
+              <ul class="changelog-list">
+                <li v-for="(change, idx) in entry.changes" :key="idx">
+                  <span class="bullet-dot"></span>
+                  <span class="change-text">{{ change }}</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+        
+        <div v-else class="error-state">
+          <p>Failed to connect to the backend metadata service. Dynamic version checking is unavailable.</p>
+        </div>
+      </div>
+    </section>
+
     <!-- ══ FOOTER CTA ═══════════════════════════════════════════════════════ -->
     <section class="cta-section">
       <div class="cta-inner">
@@ -197,6 +241,7 @@
 </template>
 
 <script setup lang="ts">
+import { ref, onMounted } from "vue";
 import {
   BookOpen,
   ScanLine,
@@ -207,6 +252,20 @@ import {
   Search,
 } from "lucide-vue-next";
 import { RouterLink } from "vue-router";
+import { api, type SystemInfo } from "../services/api";
+
+const systemInfo = ref<SystemInfo | null>(null);
+const isLoading = ref(true);
+
+onMounted(async () => {
+  try {
+    systemInfo.value = await api.getSystemInfo();
+  } catch (error) {
+    console.error("Failed to load system version/changelog from backend:", error);
+  } finally {
+    isLoading.value = false;
+  }
+});
 
 const developers = [
   {
@@ -932,6 +991,188 @@ const developers = [
   .hero-stats {
     flex-direction: column;
     align-items: center;
+  }
+}
+
+/* ── Changelog Section ────────────────────────────────────── */
+.changelog-section {
+  padding: 5rem 0;
+  background: var(--surface);
+  border-top: 1px solid var(--rule);
+}
+
+.loading-state,
+.error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 3rem;
+  text-align: center;
+  color: var(--ink-2);
+  font-family: "Inter", sans-serif;
+  font-size: 0.95rem;
+}
+
+.spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid var(--rule);
+  border-top-color: var(--green);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.changelog-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  max-width: 800px;
+  margin: 0 auto;
+  position: relative;
+}
+
+.timeline-item {
+  display: flex;
+  gap: 2rem;
+  align-items: stretch;
+}
+
+.timeline-badge-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 70px;
+  flex-shrink: 0;
+}
+
+.timeline-version-badge {
+  font-family: "Schibsted Grotesk", sans-serif;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--green);
+  background: rgba(0, 166, 81, 0.08);
+  border: 1px solid rgba(0, 166, 81, 0.2);
+  padding: 0.4rem 0.8rem;
+  border-radius: 100px;
+  text-align: center;
+  box-shadow: 0 4px 10px rgba(0, 166, 81, 0.05);
+}
+
+.dark .timeline-version-badge {
+  background: rgba(0, 200, 83, 0.12);
+  border-color: rgba(0, 200, 83, 0.25);
+  color: #00c853;
+}
+
+.timeline-line {
+  width: 2px;
+  flex: 1;
+  background: var(--rule);
+  margin-top: 0.75rem;
+  border-radius: 2px;
+}
+
+.timeline-item:last-child .timeline-line {
+  display: none;
+}
+
+.timeline-content-card {
+  flex: 1;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 16px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.01);
+  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.dark .timeline-content-card {
+  background: rgba(18, 18, 18, 0.7);
+  border-color: rgba(255, 255, 255, 0.05);
+}
+
+.timeline-content-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(0, 166, 81, 0.2);
+  box-shadow: 0 8px 24px rgba(0, 166, 81, 0.05);
+}
+
+.card-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.changelog-title {
+  font-family: "Lora", Georgia, serif;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 0;
+}
+
+.changelog-date {
+  font-family: "Inter", sans-serif;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--ink-3);
+}
+
+.changelog-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.changelog-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.bullet-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--green);
+  margin-top: 0.55rem;
+  flex-shrink: 0;
+}
+
+.change-text {
+  font-family: "Source Sans 3", sans-serif;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+
+@media (max-width: 768px) {
+  .timeline-item {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  .timeline-badge-wrap {
+    flex-direction: row;
+    width: auto;
+    align-items: center;
+    gap: 1rem;
+  }
+  .timeline-line {
+    display: none !important;
   }
 }
 </style>

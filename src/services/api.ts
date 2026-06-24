@@ -228,6 +228,21 @@ export interface HealthStatus {
 
 export type SystemHealth = Record<string, HealthStatus>;
 
+export interface ChangelogEntry {
+  version: string;
+  date: string;
+  title: string;
+  changes: string[];
+}
+
+export interface SystemInfo {
+  version: string;
+  academic_year: string;
+  release_date: string;
+  department: string;
+  changelog: ChangelogEntry[];
+}
+
 export interface SearchParams {
   query?: string;
   threshold?: number;
@@ -611,6 +626,12 @@ export const api = {
       headers: getAuthHeaders(),
     });
     if (!response.ok) throw new Error("Failed to fetch system health");
+    return response.json();
+  },
+
+  async getSystemInfo(): Promise<SystemInfo> {
+    const response = await fetchWithToast(`${BASE_URL}/system/info`);
+    if (!response.ok) throw new Error("Failed to fetch system info");
     return response.json();
   },
 
