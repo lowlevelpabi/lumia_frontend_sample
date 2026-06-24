@@ -147,37 +147,7 @@
       </div>
     </section>
 
-    <!-- ══ MEET THE TEAM ════════════════════════════════════════════════════ -->
-    <section class="team-section">
-      <div class="about-container">
-        <div class="section-head" style="text-align: center">
-          <span class="section-eyebrow">Who We Are</span>
-          <h2 class="section-title">Meet the Developers</h2>
-          <p class="section-sub">
-            The team behind Lumia — students of the Department of Computer Science.
-          </p>
-        </div>
 
-        <div class="team-grid">
-          <div class="team-card" v-for="dev in developers" :key="dev.name">
-            <div class="team-card-img-wrap">
-              <img v-if="dev.image" :src="dev.image" :alt="dev.name" class="team-photo" />
-              <div v-else class="team-avatar" :style="{ background: dev.color }">
-                <span class="avatar-initials">{{ dev.initials }}</span>
-              </div>
-              <div class="team-card-glow" :style="{ background: dev.color }"></div>
-            </div>
-            <div class="team-card-body">
-              <h3 class="dev-name">{{ dev.name }}</h3>
-              <span class="dev-course">{{ dev.course }}</span>
-              <div class="dev-role-pill">
-                <span>{{ dev.role }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
 
     <!-- ══ SYSTEM VERSION & CHANGELOG ═══════════════════════════════════════ -->
     <section class="changelog-section" id="system-info">
@@ -266,34 +236,6 @@ onMounted(async () => {
   }
 });
 
-const developers = [
-  {
-    name: "Author 1 Full Name",
-    initials: "A1",
-    image: "",
-    course: "BS Computer Science",
-    role: "Documentation · Roadmap Planner",
-    quote: "Your quote or motto here.",
-    color: "linear-gradient(135deg, #00a651 0%, #007d3d 100%)",
-  },
-  {
-    name: "RYAN ANDREW A. REYES",
-    initials: "RR",
-    image: "",
-    course: "BS Computer Science",
-    role: "Lead Developer · UI/UX · Document",
-    quote: "Kung di mo kaya, wag mo gawin. Maging irregular ka na lang para welcome to the club!",
-    color: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
-  },
-  {
-    name: "Author 3 Full Name",
-    initials: "A3",
-    course: "BS Computer Science",
-    role: "EWAN, DI KO ALAM",
-    quote: "Your quote or motto here.",
-    color: "linear-gradient(135deg, #34d399 0%, #10b981 100%)",
-  },
-];
 </script>
 
 <style scoped>
@@ -732,164 +674,6 @@ const developers = [
   flex-shrink: 0;
 }
 
-/* ══ MEET THE TEAM ════════════════════════════════════════════ */
-.team-section {
-  padding: 5rem 0;
-  background: var(--paper);
-  border-top: 1px solid var(--rule);
-  border-bottom: 1px solid var(--rule);
-}
-
-.dark .team-section {
-  background: rgba(10, 10, 10, 0.4);
-}
-
-.team-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1.75rem;
-  margin-top: 3rem;
-}
-
-.team-card {
-  background: var(--surface);
-  border: 1px solid var(--rule);
-  border-radius: 20px;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  transition:
-    transform 0.3s ease,
-    box-shadow 0.3s ease,
-    border-color 0.3s ease;
-}
-
-.team-card:hover {
-  transform: translateY(-6px);
-  box-shadow: 0 20px 45px rgba(0, 166, 81, 0.09);
-  border-color: rgba(0, 166, 81, 0.2);
-}
-
-.dark .team-card {
-  background: rgba(18, 18, 18, 0.8);
-  border-color: rgba(255, 255, 255, 0.06);
-}
-
-/* Avatar header area */
-.team-card-img-wrap {
-  position: relative;
-  height: 260px; /* ← increased from 200px */
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--paper);
-  overflow: hidden;
-}
-
-.team-photo {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: top; /* ← keeps face visible */
-  z-index: 2;
-}
-
-.dark .team-card-img-wrap {
-  background: rgba(25, 25, 25, 0.9);
-}
-
-.team-card-glow {
-  position: absolute;
-  inset: 0;
-  opacity: 0.12;
-  pointer-events: none;
-}
-
-.team-avatar {
-  position: relative;
-  z-index: 2;
-  width: 96px;
-  height: 96px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
-  border: 3px solid rgba(255, 255, 255, 0.25);
-}
-
-.avatar-initials {
-  font-family: "Lora", serif;
-  font-size: 2rem;
-  font-weight: 700;
-  color: #ffffff;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-}
-
-/* Card body */
-.team-card-body {
-  padding: 1.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  flex: 1;
-}
-
-.dev-name {
-  font-family: "Lora", Georgia, serif;
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: var(--ink);
-  margin: 0;
-}
-
-.dev-course {
-  font-family: "Inter", sans-serif;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--green);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-
-.dev-quote {
-  font-family: "Lora", Georgia, serif;
-  font-size: 0.88rem;
-  font-style: italic;
-  line-height: 1.6;
-  color: var(--ink-2);
-  margin: 0.5rem 0;
-  padding-left: 1rem;
-  border-left: 2px solid rgba(0, 166, 81, 0.3);
-}
-
-.dev-role-pill {
-  margin-top: auto;
-  padding-top: 0.75rem;
-}
-
-.dev-role-pill span {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-family: "Inter", sans-serif;
-  font-size: 0.72rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--ink-3);
-  background: var(--paper);
-  border: 1px solid var(--rule);
-  padding: 0.3rem 0.7rem;
-  border-radius: 100px;
-}
-
-.dark .dev-role-pill span {
-  background: rgba(25, 25, 25, 0.8);
-}
-
 /* ══ FOOTER CTA ═══════════════════════════════════════════════ */
 .cta-section {
   padding: 5rem 2.5rem;
@@ -949,15 +733,13 @@ const developers = [
 
 /* ── Responsive ───────────────────────────────────────────── */
 @media (max-width: 1024px) {
-  .feature-grid,
-  .team-grid {
+  .feature-grid {
     grid-template-columns: repeat(2, 1fr);
   }
 }
 
 @media (max-width: 768px) {
-  .feature-grid,
-  .team-grid {
+  .feature-grid {
     grid-template-columns: 1fr;
   }
 
