@@ -51,6 +51,8 @@ import {
   Bookmark,
   Sun,
   Moon,
+  ChevronDown,
+  CheckSquare,
 } from 'lucide-vue-next'
 import {
   api,
@@ -71,6 +73,7 @@ const { isDark, toggleTheme } = useTheme()
 const canEdit = computed(() => isAdmin.value || isFaculty.value)
 
 const DEPT_ABBR: Record<string, string> = {
+  'computer studies': 'CS/IT',
   'computer science': 'CS',
   'information technology': 'IT',
   'information systems': 'IS',
@@ -140,7 +143,7 @@ const onResize = () => {
   const width = window.innerWidth
   isMobile.value = width <= 768
   const currentCategory = width <= 768 ? 'mobile' : (width < 1024 ? 'tablet' : 'desktop')
-  
+
   if (currentCategory !== lastWidthCategory) {
     if (currentCategory === 'mobile') {
       sidebarCollapsed.value = false
@@ -877,9 +880,7 @@ const uploadMetadata = reactive<PartialPaperMetadata>({
   trim_points: {},
   media: {} as Record<string, string>,
 })
-const activeImradTab = ref<'introduction' | 'methods' | 'results' | 'discussion' | 'references'>(
-  'introduction',
-)
+const activeImradTab = ref<'abstract' | 'introduction' | 'methods' | 'results' | 'discussion' | 'references'>('abstract')
 
 // Keep in sync with imrad_service.py METHODOLOGY_SUBHEADINGS labels
 const METHODOLOGY_SUBHEADING_LABELS = [
@@ -936,7 +937,8 @@ const rawImradSections = reactive({
 // when the backend stored a single combined RAD section
 
 // Available tabs — merges R+D into one tab
-const availableImradTabs = computed<ImradKey[]>(() => {
+const availableImradTabs = computed<Array<'abstract' | ImradKey>>(() => {
+  const tabs: Array<'abstract' | ImradKey> = ['abstract']
   const all = ALL_IMRAD_TABS.filter((t) => imradSections[t])
   const hasResults = all.includes('results')
   const hasDiscussion = all.includes('discussion')
@@ -944,9 +946,11 @@ const availableImradTabs = computed<ImradKey[]>(() => {
     const merged: ImradKey[] = all.filter((t) => t !== 'results' && t !== 'discussion' && t !== 'references')
     merged.push('results')
     if (all.includes('references')) merged.push('references')
-    return merged
+    tabs.push(...merged)
+  } else {
+    tabs.push(...all)
   }
-  return all
+  return tabs
 })
 
 // Auto-resize textareas to fit their content
@@ -1099,7 +1103,61 @@ const linkifyReferences = (raw: string): string => {
   return linkify(escapedRaw)
 }
 
-const authors = ref<string[]>([''])
+const authors = ref<string[]>([])
+const newAuthorInput = ref('')
+
+const addAuthorChip = () => {
+  const raw = newAuthorInput.value.trim()
+  if (!raw) return
+  const parts = raw.split(/[,;|]+/).map(p => p.trim()).filter(p => p.length > 0)
+  parts.forEach(p => {
+    if (!authors.value.includes(p)) {
+      authors.value.push(p)
+    }
+  })
+  newAuthorInput.value = ''
+}
+
+const removeAuthorChip = (index: number) => {
+  authors.value.splice(index, 1)
+}
+
+const handleAuthorBackspace = () => {
+  if (newAuthorInput.value === '' && authors.value.length > 0) {
+    authors.value.pop()
+  }
+}
+
+// Keywords chip input support
+const keywordChips = ref<string[]>([])
+const newKeywordInput = ref('')
+
+const addKeywordChip = () => {
+  const raw = newKeywordInput.value.trim()
+  if (!raw) return
+  const parts = raw.split(/[,;|]+/).map(p => p.trim()).filter(p => p.length > 0)
+  parts.forEach(p => {
+    if (!keywordChips.value.includes(p)) {
+      keywordChips.value.push(p)
+    }
+  })
+  newKeywordInput.value = ''
+  uploadMetadata.keywords = keywordChips.value.join(', ')
+}
+
+const removeKeywordChip = (index: number) => {
+  keywordChips.value.splice(index, 1)
+  uploadMetadata.keywords = keywordChips.value.join(', ')
+}
+
+const handleKeywordBackspace = () => {
+  if (newKeywordInput.value === '' && keywordChips.value.length > 0) {
+    keywordChips.value.pop()
+    uploadMetadata.keywords = keywordChips.value.join(', ')
+  }
+}
+
+const showDetectedComponents = ref(false)
 const selectedPages = ref<number[]>([])
 const sectionPages = ref<Record<string, number[]>>({})
 const isManuscript = ref(false)
@@ -1142,6 +1200,37 @@ const triggerFallback = async () => {
     extractionMessage.value = 'Rendering pages...'
     sessionId.value = preview.session_id
     Object.assign(uploadMetadata, preview.metadata)
+
+    // Normalize department for CS or IT to 'Department of Computer Studies'
+    const checkDept1 = (uploadMetadata.department || '').toLowerCase()
+    const checkDeg1 = (uploadMetadata.degree_program || '').toLowerCase()
+    const deptWords1 = checkDept1.split(/[^a-z]+/)
+    const degWords1 = checkDeg1.split(/[^a-z]+/)
+    if (
+      deptWords1.includes('cs') ||
+      deptWords1.includes('it') ||
+      checkDept1.includes('computer science') ||
+      checkDept1.includes('information technology') ||
+      checkDept1.includes('computer studies') ||
+      degWords1.includes('bscs') ||
+      degWords1.includes('bsit') ||
+      checkDeg1.includes('computer science') ||
+      checkDeg1.includes('information technology')
+    ) {
+      uploadMetadata.department = 'Department of Computer Studies'
+    }
+
+    if (preview.metadata.author) {
+      const splitAuthors = preview.metadata.author.split(/\s*\|\s*/).map((a: string) => a.trim()).filter((a: string) => a.length > 0)
+      authors.value = splitAuthors.length > 0 ? splitAuthors : []
+    } else { authors.value = [] }
+
+    if (preview.metadata.keywords) {
+      keywordChips.value = preview.metadata.keywords.split(/\s*,\s*/).map((k: string) => k.trim()).filter((k: string) => k.length > 0)
+    } else {
+      keywordChips.value = []
+    }
+
     pages.value = preview.pages
     if (preview.sections) {
       // Store raw (with markers) for DB submission
@@ -1261,14 +1350,40 @@ const startInitialExtraction = async (autoExtract: boolean = true) => {
 
     sessionId.value = preview.session_id
     Object.assign(uploadMetadata, preview.metadata)
+
+    // Normalize department for CS or IT to 'Department of Computer Studies'
+    const checkDept2 = (uploadMetadata.department || '').toLowerCase()
+    const checkDeg2 = (uploadMetadata.degree_program || '').toLowerCase()
+    const deptWords2 = checkDept2.split(/[^a-z]+/)
+    const degWords2 = checkDeg2.split(/[^a-z]+/)
+    if (
+      deptWords2.includes('cs') ||
+      deptWords2.includes('it') ||
+      checkDept2.includes('computer science') ||
+      checkDept2.includes('information technology') ||
+      checkDept2.includes('computer studies') ||
+      degWords2.includes('bscs') ||
+      degWords2.includes('bsit') ||
+      checkDeg2.includes('computer science') ||
+      checkDeg2.includes('information technology')
+    ) {
+      uploadMetadata.department = 'Department of Computer Studies'
+    }
+
     if (preview.metadata.author) {
       const splitAuthors = preview.metadata.author
         .split(/\s*\|\s*/)
         .map((a: string) => a.trim())
         .filter((a: string) => a.length > 0)
-      authors.value = splitAuthors.length > 0 ? splitAuthors : ['']
+      authors.value = splitAuthors.length > 0 ? splitAuthors : []
     } else {
-      authors.value = ['']
+      authors.value = []
+    }
+
+    if (preview.metadata.keywords) {
+      keywordChips.value = preview.metadata.keywords.split(/\s*,\s*/).map((k: string) => k.trim()).filter((k: string) => k.length > 0)
+    } else {
+      keywordChips.value = []
     }
 
     pages.value = preview.pages
@@ -1352,13 +1467,7 @@ const selectAll = () => {
 const deselectAll = () => {
   selectedPages.value = []
 }
-const addAuthor = () => {
-  authors.value.push('')
-}
-const removeAuthor = (index: number) => {
-  if (authors.value.length > 1) authors.value.splice(index, 1)
-  else authors.value[0] = ''
-}
+
 
 const handleFinalConfirm = async () => {
   if (selectedPages.value.length === 0) {
@@ -1463,7 +1572,8 @@ watch(
       </nav>
 
       <div class="sb-footer">
-        <button class="sb-theme-btn" @click="toggleTheme" :title="isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'">
+        <button class="sb-theme-btn" @click="toggleTheme"
+          :title="isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'">
           <Sun v-if="isDark" :size="14" />
           <Moon v-else :size="14" />
           <span>{{ isDark ? 'Light' : 'Dark' }} Mode</span>
@@ -1494,9 +1604,8 @@ watch(
           <ChevronRight :size="12" class="bc-sep" />
           <span class="bc-active">{{ activeLabel }}</span>
         </div>
-        <div class="topbar-right">
-          <!-- Upload step rail -->
-          <div v-if="activeSection === 'upload'" class="steps-rail inside-navbar">
+        <div v-if="activeSection === 'upload'" class="topbar-center">
+          <div class="steps-rail inside-navbar">
             <div class="step-item" :class="{ active: step >= 1, done: step > 1 }">
               <div class="step-num">
                 <Check v-if="step > 1" :size="12" /><span v-else>1</span>
@@ -1517,13 +1626,10 @@ watch(
               </div>
               <span class="step-label">Done</span>
             </div>
-            <button v-if="step === 2" class="cancel-btn" @click="handleCancelParsing" :disabled="uploadingPaper"
-              style="margin-left: 1.5rem;">
-              <X :size="14" />
-              <span>Cancel</span>
-            </button>
           </div>
-          <div v-else-if="!isMobile" class="live-clock">
+        </div>
+        <div class="topbar-right">
+          <div v-if="activeSection !== 'upload' && !isMobile" class="live-clock">
             <Clock :size="13" stroke-width="2.5" />
             <span>{{ formattedTime }}</span>
           </div>
@@ -1541,7 +1647,7 @@ watch(
             </div>
             <div class="notif-body">
               <strong>{{ uploadNotification.includes('Upload Terminated') ? 'Upload Rejected' : 'Error Detected'
-              }}</strong>
+                }}</strong>
               <p>{{ uploadNotification }}</p>
             </div>
             <button class="notif-close" @click="closeUploadMessage">
@@ -1675,6 +1781,7 @@ watch(
             </div>
 
             <!-- Step 2: Review -->
+            <!-- Step 2: Review -->
             <div v-else class="review-wrap">
               <header class="review-bar">
                 <div class="review-bar-left">
@@ -1687,17 +1794,10 @@ watch(
                   </div>
                 </div>
                 <div class="review-bar-right">
-                  <div class="file-pill">
-                    <span class="file-pill-label">FILE</span>
-                    <span class="file-pill-name">{{ file?.name }}</span>
-                    <span class="file-pill-count"><strong>{{ selectedPages.length }}</strong>/{{ pages.length }}
-                      pages</span>
+                  <div class="file-pill custom-header-file-pill">
+                    <span class="file-pill-label">FILE:&nbsp;</span>
+                    <span class="file-pill-name" :title="file?.name">{{ file?.name }}</span>
                   </div>
-                  <button @click="handleFinalConfirm" class="confirm-btn" :disabled="uploadingPaper">
-                    <Loader2 v-if="uploadingPaper" :size="15" class="spin" />
-                    <Check v-else :size="15" />
-                    Confirm Indexing
-                  </button>
                 </div>
               </header>
 
@@ -1721,34 +1821,50 @@ watch(
                 </div>
               </div>
 
-              <!-- Inline missing sections banner removed — missing sections are shown via floating notification -->
+              <!-- Error banner in review -->
+              <div v-if="uploadError" class="error-banner"
+                :class="{ 'terminal-error': uploadError.includes('Upload Terminated') }">
+                <ShieldAlert v-if="uploadError.includes('Upload Terminated')" :size="24" />
+                <AlertCircle v-else :size="16" />
+                <div class="error-content">
+                  <strong>{{ uploadError.includes('Upload Terminated') ? 'Upload Rejected' : 'Error' }}</strong>
+                  <p>{{ uploadError }}</p>
+                </div>
+              </div>
 
               <div class="review-grid">
+                <!-- Left: Metadata -->
                 <section class="meta-panel">
                   <div class="meta-panel-head">
                     <span class="step-badge">1</span>
                     <h4>Verify Metadata</h4>
                   </div>
                   <div class="fg">
-                    <label>Title</label><textarea v-model="uploadMetadata.title" placeholder="Research Title" @input="autoResizeTextarea" />
+                    <label>Title</label>
+                    <textarea v-model="uploadMetadata.title" placeholder="Research Title" @input="autoResizeTextarea" />
                   </div>
+
+                  <!-- Authors Chip Input -->
                   <div class="fg">
-                    <label>Author(s)</label>
-                    <div class="authors-stack">
-                      <div v-for="(author, index) in authors" :key="index" class="author-row">
-                        <input v-model="authors[index]" type="text" placeholder="Full Name of Author" />
-                        <button @click="removeAuthor(index)" class="icon-btn red">
-                          <Trash2 :size="14" />
+                    <label>Author(s) <span class="fg-label-hint">(press Enter or Comma to add)</span></label>
+                    <div class="chips-input-wrap">
+                      <div v-for="(author, index) in authors" :key="index" class="chip-item">
+                        <span>{{ author }}</span>
+                        <button type="button" class="chip-close" @click="removeAuthorChip(index)">
+                          <X :size="10" />
                         </button>
                       </div>
-                      <button @click="addAuthor" class="add-btn">
-                        <Plus :size="13" /> Add Author
-                      </button>
+                      <input v-model="newAuthorInput" type="text" placeholder="Add author..."
+                        @keydown.enter.prevent="addAuthorChip"
+                        @keydown="(e) => { if (e.key === ',') { e.preventDefault(); addAuthorChip(); } }"
+                        @blur="addAuthorChip" @keydown.backspace="handleAuthorBackspace" />
                     </div>
                   </div>
+
                   <div class="fg-row">
                     <div class="fg">
-                      <label>Year</label><input v-model="uploadMetadata.year" type="text" placeholder="e.g., 2025" />
+                      <label>Year</label>
+                      <input v-model="uploadMetadata.year" type="text" placeholder="e.g., 2025" />
                     </div>
                     <div class="fg">
                       <label>Type</label>
@@ -1758,156 +1874,166 @@ watch(
                       </select>
                     </div>
                   </div>
-                  <!-- Abstract moved to IMRAD panel to keep metadata compact -->
-                  <div class="fg">
-                    <label>Department</label>
-                    <select v-model="uploadMetadata.department">
-                      <option>N/A</option>
-                      <option>Department of Computer Science</option>
-                      <option>Department of Information Technology</option>
-                    </select>
+
+                  <div class="fg-row">
+                    <div class="fg">
+                      <label>Department</label>
+                      <select v-model="uploadMetadata.department">
+                        <option>N/A</option>
+                        <option>Department of Computer Studies</option>
+                      </select>
+                    </div>
+
+                    <div class="fg">
+                      <label>Degree Program</label>
+                      <select v-model="uploadMetadata.degree_program">
+                        <option>N/A</option>
+                        <option>BSCS</option>
+                        <option>BSIT</option>
+                      </select>
+                    </div>
                   </div>
+
+                  <!-- Keywords Chip Input -->
                   <div class="fg">
-                    <label>Degree Program</label>
-                    <select v-model="uploadMetadata.degree_program">
-                      <option>N/A</option>
-                      <option>BSCS</option>
-                      <option>BSIT</option>
-                    </select>
-                  </div>
-                  <div class="fg">
-                    <label>Keywords</label>
-                    <input v-model="uploadMetadata.keywords" type="text"
-                      placeholder="e.g. machine learning, NLP, deep learning" />
+                    <label>Keywords <span class="fg-label-hint">(press Enter or Comma to add)</span></label>
+                    <div class="chips-input-wrap">
+                      <div v-for="(keyword, index) in keywordChips" :key="index" class="chip-item">
+                        <span>{{ keyword }}</span>
+                        <button type="button" class="chip-close" @click="removeKeywordChip(index)">
+                          <X :size="10" />
+                        </button>
+                      </div>
+                      <input v-model="newKeywordInput" type="text" placeholder="Add keyword..."
+                        @keydown.enter.prevent="addKeywordChip"
+                        @keydown="(e) => { if (e.key === ',') { e.preventDefault(); addKeywordChip(); } }"
+                        @blur="addKeywordChip" @keydown.backspace="handleKeywordBackspace" />
+                    </div>
                   </div>
                 </section>
 
                 <div class="review-main">
-                  <!-- IMRAD Section Analysis -->
+                  <!-- IMRAD panel -->
                   <section class="imrad-panel">
-                    <div class="meta-panel-head" style="margin-bottom: 1.5rem">
-                      <span class="step-badge">2</span>
-                      <h4>Refine IMRAD Sections</h4>
-                    </div>
-
-                    <div v-if="
-                      uploadMetadata.detected_subheadings &&
-                      uploadMetadata.detected_subheadings.length > 0
-                    " class="subheadings-preview">
-                      <!-- Abstract moved here from Verify Metadata -->
-                      <div class="fg" style="margin-bottom:0.85rem">
-                        <label>Abstract</label>
-                        <textarea v-model="uploadMetadata.abstract" class="abstract-area"
-                          placeholder="Enter abstract…" @input="autoResizeTextarea" />
-                      </div>
-                      <template v-if="
-                        uploadMetadata.detected_subheadings.some((s) =>
-                          INTRODUCTION_SUBHEADING_LABELS.includes(s),
-                        )
-                      ">
-                        <label class="fg-label">Detected Introduction Components:</label>
-                        <div class="sub-tags" style="margin-bottom: 0.75rem">
-                          <span v-for="sub in uploadMetadata.detected_subheadings.filter((s) =>
-                            INTRODUCTION_SUBHEADING_LABELS.includes(s),
-                          )" :key="sub" class="sub-tag sub-tag-intro">
-                            <Check :size="12" /> {{ sub }}
-                          </span>
-                        </div>
-                      </template>
-
-                      <template v-if="
-                        uploadMetadata.detected_subheadings.some((s) =>
-                          METHODOLOGY_SUBHEADING_LABELS.includes(s),
-                        )
-                      ">
-                        <label class="fg-label">Detected Methodology Components:</label>
-                        <div class="sub-tags" style="margin-bottom: 0.75rem">
-                          <span v-for="sub in uploadMetadata.detected_subheadings.filter((s) =>
-                            METHODOLOGY_SUBHEADING_LABELS.includes(s),
-                          )" :key="sub" class="sub-tag">
-                            <Check :size="12" /> {{ sub }}
-                          </span>
-                        </div>
-                      </template>
-
-                      <template v-if="
-                        uploadMetadata.detected_subheadings.some(
-                          (s) => !METHODOLOGY_SUBHEADING_LABELS.includes(s) && !INTRODUCTION_SUBHEADING_LABELS.includes(s),
-                        )
-                      ">
-                        <label class="fg-label">Detected Results Components:</label>
-                        <div class="sub-tags">
-                          <span v-for="sub in uploadMetadata.detected_subheadings.filter(
-                            (s) => !METHODOLOGY_SUBHEADING_LABELS.includes(s) && !INTRODUCTION_SUBHEADING_LABELS.includes(s),
-                          )" :key="sub" class="sub-tag sub-tag-results">
-                            <Check :size="12" /> {{ sub }}
-                          </span>
-                        </div>
-                      </template>
-                    </div>
                     <div class="imrad-tabs">
                       <button v-for="tab in availableImradTabs" :key="tab" type="button" class="imrad-tab-btn"
-                        :class="{ active: activeImradTab === tab }" @click="activeImradTab = tab as ImradKey">
-                        {{
-                          tab === 'results'
-                            ? 'Results and Discussion'
-                            : tab === 'methods'
-                            ? 'Methodology'
-                            : tab.charAt(0).toUpperCase() + tab.slice(1)
-                        }}
+                        :class="{ active: activeImradTab === tab }" @click="activeImradTab = tab">
+                        {{ tab === 'abstract' ? 'Abstract' : tab === 'results' ? 'Results and Discussion' : tab ===
+                          'methods' ? 'Methodology' : tab.charAt(0).toUpperCase() + tab.slice(1) }}
                       </button>
                     </div>
 
+                    <!-- Collapsible Detected Components accordion panel -->
+                    <div v-if="uploadMetadata.detected_subheadings && uploadMetadata.detected_subheadings.length > 0"
+                      class="detected-components-accordion">
+                      <button type="button" class="accordion-trigger"
+                        @click="showDetectedComponents = !showDetectedComponents">
+                        <div class="accordion-trigger-left">
+                          <CheckSquare :size="15" />
+                          <span>Detected Components</span>
+                          <span class="components-count-badge">{{ uploadMetadata.detected_subheadings.length }}
+                            found</span>
+                        </div>
+                        <ChevronDown :size="15" class="accordion-arrow" :class="{ rotated: showDetectedComponents }" />
+                      </button>
+
+                      <transition name="slide-fade">
+                        <div v-if="showDetectedComponents" class="accordion-content">
+                          <template
+                            v-if="uploadMetadata.detected_subheadings.some(s => INTRODUCTION_SUBHEADING_LABELS.includes(s))">
+                            <div class="component-group">
+                              <span class="group-label">Introduction:</span>
+                              <div class="sub-tags">
+                                <span
+                                  v-for="sub in uploadMetadata.detected_subheadings.filter(s => INTRODUCTION_SUBHEADING_LABELS.includes(s))"
+                                  :key="sub" class="sub-tag sub-tag-intro">
+                                  <Check :size="10" /> {{ sub }}
+                                </span>
+                              </div>
+                            </div>
+                          </template>
+
+                          <template
+                            v-if="uploadMetadata.detected_subheadings.some(s => METHODOLOGY_SUBHEADING_LABELS.includes(s))">
+                            <div class="component-group">
+                              <span class="group-label">Methodology:</span>
+                              <div class="sub-tags">
+                                <span
+                                  v-for="sub in uploadMetadata.detected_subheadings.filter(s => METHODOLOGY_SUBHEADING_LABELS.includes(s))"
+                                  :key="sub" class="sub-tag">
+                                  <Check :size="10" /> {{ sub }}
+                                </span>
+                              </div>
+                            </div>
+                          </template>
+
+                          <template
+                            v-if="uploadMetadata.detected_subheadings.some(s => !METHODOLOGY_SUBHEADING_LABELS.includes(s) && !INTRODUCTION_SUBHEADING_LABELS.includes(s))">
+                            <div class="component-group">
+                              <span class="group-label">Results &amp; Discussion:</span>
+                              <div class="sub-tags">
+                                <span
+                                  v-for="sub in uploadMetadata.detected_subheadings.filter(s => !METHODOLOGY_SUBHEADING_LABELS.includes(s) && !INTRODUCTION_SUBHEADING_LABELS.includes(s))"
+                                  :key="sub" class="sub-tag sub-tag-results">
+                                  <Check :size="10" /> {{ sub }}
+                                </span>
+                              </div>
+                            </div>
+                          </template>
+                        </div>
+                      </transition>
+                    </div>
+
                     <div class="imrad-content">
-                      <div v-if="
-                        uploadMetadata.trim_points && uploadMetadata.trim_points[activeImradTab]
-                      " class="trim-alert">
+                      <div
+                        v-if="activeImradTab !== 'abstract' && uploadMetadata.trim_points && uploadMetadata.trim_points[activeImradTab as ImradKey]"
+                        class="trim-alert">
                         <AlertCircle :size="16" />
-                        <span>
-                          <strong>Auto-Trimmed:</strong> This section was trimmed at
-                          <strong>"{{ uploadMetadata.trim_points[activeImradTab] }}"</strong>
-                        </span>
+                        <span><strong>Auto-Trimmed:</strong> This section was trimmed at
+                          <strong>"{{ uploadMetadata.trim_points[activeImradTab as ImradKey] }}"</strong></span>
                       </div>
 
-                      <!-- References tab: formatted preview + raw editor side by side -->
-                      <template v-if="activeImradTab === 'references'">
+                      <!-- Abstract Tab content -->
+                      <template v-if="activeImradTab === 'abstract'">
+                        <textarea ref="imradTextarea" v-model="uploadMetadata.abstract"
+                          class="imrad-textarea abstract-textarea-tab" @input="autoResizeTextarea"
+                          placeholder="Enter abstract…" />
+                      </template>
+
+                      <!-- References: split pane -->
+                      <template v-else-if="activeImradTab === 'references'">
                         <div class="ref-split-wrap">
-                          <!-- Left: formatted list preview -->
                           <div class="ref-preview-pane">
                             <div class="ref-pane-label">
                               <span>Preview</span>
                               <span class="ref-count-badge">{{ parsedReferencesPreview.length }} entr{{
-                                parsedReferencesPreview.length === 1 ? 'y' : 'ies'
-                              }}
-                                detected</span>
+                                parsedReferencesPreview.length === 1 ? 'y' : 'ies' }} detected</span>
                             </div>
                             <div v-if="parsedReferencesPreview.length > 0" class="ref-preview-list">
                               <div v-for="(entry, idx) in parsedReferencesPreview" :key="idx" class="ref-preview-entry"
                                 v-html="linkifyReferences(entry)" />
                             </div>
-                            <div v-else class="ref-preview-empty">
-                              <span>No references extracted yet.</span>
-                            </div>
+                            <div v-else class="ref-preview-empty"><span>No references extracted yet.</span></div>
                           </div>
-                          <!-- Right: raw editable textarea -->
                           <div class="ref-editor-pane">
                             <div class="ref-pane-label">
                               <span>Raw Text <span class="ref-pane-hint">(editable)</span></span>
                             </div>
-                            <textarea ref="imradTextarea" v-model="imradSections[activeImradTab]"
+                            <textarea ref="imradTextarea" v-model="imradSections[activeImradTab as ImradKey]"
                               class="imrad-textarea ref-textarea" @input="autoResizeTextarea"
                               placeholder="No references extracted for this section…" />
                           </div>
                         </div>
                       </template>
 
-                      <!-- All other tabs: single editable textarea -->
-                      <textarea v-else ref="imradTextarea" v-model="imradSections[activeImradTab]"
+                      <!-- All other tabs -->
+                      <textarea v-else ref="imradTextarea" v-model="imradSections[activeImradTab as ImradKey]"
                         class="imrad-textarea maximized" @input="autoResizeTextarea"
                         placeholder="No text extracted for this section…"></textarea>
                     </div>
                   </section>
 
+                  <!-- Page selector -->
                   <section class="page-panel">
                     <div class="page-panel-head">
                       <div class="page-panel-title">
@@ -1939,7 +2065,6 @@ watch(
                           <div class="thumb-hover-hint">
                             <Eye :size="14" />
                           </div>
-                          <!-- Checkbox now has its own click handler -->
                           <div class="thumb-overlay">
                             <div class="thumb-check">
                               <Check :size="14" />
@@ -1949,6 +2074,31 @@ watch(
                       </div>
                     </div>
                   </section>
+                </div>
+              </div>
+
+              <!-- Sticky Bottom Bar -->
+              <div class="review-sticky-footer">
+                <div class="sticky-footer-inner">
+                  <div class="footer-info">
+                    <div class="file-pill">
+                      <span class="file-pill-label">FILE:&nbsp;</span>
+                      <span class="file-pill-name">{{ file?.name || 'Academic Document' }}</span>
+                      <span class="file-pill-count">:&nbsp;<strong>{{ selectedPages.length }}</strong>/{{ pages.length
+                        }} pages
+                        selected</span>
+                    </div>
+                  </div>
+                  <div class="footer-actions">
+                    <button @click="handleCancelParsing" class="btn-cancel-flat">
+                      Cancel
+                    </button>
+                    <button @click="handleFinalConfirm" class="confirm-btn" :disabled="uploadingPaper">
+                      <Loader2 v-if="uploadingPaper" :size="15" class="spin" />
+                      <Check v-else :size="15" />
+                      Confirm Indexing
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -2094,7 +2244,7 @@ watch(
           <div class="tbl-card-head">
             <span class="tbl-count">Overall record: {{ filteredPapers.length }} paper{{
               filteredPapers.length !== 1 ? 's' : ''
-              }}<span v-if="searchQuery || activeFilter !== 'all'" class="tbl-hint">
+            }}<span v-if="searchQuery || activeFilter !== 'all'" class="tbl-hint">
                 · filtered</span></span>
           </div>
           <div class="tbl-scroll">
@@ -2198,7 +2348,7 @@ watch(
                   <td style="text-align: center;">
                     <span class="type-badge" :class="typeColor(paper.project_type)">{{
                       paper.project_type
-                      }}</span>
+                    }}</span>
                   </td>
                   <td>
                     <div class="uploader-cell">
@@ -2252,7 +2402,7 @@ watch(
             <div class="tbl-card-head">
               <span class="tbl-count">Queue: {{ pendingPapers.length }} paper{{
                 pendingPapers.length !== 1 ? 's' : ''
-              }} awaiting approval</span>
+                }} awaiting approval</span>
             </div>
             <div class="tbl-scroll">
               <table class="tbl">
@@ -2306,7 +2456,7 @@ watch(
                     <td style="text-align: center;">
                       <span class="type-badge" :class="typeColor(paper.project_type)">{{
                         paper.project_type
-                        }}</span>
+                      }}</span>
                     </td>
                     <td>
                       <div class="uploader-cell">
@@ -2686,7 +2836,7 @@ watch(
                   <td style="text-align: center;">
                     <span class="type-badge" :class="typeColor(paper.project_type)">{{
                       paper.project_type
-                      }}</span>
+                    }}</span>
                   </td>
                   <td>
                     <span class="uploader-chip">{{ paper.deleted_by ?? '—' }}</span>
@@ -2882,7 +3032,8 @@ watch(
                 </div>
                 <div>
                   <h3>{{ bulkActionType === 'purge' ? 'Permanent Erase' : 'Move to Trash' }}</h3>
-                  <p>{{ bulkActionType === 'purge' ? 'Documents will be removed forever.' : 'Selected items will be moved to recycle bin.' }}</p>
+                  <p>{{ bulkActionType === 'purge' ? 'Documents will be removed forever.' : `Selected items will be
+                    moved to recycle bin.` }}</p>
                 </div>
                 <button @click="closeBulkModal" class="modal-close">
                   <X :size="18" />
@@ -2893,7 +3044,7 @@ watch(
                   You are about to {{ bulkActionType === 'purge' ? 'permanently erase' : 'move to trash' }}
                   <strong>{{ bulkActionType === 'purge' ? selectedTrashIds.length : selectedRepoIds.length }}</strong>
                   document{{ (bulkActionType === 'purge' ? selectedTrashIds.length : selectedRepoIds.length) !== 1 ? 's'
-                  : ''
+                    : ''
                   }}.
                 </div>
                 <p v-if="bulkActionType === 'purge'" class="purge-warning"
@@ -2904,7 +3055,8 @@ watch(
               </div>
               <div class="modal-foot">
                 <button @click="closeBulkModal" class="ghost-btn" :disabled="purging">Cancel</button>
-                <button @click="handleBulkConfirm" class="purge-confirm-btn" :class="{ delete: bulkActionType === 'delete' }" :disabled="purging">
+                <button @click="handleBulkConfirm" class="purge-confirm-btn"
+                  :class="{ delete: bulkActionType === 'delete' }" :disabled="purging">
                   <Loader2 v-if="purging" :size="13" class="spin" />
                   <Trash2 v-else :size="13" />
                   {{ purging ? 'Processing...' : (bulkActionType === 'purge' ? 'Confirm Erase' : 'Confirm Delete') }}
@@ -3088,7 +3240,7 @@ watch(
                     <div class="ic-body">
                       <div v-if="detailsTarget.keywords" class="kw-flex">
                         <span v-for="kw in detailsTarget.keywords.split(',')" :key="kw" class="kw-pill-v2">{{ kw.trim()
-                          }}</span>
+                        }}</span>
                       </div>
                       <span v-else class="val-empty">No keywords defined</span>
                     </div>
@@ -3158,7 +3310,6 @@ watch(
 </template>
 
 <style scoped>
-
 /* ── Modern Layout & Design System ── */
 .mgmt {
   --blue: #3b82f6;
@@ -3173,7 +3324,7 @@ watch(
   --amber-dim: rgba(245, 158, 11, 0.1);
   --red: #ef4444;
   --red-dim: rgba(239, 68, 68, 0.1);
-  
+
   --bg-primary: #ffffff;
   --bg-secondary: #f8fafc;
   --text-primary: #0f172a;
@@ -3187,7 +3338,16 @@ watch(
   --shadow-sm: 0 2px 8px -1px rgba(0, 0, 0, 0.04);
   --shadow-md: 0 10px 25px -5px rgba(0, 166, 81, 0.04), 0 8px 16px -6px rgba(0, 0, 0, 0.02);
   --shadow-lg: 0 20px 40px -10px rgba(0, 0, 0, 0.08);
-  
+
+  /* Review Screen variables mapping */
+  --green-dk: var(--green);
+  --ink: var(--text-primary);
+  --ink-2: var(--text-secondary);
+  --ink-3: var(--text-tertiary);
+  --rule: var(--border-color);
+  --surface: var(--bg-primary);
+  --paper: var(--bg-secondary);
+
   font-family: 'Inter', system-ui, sans-serif;
   display: flex;
   height: calc(100vh - 64px);
@@ -3211,7 +3371,7 @@ watch(
   --amber-dim: rgba(251, 191, 36, 0.15);
   --red: #f87171;
   --red-dim: rgba(248, 113, 113, 0.15);
-  
+
   --bg-primary: #0a0a0a;
   --bg-secondary: #121212;
   --text-primary: #f8fafc;
@@ -3327,6 +3487,7 @@ watch(
   flex-direction: column;
   transition: opacity 0.2s ease;
 }
+
 .sidebar.collapsed .sb-brand-text {
   opacity: 0;
   pointer-events: none;
@@ -3359,6 +3520,7 @@ watch(
   transition: opacity 0.2s;
   white-space: nowrap;
 }
+
 .sidebar.collapsed .sb-group-label {
   opacity: 0;
   display: none;
@@ -3433,6 +3595,7 @@ watch(
   min-width: 0;
   transition: opacity 0.25s ease;
 }
+
 .sidebar.collapsed .sb-item-body {
   opacity: 0;
   pointer-events: none;
@@ -3449,6 +3612,7 @@ watch(
   color: var(--text-tertiary);
   margin-top: 1px;
 }
+
 .sb-item.active .sb-item-desc {
   color: rgba(255, 255, 255, 0.75);
 }
@@ -3458,10 +3622,12 @@ watch(
   transition: transform 0.2s;
   flex-shrink: 0;
 }
+
 .sb-item:hover .sb-arrow {
   color: var(--green);
   transform: translateX(2px);
 }
+
 .sb-item.active .sb-arrow {
   color: rgba(255, 255, 255, 0.8);
 }
@@ -3491,6 +3657,7 @@ watch(
   transition: all 0.2s;
   width: 100%;
 }
+
 .dark .sb-theme-btn {
   background: rgba(10, 10, 10, 0.5);
 }
@@ -3516,6 +3683,7 @@ watch(
   letter-spacing: 0.02em;
   white-space: nowrap;
 }
+
 .sidebar.collapsed .sb-footer-badge span {
   display: none;
 }
@@ -3664,11 +3832,13 @@ watch(
   color: var(--text-secondary);
   transition: all 0.3s;
 }
+
 .step-item.active .step-num {
   background: var(--green-dim);
   border-color: var(--green);
   color: var(--green);
 }
+
 .step-item.done .step-num {
   background: var(--green);
   border-color: var(--green);
@@ -3680,6 +3850,7 @@ watch(
   font-weight: 600;
   color: var(--text-secondary);
 }
+
 .step-item.active .step-label {
   color: var(--text-primary);
   font-weight: 700;
@@ -3691,6 +3862,7 @@ watch(
   background: var(--border-color);
   border-radius: 1px;
 }
+
 .step-line.loading {
   background: linear-gradient(90deg, var(--border-color) 0%, var(--green) 50%, var(--border-color) 100%);
   background-size: 200% 100%;
@@ -3698,8 +3870,13 @@ watch(
 }
 
 @keyframes move-gradient {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 /* ── Content Area & Headings ── */
@@ -3769,11 +3946,30 @@ watch(
   flex-shrink: 0;
 }
 
-.stat-ico.green { background: var(--green-dim); color: var(--green); }
-.stat-ico.blue { background: var(--blue-dim); color: var(--blue); }
-.stat-ico.orange { background: var(--orange-dim); color: var(--orange); }
-.stat-ico.purple { background: var(--purple-dim); color: var(--purple); }
-.stat-ico.amber { background: var(--amber-dim); color: var(--amber); }
+.stat-ico.green {
+  background: var(--green-dim);
+  color: var(--green);
+}
+
+.stat-ico.blue {
+  background: var(--blue-dim);
+  color: var(--blue);
+}
+
+.stat-ico.orange {
+  background: var(--orange-dim);
+  color: var(--orange);
+}
+
+.stat-ico.purple {
+  background: var(--purple-dim);
+  color: var(--purple);
+}
+
+.stat-ico.amber {
+  background: var(--amber-dim);
+  color: var(--amber);
+}
 
 .stat-val {
   display: block;
@@ -3846,7 +4042,7 @@ watch(
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
   flex-shrink: 0;
 }
 
@@ -3859,7 +4055,7 @@ watch(
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  box-shadow: inset 0 2px 8px rgba(0,0,0,0.05);
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
 .pie-total {
@@ -3895,8 +4091,14 @@ watch(
   height: 10px;
   border-radius: 50%;
 }
-.legend-item .dot.blue { background: var(--blue); }
-.legend-item .dot.orange { background: var(--orange); }
+
+.legend-item .dot.blue {
+  background: var(--blue);
+}
+
+.legend-item .dot.orange {
+  background: var(--orange);
+}
 
 .legend-item .label {
   color: var(--text-secondary);
@@ -4060,8 +4262,15 @@ watch(
 }
 
 @keyframes slide-down {
-  0% { transform: translateY(-10px); opacity: 0; }
-  100% { transform: translateY(0); opacity: 1; }
+  0% {
+    transform: translateY(-10px);
+    opacity: 0;
+  }
+
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
 .selection-count {
@@ -4088,6 +4297,7 @@ watch(
   color: #fff;
   border: none;
 }
+
 .bulk-btn.delete:hover {
   box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
 }
@@ -4097,6 +4307,7 @@ watch(
   color: var(--text-secondary);
   border: 1px solid var(--border-color);
 }
+
 .bulk-btn.cancel:hover {
   background: var(--bg-secondary);
 }
@@ -4116,6 +4327,7 @@ watch(
   border-bottom: 1px solid var(--border-color);
   background: rgba(255, 255, 255, 0.2);
 }
+
 .dark .tbl-card-head {
   background: rgba(10, 10, 10, 0.2);
 }
@@ -4172,6 +4384,7 @@ watch(
 .tbl-row:hover {
   background-color: rgba(0, 166, 81, 0.04);
 }
+
 .dark .tbl-row:hover {
   background-color: rgba(255, 255, 255, 0.03);
 }
@@ -4213,11 +4426,11 @@ watch(
   transition: all 0.2s;
 }
 
-.custom-check:hover input ~ .check-box {
+.custom-check:hover input~.check-box {
   border-color: var(--green);
 }
 
-.custom-check input:checked ~ .check-box {
+.custom-check input:checked~.check-box {
   background: var(--green);
   border-color: var(--green);
 }
@@ -4233,7 +4446,7 @@ watch(
   margin-bottom: 2px;
 }
 
-.custom-check input:checked ~ .check-box::after {
+.custom-check input:checked~.check-box::after {
   display: block;
 }
 
@@ -4268,8 +4481,15 @@ watch(
   text-transform: uppercase;
 }
 
-.paper-av[data-t="blue"] { background: var(--blue-dim); color: var(--blue); }
-.paper-av[data-t="orange"] { background: var(--orange-dim); color: var(--orange); }
+.paper-av[data-t="blue"] {
+  background: var(--blue-dim);
+  color: var(--blue);
+}
+
+.paper-av[data-t="orange"] {
+  background: var(--orange-dim);
+  color: var(--orange);
+}
 
 .paper-info {
   display: flex;
@@ -4289,6 +4509,7 @@ watch(
 .paper-name.clickable {
   cursor: pointer;
 }
+
 .paper-name.clickable:hover {
   color: var(--green);
   text-decoration: underline;
@@ -4314,11 +4535,31 @@ watch(
   text-transform: uppercase;
   letter-spacing: 0.02em;
 }
-.type-badge.green { background: var(--green-dim); color: var(--green); }
-.type-badge.blue { background: var(--blue-dim); color: var(--blue); }
-.type-badge.orange { background: var(--orange-dim); color: var(--orange); }
-.type-badge.purple { background: var(--purple-dim); color: var(--purple); }
-.type-badge.amber { background: var(--amber-dim); color: var(--amber); }
+
+.type-badge.green {
+  background: var(--green-dim);
+  color: var(--green);
+}
+
+.type-badge.blue {
+  background: var(--blue-dim);
+  color: var(--blue);
+}
+
+.type-badge.orange {
+  background: var(--orange-dim);
+  color: var(--orange);
+}
+
+.type-badge.purple {
+  background: var(--purple-dim);
+  color: var(--purple);
+}
+
+.type-badge.amber {
+  background: var(--amber-dim);
+  color: var(--amber);
+}
 
 .dept-td {
   max-width: 0;
@@ -4364,9 +4605,18 @@ watch(
   text-transform: uppercase;
   margin-top: 2px;
 }
-.uploader-role-tag.admin { color: var(--purple); }
-.uploader-role-tag.faculty { color: var(--green); }
-.uploader-role-tag.student { color: var(--blue); }
+
+.uploader-role-tag.admin {
+  color: var(--purple);
+}
+
+.uploader-role-tag.faculty {
+  color: var(--green);
+}
+
+.uploader-role-tag.student {
+  color: var(--blue);
+}
 
 .upload-time-mini {
   font-size: 0.75rem;
@@ -4421,7 +4671,8 @@ watch(
   flex-shrink: 0;
 }
 
-.th-r, .td-r {
+.th-r,
+.td-r {
   text-align: right !important;
 }
 
@@ -4460,6 +4711,7 @@ watch(
   flex-wrap: wrap;
   gap: 16px;
 }
+
 .dark .logs-legend {
   background: rgba(10, 10, 10, 0.15);
 }
@@ -4478,10 +4730,26 @@ watch(
   font-weight: 700;
   text-transform: uppercase;
 }
-.log-badge.green { background: var(--green-dim); color: var(--green); }
-.log-badge.blue { background: var(--blue-dim); color: var(--blue); }
-.log-badge.purple { background: var(--purple-dim); color: var(--purple); }
-.log-badge.red { background: var(--red-dim); color: var(--red); }
+
+.log-badge.green {
+  background: var(--green-dim);
+  color: var(--green);
+}
+
+.log-badge.blue {
+  background: var(--blue-dim);
+  color: var(--blue);
+}
+
+.log-badge.purple {
+  background: var(--purple-dim);
+  color: var(--purple);
+}
+
+.log-badge.red {
+  background: var(--red-dim);
+  color: var(--red);
+}
 
 .legend-lbl {
   font-size: 0.72rem;
@@ -4532,9 +4800,21 @@ watch(
   font-size: 0.72rem;
   font-weight: 700;
 }
-.days-badge.green { background: var(--green-dim); color: var(--green); }
-.days-badge.amber { background: var(--amber-dim); color: var(--amber); }
-.days-badge.red { background: var(--red-dim); color: var(--red); }
+
+.days-badge.green {
+  background: var(--green-dim);
+  color: var(--green);
+}
+
+.days-badge.amber {
+  background: var(--amber-dim);
+  color: var(--amber);
+}
+
+.days-badge.red {
+  background: var(--red-dim);
+  color: var(--red);
+}
 
 /* Table Skeletons */
 .skel-row td {
@@ -4589,8 +4869,13 @@ watch(
 }
 
 @keyframes shine {
-  0% { background-position: -200% 0; }
-  100% { background-position: 200% 0; }
+  0% {
+    background-position: -200% 0;
+  }
+
+  100% {
+    background-position: 200% 0;
+  }
 }
 
 .tbl-empty {
@@ -4668,6 +4953,7 @@ watch(
 .icon-action-btn.danger {
   color: var(--red);
 }
+
 .icon-action-btn.danger:hover {
   border-color: var(--red);
   background: var(--red-dim);
@@ -4838,11 +5124,13 @@ watch(
   align-items: center;
   gap: 12px;
 }
+
 .dark .drop-zone {
   background: rgba(10, 10, 10, 0.1);
 }
 
-.drop-zone:hover, .drop-zone.dragging {
+.drop-zone:hover,
+.drop-zone.dragging {
   border-color: var(--green);
   background: var(--green-dim);
 }
@@ -4924,85 +5212,22 @@ watch(
   user-select: none;
 }
 
-.sample-doc-row:hover {
-  border-color: var(--green);
-  background: var(--green-dim);
-}
-
-.sample-doc-icon {
+.topbar-center {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
-}
-
-.sample-doc-name {
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  flex: 1;
-}
-
-.sample-doc-size {
-  font-size: 0.7rem;
-  color: var(--text-tertiary);
-}
-
-.sample-doc-grip {
-  color: var(--text-tertiary);
-  opacity: 0.5;
-}
-
-.sample-doc-row:hover .sample-doc-grip {
-  color: var(--green);
-  opacity: 1;
-}
-
-.attach-btn-mobile {
-  display: none;
-}
-
-/* Success Card */
-.upload-success {
-  text-align: center;
-  padding: 24px;
-}
-
-.upload-success h2 {
-  font-size: 1.25rem;
-  font-weight: 800;
-  color: var(--text-primary);
-  margin-top: 16px;
-}
-
-.upload-success p {
-  font-size: 0.85rem;
-  color: var(--text-secondary);
-  margin-top: 4px;
-}
-
-/* Step 2 Review workspace */
-.review-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
 }
 
 .review-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 24px;
-  background: var(--card-bg);
-  backdrop-filter: blur(20px);
-  border: 1px solid var(--border-color);
-  border-radius: 14px;
-  box-shadow: var(--shadow-sm);
-  flex-wrap: wrap;
-  gap: 16px;
+  margin-bottom: 2rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--border-color);
 }
 
 .review-bar-left {
@@ -5011,242 +5236,287 @@ watch(
   gap: 12px;
 }
 
-.review-bar-icon {
-  width: 38px;
-  height: 38px;
-  border-radius: 10px;
-  background: var(--green-dim);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.review-bar-title {
-  font-size: 1rem;
-  font-weight: 800;
-  color: var(--text-primary);
-}
-
-.review-bar-sub {
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-  margin-top: 1px;
-}
-
 .review-bar-right {
   display: flex;
   align-items: center;
-  gap: 12px;
 }
 
-.file-pill {
-  display: flex;
+.custom-header-file-pill {
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border-radius: 20px;
+  padding: 6px 14px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
-  font-size: 0.75rem;
+  border-radius: 9999px;
+  font-family: 'Lora', Georgia, serif;
+  font-size: 0.85rem;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.2s ease;
 }
 
-.file-pill-label {
-  font-weight: 700;
+.custom-header-file-pill:hover {
+  border-color: var(--green);
+  box-shadow: 0 4px 12px rgba(0, 166, 81, 0.08);
+}
+
+.custom-header-file-pill .file-pill-label {
   color: var(--green);
+  font-weight: 700;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
 }
 
-.file-pill-name {
+.custom-header-file-pill .file-pill-name {
   color: var(--text-primary);
-  font-weight: 600;
-  max-width: 120px;
+  font-weight: 500;
+  max-width: 280px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.file-pill-count {
-  color: var(--text-secondary);
-  border-left: 1px solid var(--border-color);
-  padding-left: 6px;
+.review-bar-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+  line-height: 1.2;
 }
 
-.confirm-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 16px;
-  height: 32px;
-  border-radius: 16px;
-  border: none;
-  background: var(--green);
-  color: #fff;
+.review-bar-sub {
+  margin: 4px 0 0 0;
   font-size: 0.8rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.confirm-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 166, 81, 0.25);
-}
-
-.cancel-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
-  border-radius: 12px;
-  border: 1px solid var(--border-color);
-  background: transparent;
   color: var(--text-secondary);
-  font-size: 0.72rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
+  line-height: 1.4;
 }
-.cancel-btn:hover {
-  color: var(--red);
-  border-color: var(--red);
+
+.review-bar-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  background: var(--green-dim);
+  border-radius: 8px;
+  flex-shrink: 0;
 }
 
 .review-grid {
   display: grid;
-  grid-template-columns: 280px 1fr;
-  gap: 20px;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
   align-items: start;
 }
 
-.meta-panel {
-  background: var(--card-bg);
-  backdrop-filter: blur(20px);
-  border: 1px solid var(--border-color);
-  border-radius: 16px;
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+@media (min-width: 1024px) {
+  .review-grid {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 2.5rem;
+  }
+
+  .meta-panel {
+    grid-column: span 4;
+  }
+
+  .review-main {
+    grid-column: span 8;
+  }
+}
+
+.meta-panel,
+.imrad-panel {
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: none;
+  box-shadow: none;
+  padding: 0;
 }
 
 .meta-panel-head {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--rule);
 }
 
-.step-badge {
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: var(--green);
-  color: #fff;
-  font-size: 0.65rem;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.dark .meta-panel-head {
+  border-bottom-color: rgba(255, 255, 255, 0.06);
 }
 
 .meta-panel-head h4 {
-  font-size: 0.88rem;
-  font-weight: 750;
-  color: var(--text-primary);
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--ink);
+  font-family: 'Lora', serif;
+}
+
+.step-badge {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--green);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: 0 2px 5px rgba(0, 166, 81, 0.3);
 }
 
 .fg {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 0.3rem;
+  margin-bottom: 0.9rem;
+}
+
+.fg label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07rem;
+  color: var(--ink-3);
+}
+
+.fg label .fg-label-hint {
+  font-size: 0.62rem;
+  font-weight: 500;
+  text-transform: none;
+  opacity: 0.75;
+  letter-spacing: 0;
+}
+
+.fg input,
+.fg select,
+.fg textarea {
+  width: 100%;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.02);
+  color: var(--ink);
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.dark .fg input,
+.dark .fg select,
+.dark .fg textarea {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.fg input:focus,
+.fg select:focus,
+.fg textarea:focus {
+  outline: none;
+  border-color: var(--green);
+  background: var(--bg-secondary);
+  box-shadow: 0 0 0 3px rgba(0, 166, 81, 0.1);
+}
+
+.fg textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.fg textarea.abstract-area {
+  min-height: 180px !important;
+  font-family: 'Lora', Georgia, serif;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  letter-spacing: 0.01em;
+  padding: 16px 20px;
+  text-align: justify;
 }
 
 .fg-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: 0.75rem;
 }
 
-.fg label {
-  font-size: 0.72rem;
-  font-weight: 700;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.01em;
-}
-
-.fg input, .fg select, .fg textarea {
-  width: 100%;
-  padding: 8px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--border-color);
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  font-size: 0.8rem;
-  outline: none;
-  transition: border-color 0.2s;
-}
-
-.fg textarea {
-  resize: none;
-  min-height: 38px;
-  overflow-y: hidden;
-  font-family: inherit;
-}
-
-.fg input:focus, .fg select:focus, .fg textarea:focus {
-  border-color: var(--green);
+@media (max-width: 640px) {
+  .fg-row {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
 }
 
 .authors-stack {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 0.4rem;
 }
 
 .author-row {
   display: flex;
-  gap: 6px;
+  gap: 0.4rem;
+  align-items: center;
 }
 
-.icon-btn.red {
-  width: 32px;
-  height: 32px;
+.author-row input {
+  flex: 1;
+  background: var(--surface);
+  border: 1px solid var(--rule);
   border-radius: 8px;
-  border: 1px solid var(--border-color);
-  background: transparent;
-  color: var(--red);
+  padding: 0.55rem 0.75rem;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.86rem;
+  color: var(--ink);
+  outline: none;
+}
+
+.author-row input:focus {
+  border-color: var(--green);
+}
+
+.icon-btn {
+  background: none;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  padding: 0.5rem;
+  cursor: pointer;
+  color: var(--ink-3);
   display: flex;
   align-items: center;
-  justify-content: center;
-  cursor: pointer;
   transition: all 0.2s;
-  flex-shrink: 0;
 }
 
 .icon-btn.red:hover {
-  border-color: var(--red);
-  background: var(--red-dim);
+  border-color: #ef4444;
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.08);
 }
 
 .add-btn {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 4px;
-  padding: 6px 12px;
+  gap: 0.35rem;
+  background: none;
+  border: 1.5px dashed var(--rule);
   border-radius: 8px;
-  border: 1px dashed var(--border-color);
-  background: transparent;
-  color: var(--green);
-  font-size: 0.75rem;
-  font-weight: 700;
+  padding: 0.5rem 0.85rem;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.78rem;
+  color: var(--ink-2);
   cursor: pointer;
   transition: all 0.2s;
-  width: 100%;
 }
 
 .add-btn:hover {
   border-color: var(--green);
+  color: var(--green);
   background: var(--green-dim);
 }
 
@@ -5265,266 +5535,766 @@ watch(
   box-shadow: 0 4px 12px rgba(0, 166, 81, 0.2);
 }
 
+.chips-input-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.02);
+  min-height: 42px;
+  box-sizing: border-box;
+  transition: all 0.2s ease;
+}
+
+.dark .chips-input-wrap {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.chips-input-wrap:focus-within {
+  border-color: var(--green);
+  background: var(--bg-secondary);
+  box-shadow: 0 0 0 3px rgba(0, 166, 81, 0.1);
+}
+
+.chip-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: rgba(0, 166, 81, 0.08);
+  color: var(--green);
+  border: 1px solid rgba(0, 166, 81, 0.15);
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.chip-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--green);
+  cursor: pointer;
+  border-radius: 50%;
+  opacity: 0.7;
+  transition: opacity 0.2s, background 0.2s;
+}
+
+.chip-close:hover {
+  opacity: 1;
+  background: rgba(0, 166, 81, 0.15);
+}
+
+.chips-input-wrap input {
+  flex: 1;
+  min-width: 120px;
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  padding: 0.2rem 0.3rem !important;
+  font-size: 0.88rem !important;
+  color: var(--ink) !important;
+  box-shadow: none !important;
+}
+
+.detected-components-accordion {
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(var(--bg-secondary-rgb, 255, 255, 255), 0.3);
+  margin-bottom: 1rem;
+}
+
+.dark .detected-components-accordion {
+  background: rgba(22, 22, 22, 0.2);
+  border-color: rgba(255, 255, 255, 0.06);
+}
+
+.accordion-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  background: transparent;
+  border: none;
+  color: var(--ink-2);
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 600;
+  transition: background 0.2s;
+}
+
+.accordion-trigger:hover {
+  background: rgba(0, 0, 0, 0.02);
+  color: var(--ink);
+}
+
+.dark .accordion-trigger:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.accordion-trigger-left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.components-count-badge {
+  background: var(--green-dim);
+  color: var(--green);
+  font-size: 0.7rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 10px;
+  font-weight: 700;
+}
+
+.accordion-arrow {
+  transition: transform 0.2s ease;
+}
+
+.accordion-arrow.rotated {
+  transform: rotate(180deg);
+}
+
+.accordion-content {
+  padding: 0.25rem 1rem 1rem;
+  border-top: 1px dashed var(--rule);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.dark .accordion-content {
+  border-top-color: rgba(255, 255, 255, 0.06);
+}
+
+.component-group {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.component-group .sub-tags {
+  margin-bottom: 0 !important;
+}
+
+.group-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--ink-3);
+  min-width: 140px;
+}
+
 .review-main {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-}
-
-.imrad-panel {
-  background: var(--card-bg);
-  backdrop-filter: blur(20px);
-  border: 1px solid var(--border-color);
-  border-radius: 16px;
-  padding: 24px;
+  gap: 1.25rem;
+  min-width: 0;
 }
 
 .subheadings-preview {
-  background: rgba(255, 255, 255, 0.2);
-  border: 1px solid var(--border-color);
-  border-radius: 10px;
-  padding: 12px;
-  margin-bottom: 16px;
-}
-.dark .subheadings-preview {
-  background: rgba(10, 10, 10, 0.2);
+  margin-bottom: 1.25rem;
 }
 
 .fg-label {
+  display: block;
   font-size: 0.72rem;
   font-weight: 700;
-  color: var(--text-secondary);
-  display: block;
-  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-3);
+  margin-bottom: 0.5rem;
 }
 
 .sub-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 0.5rem;
 }
 
 .sub-tag {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 3px 8px;
-  border-radius: 12px;
+  gap: 0.35rem;
   background: var(--green-dim);
-  color: var(--green);
-  font-size: 0.7rem;
-  font-weight: 700;
+  color: var(--green-dk);
+  font-size: 0.74rem;
+  font-weight: 600;
+  padding: 0.25rem 0.6rem;
+  border-radius: 4px;
 }
 
 .sub-tag-intro {
-  background: var(--purple-dim);
-  color: var(--purple);
+  background: rgba(139, 92, 246, 0.1);
+  color: #8b5cf6;
 }
 
 .sub-tag-results {
-  background: var(--blue-dim);
-  color: var(--blue);
+  background: rgba(245, 158, 11, 0.1);
+  color: #d97706;
 }
 
 .imrad-tabs {
   display: flex;
-  border-bottom: 1px solid var(--border-color);
-  gap: 4px;
-  margin-bottom: 16px;
+  gap: 0.25rem;
+  background: rgba(var(--bg-primary-rgb, 255, 255, 255), 0.3);
+  border: 1px solid var(--rule);
+  padding: 0.3rem;
+  border-radius: 10px;
+  margin-bottom: 1.25rem;
   overflow-x: auto;
-  white-space: nowrap;
+  scrollbar-width: none;
+}
+
+.dark .imrad-tabs {
+  background: rgba(10, 10, 10, 0.3);
+  border-color: rgba(255, 255, 255, 0.06);
+}
+
+.imrad-tabs::-webkit-scrollbar {
+  display: none;
 }
 
 .imrad-tab-btn {
-  padding: 10px 16px;
-  background: transparent;
+  flex: 1;
+  background: none;
   border: none;
-  border-bottom: 2px solid transparent;
-  color: var(--text-secondary);
-  font-size: 0.8rem;
+  padding: 0.55rem;
+  font-family: inherit;
+  font-size: 0.78rem;
   font-weight: 700;
+  color: var(--ink-3);
   cursor: pointer;
-  transition: all 0.2s;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  white-space: nowrap;
 }
 
 .imrad-tab-btn:hover {
-  color: var(--green);
+  color: var(--ink);
+  background: rgba(0, 166, 81, 0.05);
 }
 
 .imrad-tab-btn.active {
-  color: var(--green);
-  border-bottom-color: var(--green);
+  background: var(--green);
+  color: #fff;
+  box-shadow: 0 4px 10px rgba(0, 166, 81, 0.25);
 }
 
 .imrad-content {
   display: flex;
   flex-direction: column;
+  gap: 0.75rem;
 }
 
 .trim-alert {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  background: rgba(245, 158, 11, 0.03);
-  border: 1px solid var(--amber);
+  gap: 0.75rem;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  color: #d97706;
+  padding: 0.75rem 1rem;
   border-radius: 8px;
-  color: var(--text-secondary);
-  font-size: 0.75rem;
-  margin-bottom: 12px;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.trim-alert strong {
+  color: #b45309;
 }
 
 .imrad-textarea {
   width: 100%;
-  min-height: 120px;
+  min-height: 480px;
+  max-height: 600px;
+  background: var(--surface);
+  border: 1.5px solid var(--rule);
   border-radius: 10px;
-  border: 1px solid var(--border-color);
-  background: var(--bg-secondary);
-  color: var(--text-primary);
   padding: 16px 20px;
-  font-size: 0.85rem;
-  line-height: 1.6;
-  outline: none;
+  font-size: 0.88rem;
+  line-height: 1.75;
   font-family: 'Lora', Georgia, serif;
-  resize: none;
-  overflow-y: hidden;
+  resize: vertical;
+  overflow-y: auto;
+  color: var(--ink-2);
+  box-sizing: border-box;
   letter-spacing: 0.01em;
   text-align: justify;
+}
+
+.abstract-textarea-tab {
+  min-height: 250px !important;
 }
 
 .imrad-textarea:focus {
+  outline: none;
   border-color: var(--green);
+  box-shadow: 0 0 0 3px rgba(0, 166, 81, 0.15);
 }
 
-.imrad-textarea.maximized {
-  min-height: 160px;
-}
-
-.fg textarea.abstract-area {
-  min-height: 80px;
-  font-family: 'Lora', Georgia, serif;
-  font-size: 0.85rem;
-  line-height: 1.6;
-  letter-spacing: 0.01em;
-  padding: 16px 20px;
-  text-align: justify;
-  resize: none;
-  overflow-y: hidden;
-}
-
-/* Reference split preview */
 .ref-split-wrap {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  height: 380px;
+  gap: 1rem;
+  align-items: start;
 }
 
-.ref-preview-pane, .ref-editor-pane {
+.ref-preview-pane,
+.ref-editor-pane {
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--border-color);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.1);
-  overflow: hidden;
-}
-.dark .ref-preview-pane, .dark .ref-editor-pane {
-  background: rgba(10, 10, 10, 0.1);
+  gap: 0.5rem;
 }
 
 .ref-pane-label {
-  padding: 8px 12px;
-  background: rgba(255, 255, 255, 0.3);
-  border-bottom: 1px solid var(--border-color);
-  font-size: 0.72rem;
-  font-weight: 700;
-  color: var(--text-secondary);
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--ink-3);
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--rule);
 }
+
 .dark .ref-pane-label {
-  background: rgba(10, 10, 10, 0.3);
+  border-bottom-color: rgba(255, 255, 255, 0.06);
+}
+
+.ref-pane-hint {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  font-style: italic;
 }
 
 .ref-count-badge {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: 0;
   background: var(--green-dim);
-  color: var(--green);
-  padding: 2px 6px;
-  border-radius: 10px;
-  font-size: 0.65rem;
+  color: var(--green-dk);
+  padding: 0.12rem 0.45rem;
+  border-radius: 3px;
 }
 
 .ref-preview-list {
-  flex: 1;
+  background: var(--surface);
+  border: 1.5px solid var(--rule);
+  border-radius: 10px;
+  padding: 1rem;
+  max-height: 560px;
   overflow-y: auto;
-  padding: 12px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  box-sizing: border-box;
 }
 
 .ref-preview-entry {
   font-family: 'Lora', Georgia, serif;
-  font-size: 0.85rem;
-  line-height: 1.6;
-  color: var(--text-primary);
-  border-left: 2px solid var(--green);
-  padding-left: 8px;
+  font-size: 0.86rem;
+  line-height: 1.7;
+  color: var(--ink);
+  padding: 0.65rem 0 0.65rem 1.75rem;
+  text-indent: -1.75rem;
+  border-bottom: 1px solid var(--rule);
+  word-break: break-word;
   letter-spacing: 0.01em;
 }
 
-.ref-preview-empty {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-tertiary);
-  font-size: 0.78rem;
+.dark .ref-preview-entry {
+  border-bottom-color: rgba(255, 255, 255, 0.05);
 }
 
-.ref-pane-hint {
-  font-weight: 500;
+.ref-preview-entry:last-child {
+  border-bottom: none;
+}
+
+.ref-authors-preview {
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.ref-year-preview {
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.ref-title-preview {
   font-style: italic;
-  color: var(--text-tertiary);
+  font-weight: 400;
+  color: var(--ink);
+}
+
+.ref-num-preview {
+  font-weight: 700;
+  color: var(--green-dk);
+  margin-right: 0.2rem;
+}
+
+.ref-link-preview {
+  color: var(--green-dk);
+  text-decoration: none;
+  word-break: break-all;
+}
+
+.ref-link-preview:hover {
+  text-decoration: underline;
+}
+
+.ref-preview-empty {
+  background: var(--surface);
+  border: 1.5px dashed var(--rule);
+  border-radius: 8px;
+  padding: 2rem 1rem;
+  text-align: center;
+  font-size: 0.82rem;
+  color: var(--ink-3);
+  font-style: italic;
 }
 
 .ref-textarea {
-  flex: 1;
-  border: none;
-  border-radius: 0;
-  background: transparent;
-  resize: none;
-  min-height: auto;
+  min-height: 560px;
+  max-height: 560px;
+  font-size: 0.82rem;
+  line-height: 1.6;
 }
 
-/* Page indexer panel */
 .page-panel {
-  background: var(--card-bg);
+  background: rgba(var(--bg-secondary-rgb, 255, 255, 255), 0.5);
   backdrop-filter: blur(20px);
-  border: 1px solid var(--border-color);
-  border-radius: 16px;
-  padding: 24px;
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  padding: 1.5rem;
+  box-shadow: 0 4px 25px rgba(0, 0, 0, 0.02);
+}
+
+.dark .page-panel {
+  background: rgba(22, 22, 22, 0.45);
+  border-color: rgba(255, 255, 255, 0.06);
 }
 
 .page-panel-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-bottom: 1px solid var(--border-color);
-  padding-bottom: 14px;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
-  gap: 12px;
+  margin-bottom: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.dark .page-panel-head {
+  border-bottom-color: rgba(255, 255, 255, 0.06);
 }
 
 .page-panel-title {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
 }
 
 .page-panel-title h4 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--ink);
+  font-family: 'Lora', serif;
+}
+
+.page-panel-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.selector-hint {
+  font-size: 0.78rem;
+  color: var(--ink-3);
+  margin: 0;
+}
+
+.selector-btns {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.text-btn {
+  background: none;
+  border: none;
+  color: var(--green-dk);
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+
+.text-btn:hover {
+  text-decoration: underline;
+}
+
+.dot-sep {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--rule);
+}
+
+.thumbs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 0.75rem;
+}
+
+.thumb-card {
+  cursor: pointer;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 2px solid var(--rule);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.01);
+  aspect-ratio: 3/4;
+}
+
+.dark .thumb-card {
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.thumb-card.selected {
+  border-color: var(--green);
+  box-shadow: 0 4px 15px rgba(0, 166, 81, 0.2);
+  transform: scale(1.02);
+}
+
+.thumb-wrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.thumb-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  cursor: zoom-in;
+  transition: filter 0.15s;
+}
+
+.thumb-wrap:hover .thumb-img {
+  filter: brightness(0.88);
+}
+
+.thumb-num {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(5px);
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-align: center;
+  padding: 0.2rem;
+}
+
+.thumb-sec-badges {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sec-badge {
+  font-size: 0.55rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 0.1rem 0.3rem;
+  border-radius: 3px;
+  color: #fff;
+}
+
+.sec-badge.introduction {
+  background: #7c3aed;
+}
+
+.sec-badge.methods,
+.sec-badge.methodology {
+  background: #2563eb;
+}
+
+.sec-badge.results {
+  background: #059669;
+}
+
+.sec-badge.discussion {
+  background: #d97706;
+}
+
+.sec-badge.abstract {
+  background: #be185d;
+}
+
+.sec-badge.references {
+  background: #065f46;
+}
+
+.thumb-hover-hint {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s;
+  pointer-events: none;
+}
+
+.thumb-wrap:hover .thumb-hover-hint {
+  opacity: 1;
+}
+
+.thumb-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 166, 81, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.14s;
+  pointer-events: none;
+}
+
+.thumb-card.selected .thumb-overlay {
+  opacity: 1;
+}
+
+.thumb-check {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--green);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(0, 166, 81, 0.3);
+}
+
+/* Sticky Bottom Footer */
+.review-sticky-footer {
+  position: sticky;
+  bottom: 0;
+  margin-left: -28px;
+  margin-right: -28px;
+  margin-bottom: -32px;
+  margin-top: 2rem;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--rule);
+  padding: 1rem 28px;
+  z-index: 99;
+  box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.03);
+  transition: background-color 0.3s;
+}
+
+.dark .review-sticky-footer {
+  background: #0a0a0a;
+  border-top-color: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.25);
+}
+
+.sticky-footer-inner {
+  max-width: 1440px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.btn-cancel-flat {
+  background: transparent;
+  border: 1px solid var(--rule);
+  color: var(--ink-2);
+  padding: 0.6rem 1.25rem;
+  border-radius: 8px;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-cancel-flat:hover {
+  background: rgba(0, 0, 0, 0.03);
+  color: var(--ink);
+}
+
+.dark .btn-cancel-flat:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.confirm-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: var(--green);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 0.6rem 1.3rem;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.confirm-btn:hover:not(:disabled) {
+  background: #008f44;
+  box-shadow: 0 4px 12px rgba(0, 166, 81, 0.2);
+}
+
+.confirm-btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+page-panel-title h4 {
   font-size: 0.88rem;
   font-weight: 750;
   color: var(--text-primary);
@@ -5610,10 +6380,12 @@ watch(
   opacity: 0.75;
   transition: opacity 0.2s, transform 0.2s;
 }
+
 .thumb-card:hover .thumb-img {
   opacity: 0.9;
   transform: scale(1.02);
 }
+
 .thumb-card.selected .thumb-img {
   opacity: 1;
 }
@@ -5622,7 +6394,7 @@ watch(
   position: absolute;
   bottom: 6px;
   left: 6px;
-  background: rgba(0,0,0,0.6);
+  background: rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(4px);
   color: #fff;
   font-size: 0.65rem;
@@ -5648,12 +6420,24 @@ watch(
   color: #fff;
   text-transform: uppercase;
 }
-.sec-badge.introduction { background: var(--blue); }
+
+.sec-badge.introduction {
+  background: var(--blue);
+}
+
 .sec-badge.methodology,
-.sec-badge.methods { background: var(--purple); }
+.sec-badge.methods {
+  background: var(--purple);
+}
+
 .sec-badge.results,
-.sec-badge.discussion { background: var(--orange); }
-.sec-badge.references { background: var(--red); }
+.sec-badge.discussion {
+  background: var(--orange);
+}
+
+.sec-badge.references {
+  background: var(--red);
+}
 
 .thumb-hover-hint {
   position: absolute;
@@ -5661,7 +6445,7 @@ watch(
   left: 50%;
   transform: translate(-50%, -50%) scale(0.8);
   opacity: 0;
-  background: rgba(0,0,0,0.65);
+  background: rgba(0, 0, 0, 0.65);
   backdrop-filter: blur(4px);
   color: #fff;
   width: 28px;
@@ -5672,6 +6456,7 @@ watch(
   justify-content: center;
   transition: all 0.2s;
 }
+
 .thumb-card:hover .thumb-hover-hint {
   opacity: 1;
   transform: translate(-50%, -50%) scale(1);
@@ -5685,6 +6470,7 @@ watch(
   transition: opacity 0.2s;
   pointer-events: none;
 }
+
 .thumb-card.selected .thumb-overlay {
   opacity: 1;
 }
@@ -5701,7 +6487,7 @@ watch(
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 }
 
 /* Floating Upload notification */
@@ -5768,6 +6554,7 @@ watch(
   padding: 2px;
   border-radius: 4px;
 }
+
 .notif-close:hover {
   color: var(--text-primary);
   background: var(--bg-secondary);
@@ -5830,8 +6617,15 @@ watch(
 }
 
 @keyframes modal-enter {
-  0% { transform: scale(0.95); opacity: 0; }
-  100% { transform: scale(1); opacity: 1; }
+  0% {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 .modal-head {
@@ -5852,10 +6646,26 @@ watch(
   justify-content: center;
   flex-shrink: 0;
 }
-.modal-head-icon.green { background: var(--green-dim); color: var(--green); }
-.modal-head-icon.blue { background: var(--blue-dim); color: var(--blue); }
-.modal-head-icon.purple { background: var(--purple-dim); color: var(--purple); }
-.modal-head-icon.red { background: var(--red-dim); color: var(--red); }
+
+.modal-head-icon.green {
+  background: var(--green-dim);
+  color: var(--green);
+}
+
+.modal-head-icon.blue {
+  background: var(--blue-dim);
+  color: var(--blue);
+}
+
+.modal-head-icon.purple {
+  background: var(--purple-dim);
+  color: var(--purple);
+}
+
+.modal-head-icon.red {
+  background: var(--red-dim);
+  color: var(--red);
+}
 
 .modal-head h3 {
   font-size: 1.1rem;
@@ -5879,6 +6689,7 @@ watch(
   cursor: pointer;
   transition: color 0.2s;
 }
+
 .modal-close:hover {
   color: var(--text-primary);
 }
@@ -5897,6 +6708,7 @@ watch(
   justify-content: flex-end;
   gap: 12px;
 }
+
 .dark .modal-foot {
   background: rgba(10, 10, 10, 0.2);
 }
@@ -5930,15 +6742,19 @@ watch(
 .save-btn.green {
   background: var(--green);
 }
+
 .save-btn.blue {
   background: var(--blue);
 }
+
 .save-btn.blue:hover {
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
 }
+
 .save-btn.purple {
   background: var(--purple);
 }
+
 .save-btn.purple:hover {
   box-shadow: 0 4px 12px rgba(139, 92, 246, 0.25);
 }
@@ -5982,9 +6798,11 @@ watch(
 .role-opt.student.selected {
   border-color: var(--blue);
 }
+
 .role-opt.student.selected {
   background: var(--blue-dim);
 }
+
 .role-opt.student .role-check {
   color: var(--blue);
 }
@@ -5994,9 +6812,11 @@ watch(
 .role-opt.faculty.selected {
   border-color: var(--green);
 }
+
 .role-opt.faculty.selected {
   background: var(--green-dim);
 }
+
 .role-opt.faculty .role-check {
   color: var(--green);
 }
@@ -6006,9 +6826,11 @@ watch(
 .role-opt.admin.selected {
   border-color: var(--purple);
 }
+
 .role-opt.admin.selected {
   background: var(--purple-dim);
 }
+
 .role-opt.admin .role-check {
   color: var(--purple);
 }
@@ -6022,9 +6844,21 @@ watch(
   justify-content: center;
   flex-shrink: 0;
 }
-.role-opt-ico.blue { background: var(--blue-dim); color: var(--blue); }
-.role-opt-ico.green { background: var(--green-dim); color: var(--green); }
-.role-opt-ico.purple { background: var(--purple-dim); color: var(--purple); }
+
+.role-opt-ico.blue {
+  background: var(--blue-dim);
+  color: var(--blue);
+}
+
+.role-opt-ico.green {
+  background: var(--green-dim);
+  color: var(--green);
+}
+
+.role-opt-ico.purple {
+  background: var(--purple-dim);
+  color: var(--purple);
+}
 
 .role-opt-info {
   display: flex;
@@ -6181,7 +7015,10 @@ watch(
   max-width: 440px;
 }
 
-.modal-head-icon.orange { background: var(--orange-dim); color: var(--orange); }
+.modal-head-icon.orange {
+  background: var(--orange-dim);
+  color: var(--orange);
+}
 
 .purge-confirm-btn {
   display: inline-flex;
@@ -6272,7 +7109,9 @@ watch(
   text-transform: uppercase;
 }
 
-.input-field input, .input-field textarea, .input-field select {
+.input-field input,
+.input-field textarea,
+.input-field select {
   width: 100%;
   padding: 10px;
   border-radius: 8px;
@@ -6283,7 +7122,9 @@ watch(
   outline: none;
 }
 
-.input-field input:focus, .input-field textarea:focus, .input-field select:focus {
+.input-field input:focus,
+.input-field textarea:focus,
+.input-field select:focus {
   border-color: var(--green);
 }
 
@@ -6448,6 +7289,7 @@ watch(
   flex-direction: column;
   gap: 8px;
 }
+
 .dark .info-card {
   background: rgba(10, 10, 10, 0.1);
 }
@@ -6517,6 +7359,7 @@ watch(
   padding: 16px;
   flex-wrap: wrap;
 }
+
 .dark .audit-grid {
   background: rgba(10, 10, 10, 0.1);
 }
@@ -6594,9 +7437,18 @@ watch(
   font-weight: 700;
   text-transform: uppercase;
 }
-.node-role.admin { color: var(--purple); }
-.node-role.faculty { color: var(--green); }
-.node-role.student { color: var(--blue); }
+
+.node-role.admin {
+  color: var(--purple);
+}
+
+.node-role.faculty {
+  color: var(--green);
+}
+
+.node-role.student {
+  color: var(--blue);
+}
 
 .node-time {
   font-size: 0.7rem;
@@ -6667,17 +7519,43 @@ watch(
 }
 
 @keyframes rotation {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 /* ── Responsive media breakpoints ── */
 @media (max-width: 1024px) {
   .review-grid {
-    grid-template-columns: 1fr;
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
   }
-  .meta-panel {
-    grid-column: 1 / -1;
+
+  .review-sticky-footer {
+    padding: 1rem;
+  }
+
+  .sticky-footer-inner {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: stretch;
+  }
+
+  .footer-info {
+    text-align: center;
+  }
+
+  .footer-actions {
+    justify-content: space-between;
+  }
+
+  .footer-actions button {
+    flex: 1;
   }
 }
 
@@ -6687,11 +7565,11 @@ watch(
     transform: translateX(-100%);
     width: 260px;
   }
-  
+
   .sidebar.mob-open {
     transform: translateX(0);
   }
-  
+
   .sb-backdrop {
     position: fixed;
     inset: 0;
@@ -6699,51 +7577,59 @@ watch(
     backdrop-filter: blur(4px);
     z-index: 99;
   }
-  
+
   .content {
     padding: 24px 16px;
   }
-  
+
+  .review-sticky-footer {
+    margin-left: -16px;
+    margin-right: -16px;
+    margin-bottom: -24px;
+    bottom: 0;
+    padding: 1rem 16px;
+  }
+
   .stats-row {
     grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   }
-  
+
   .analytics-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .pie-container {
     flex-direction: column;
     gap: 20px;
   }
-  
+
   .toolbar {
     flex-direction: column;
     align-items: stretch;
   }
-  
+
   .search-box {
     min-width: auto;
   }
-  
+
   .filter-chips {
     justify-content: space-between;
   }
-  
+
   .ref-split-wrap {
     grid-template-columns: 1fr;
-    height: auto;
   }
-  
-  .ref-preview-pane, .ref-editor-pane {
-    height: 240px;
+
+  .ref-textarea {
+    min-height: 300px;
+    max-height: 400px;
   }
-  
+
   .audit-grid {
     flex-direction: column;
     align-items: stretch;
   }
-  
+
   .audit-sep {
     transform: rotate(90deg);
     margin: 8px 0;
@@ -6762,5 +7648,37 @@ body:has(.mgmt) .main-content {
   padding-top: 64px !important;
   height: 100vh !important;
   overflow: hidden !important;
+}
+
+/* Custom scrollbar styles */
+body:has(.mgmt) ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+body:has(.mgmt) ::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+}
+
+body:has(.mgmt) ::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+body:has(.mgmt) ::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Dark mode scrollbar styles */
+.dark body:has(.mgmt) ::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+}
+
+.dark body:has(.mgmt) ::-webkit-scrollbar-thumb {
+  background: #475569;
+}
+
+.dark body:has(.mgmt) ::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
 }
 </style>\n

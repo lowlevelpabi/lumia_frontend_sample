@@ -56,7 +56,7 @@ const maxYear = ref<number | undefined>(currentYear)
 const selectedProjectType = ref('')
 const selectedDegree = ref('')
 const selectedSection = ref('')
-const sortBy = ref<'newest' | 'oldest' | 'cited' | any>('newest')
+const sortBy = ref<'newest' | 'oldest' | 'cited' | string>('newest')
 
 // Search History
 const searchHistory = ref<string[]>([])
@@ -360,7 +360,7 @@ const openMobileSearch = () => {
             <div class="filter-options">
               <button v-for="s in [['newest', 'Newest'], ['oldest', 'Oldest'], ['cited', 'Most Cited']]" :key="s[0]"
                 class="filter-tag" :class="{ active: sortBy === s[0] }"
-                @click="sortBy = s[0]">{{ s[1] }}</button>
+                @click="sortBy = s[0]!">{{ s[1] }}</button>
             </div>
           </div>
 

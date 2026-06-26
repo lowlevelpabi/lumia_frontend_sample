@@ -13,14 +13,13 @@ import {
   UserCircle,
   X,
   Menu,
-  HelpCircle,
   Bookmark,
   Loader2,
   ArrowUpRight,
   Moon,
   Sun,
 } from "lucide-vue-next";
-import { api, type Paper, BASE_URL } from "../services/api";
+import { api, type Paper, type UserResponse, BASE_URL } from "../services/api";
 import { useAuth } from "../composables/useAuth";
 import { historyService } from "../services/history";
 import { useTheme } from "../composables/useTheme";
@@ -45,7 +44,7 @@ const showLogoutModal = ref(false);
 const { isLoggedIn, isStaff, fullName, userRole, refreshAuth } = useAuth();
 const { isDark, toggleTheme, setTheme, resetTheme } = useTheme();
 
-const currentUserDetails = ref<any>(null);
+const currentUserDetails = ref<UserResponse | null>(null);
 
 const fetchUserDetails = async () => {
   if (isLoggedIn.value) {
@@ -71,11 +70,6 @@ const avatarSrc = computed(() => {
   return '/avatar.png'; // fallback default
 });
 
-const avatarInitials = computed(() => {
-  const name = currentUserDetails.value?.full_name || currentUserDetails.value?.username || '';
-  if (!name) return 'U';
-  return name.slice(0, 2).toUpperCase();
-});
 
 const scrolled = ref(false);
 const handleScroll = () => {
@@ -214,6 +208,11 @@ const removeSelected = async () => {
     removeLoading.value = false;
   }
 };
+
+// Collapsible drawer sections
+const navSectionExpanded = ref(true);
+const accountSectionExpanded = ref(true);
+const accessSectionExpanded = ref(true);
 </script>
 
 <template>
@@ -241,7 +240,6 @@ const removeSelected = async () => {
             'about',
             'profile',
             'upload',
-            'guide',
           ].includes(route.name as string)
         "
         class="nav-search-wrap"
@@ -303,7 +301,6 @@ const removeSelected = async () => {
       <div class="nav-actions-desktop">
         <RouterLink :to="{ name: 'home' }" class="nav-item">Home</RouterLink>
         <RouterLink :to="{ name: 'explore' }" class="nav-item">Explore</RouterLink>
-        <RouterLink :to="{ name: 'guide' }" class="nav-item">User Guide</RouterLink>
         <RouterLink :to="{ name: 'about' }" class="nav-item">About</RouterLink>
         <RouterLink
           v-if="isLoggedIn && isStaff"
@@ -315,39 +312,32 @@ const removeSelected = async () => {
 
         <div class="nav-divider"></div>
 
+        <!-- Theme Toggle -->
+        <button
+          class="theme-toggle-btn"
+          @click="toggleTheme"
+          :title="isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'"
+        >
+          <transition name="scale" mode="out-in">
+            <Sun v-if="isDark" :size="18" />
+            <Moon v-else :size="18" />
+          </transition>
+        </button>
+
         <template v-if="isLoggedIn">
-          <div class="desktop-action-card">
-            <!-- Theme Toggle -->
-            <button
-              class="theme-toggle-btn"
-              @click="toggleTheme"
-              :title="isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode'"
-            >
-              <transition name="scale" mode="out-in">
-                <Sun v-if="isDark" :size="18" />
-                <Moon v-else :size="18" />
-              </transition>
+          <div class="nav-profile-container">
+            <button class="nav-profile-trigger" @click.stop="showProfileMenu = !showProfileMenu" title="User Menu">
+              <div class="profile-avatar">
+                <img :src="avatarSrc" alt="User Avatar" />
+              </div>
+              <ChevronDown
+                :size="12"
+                class="dropdown-arrow"
+                :class="{ rotated: showProfileMenu }"
+              />
             </button>
 
-            <div class="card-divider"></div>
-
-            <div class="nav-profile-container">
-              <button class="nav-profile-trigger" @click.stop="showProfileMenu = !showProfileMenu">
-                <div class="profile-avatar">
-                  <img :src="avatarSrc" alt="User Avatar" />
-                </div>
-                <div class="profile-info">
-                  <span class="profile-name">{{ fullName || "Academic User" }}</span>
-                  <span class="profile-role">{{ userRole }}</span>
-                </div>
-                <ChevronDown
-                  :size="14"
-                  class="dropdown-arrow"
-                  :class="{ rotated: showProfileMenu }"
-                />
-              </button>
-
-            <!-- Desktop Dropdown (Revamped) -->
+            <!-- Desktop Dropdown (Sleeker & More Compact) -->
             <transition name="dropdown-slide">
               <div v-if="showProfileMenu" class="nav-dropdown">
                 <!-- User details header inside dropdown -->
@@ -363,27 +353,26 @@ const removeSelected = async () => {
                 
                 <div class="dropdown-divider-accent"></div>
                 
-                <RouterLink :to="{ name: 'profile' }" class="dropdown-item">
+                <RouterLink :to="{ name: 'profile' }" class="dropdown-item" @click="showProfileMenu = false">
                   <div class="dropdown-icon-wrapper"><UserCircle :size="15" /></div>
                   <span>My Account</span>
                 </RouterLink>
                 
-                <a href="#" @click.prevent="openBookmarkModal" class="dropdown-item">
+                <a href="#" @click.prevent="openBookmarkModal(); showProfileMenu = false;" class="dropdown-item">
                   <div class="dropdown-icon-wrapper"><Bookmark :size="15" /></div>
                   <span>Bookmarks</span>
                 </a>
                 
                 <div class="dropdown-divider"></div>
                 
-                <button @click="logout" class="dropdown-item logout-btn">
+                <button @click="logout(); showProfileMenu = false;" class="dropdown-item logout-btn">
                   <div class="dropdown-icon-wrapper"><LogOut :size="15" /></div>
                   <span>Sign Out</span>
                 </button>
               </div>
             </transition>
           </div>
-        </div>
-      </template>
+        </template>
 
         <template v-else>
           <RouterLink :to="{ name: 'login' }" class="get-started-btn">
@@ -406,7 +395,6 @@ const removeSelected = async () => {
               'profile',
               'explore',
               'upload',
-              'guide',
             ].includes(route.name as string)
           "
           class="mobile-control-btn"
@@ -420,271 +408,293 @@ const removeSelected = async () => {
         </button>
       </div>
 
-      <!-- Mobile Drawer Overlay -->
-      <transition name="fade">
-        <div
-          v-if="showMobileMenu"
-          class="mobile-drawer-overlay"
-          @click="showMobileMenu = false"
-        ></div>
-      </transition>
+      <Teleport to="body">
+        <!-- Mobile Drawer Overlay -->
+        <transition name="fade">
+          <div
+            v-if="showMobileMenu"
+            class="mobile-drawer-overlay"
+            @click="showMobileMenu = false"
+          ></div>
+        </transition>
 
-      <!-- Mobile Side Drawer -->
-      <transition name="drawer-slide">
-        <aside v-if="showMobileMenu" class="mobile-drawer">
-          <!-- Drawer Header (Identity) -->
-          <div v-if="isLoggedIn" class="drawer-user-card">
-            <div class="drawer-user-cover"></div>
-            <div class="drawer-user-info">
-              <div class="drawer-avatar">
-                <img :src="avatarSrc" alt="User Avatar" />
-              </div>
-              <div class="drawer-text">
-                <span class="drawer-name">{{ fullName || "Academic User" }}</span>
-                <span class="drawer-role">{{ userRole }}</span>
+        <!-- Mobile Side Drawer -->
+        <transition name="drawer-slide">
+          <aside v-if="showMobileMenu" class="mobile-drawer">
+            <!-- Drawer Header (Identity) -->
+            <div v-if="isLoggedIn" class="drawer-user-card">
+              <div class="drawer-user-cover"></div>
+              <div class="drawer-user-info">
+                <div class="drawer-avatar">
+                  <img :src="avatarSrc" alt="User Avatar" />
+                </div>
+                <div class="drawer-text">
+                  <span class="drawer-name">{{ fullName || "Academic User" }}</span>
+                  <span class="drawer-role">{{ userRole }}</span>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div v-else class="drawer-guest-card">
-            <div class="logo-icon">
-              <BookOpen :size="18" color="#fff" />
+            <div v-else class="drawer-guest-card">
+              <div class="logo-icon">
+                <BookOpen :size="18" color="#fff" />
+              </div>
+              <p>Welcome to Lumia</p>
             </div>
-            <p>Welcome to Lumia</p>
-          </div>
 
-          <!-- Drawer Navigation -->
-          <div class="drawer-nav">
-            <div class="drawer-section">Navigation</div>
-            <RouterLink :to="{ name: 'home' }" class="drawer-item">
-              <Home :size="18" /> Home
-            </RouterLink>
-            <RouterLink :to="{ name: 'explore' }" class="drawer-item">
-              <Compass :size="18" /> Explore
-            </RouterLink>
-            <RouterLink :to="{ name: 'guide' }" class="drawer-item">
-              <HelpCircle :size="18" /> User Guide
-            </RouterLink>
-            <RouterLink :to="{ name: 'about' }" class="drawer-item">
-              <BookOpen :size="18" /> About
-            </RouterLink>
-
-            <template v-if="isLoggedIn">
-              <div class="drawer-section">Account & Actions</div>
-              <RouterLink :to="{ name: 'profile' }" class="drawer-item">
-                <UserCircle :size="18" /> My Profile
-              </RouterLink>
-              <RouterLink
-                v-if="isStaff"
-                :to="{ name: 'management' }"
-                class="drawer-item drawer-item--mgmt"
-              >
-                <Settings :size="18" />
-                Management
-              </RouterLink>
-              <button @click="logout" class="drawer-item logout-mobile">
-                <LogOut :size="18" /> Sign Out
+            <!-- Drawer Navigation -->
+            <div class="drawer-nav">
+              <button class="drawer-section" @click="navSectionExpanded = !navSectionExpanded" aria-label="Toggle Navigation Section">
+                <span>Navigation</span>
+                <ChevronDown :size="12" class="section-chevron" :class="{ collapsed: !navSectionExpanded }" />
               </button>
-            </template>
-
-            <template v-else>
-              <div class="drawer-section">Access</div>
-              <RouterLink :to="{ name: 'login' }" class="drawer-item drawer-cta">
-                Get Started
-                <ArrowRight :size="16" />
-              </RouterLink>
-            </template>
-
-            <div class="drawer-divider"></div>
-            <button class="drawer-item" @click="toggleTheme">
-              <Sun v-if="isDark" :size="18" />
-              <Moon v-else :size="18" />
-              {{ isDark ? "Light Mode" : "Dark Mode" }}
-            </button>
-          </div>
-        </aside>
-      </transition>
-
-      <!-- Mobile Search Overlay -->
-      <transition name="search-slide">
-        <div v-if="showMobileSearch" class="mobile-search-overlay">
-          <div class="mobile-search-container">
-            <Search :size="18" class="m-search-icon" />
-            <input
-              v-model="searchQuery"
-              type="text"
-              placeholder="Search publications..."
-              @keyup.enter="handleSearch"
-              @focus="showHistory = true"
-              autofocus
-            />
-            <button @click="showMobileSearch = false" class="close-search">
-              <X :size="20" />
-            </button>
-
-            <!-- Search History Popup (Mobile) -->
-            <div v-if="showHistory && searchHistory.length > 0" class="mobile-history-popup">
-              <div class="history-head">
-                <span>Recent Searches</span>
-                <button
-                  @click.stop="
-                    historyService.clearHistory();
-                    searchHistory = [];
-                  "
-                >
-                  Clear All
-                </button>
-              </div>
-              <div class="history-list">
-                <div
-                  v-for="h in searchHistory"
-                  :key="h"
-                  class="history-item"
-                  @click.stop="
-                    searchQuery = h;
-                    handleSearch();
-                  "
-                >
-                  <Search :size="12" />
-                  <span>{{ h }}</span>
-                  <button
-                    class="h-remove"
-                    @click.stop="
-                      historyService.removeQuery(h);
-                      searchHistory = historyService.getHistory();
-                    "
-                  >
-                    <X :size="10" />
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </transition>
-
-      <!-- Bookmarks Modal -->
-      <transition name="fade">
-        <div
-          v-if="showBookmarkModal"
-          class="bookmark-modal-overlay"
-          @click="closeBookmarkModal"
-        ></div>
-      </transition>
-
-      <transition name="modal-slide">
-        <div v-if="showBookmarkModal" class="bookmark-modal">
-          <!-- Modal Header -->
-          <div class="modal-header">
-            <div class="modal-title-section">
-              <Bookmark :size="20" class="modal-title-icon" />
-              <h2 class="modal-title">My Bookmarks</h2>
-            </div>
-            <button class="modal-close-btn" @click="closeBookmarkModal">
-              <X :size="20" />
-            </button>
-          </div>
-
-          <!-- Modal Content -->
-          <div class="modal-content">
-            <!-- Loading State -->
-            <div v-if="bookmarkLoading" class="modal-loading">
-              <Loader2 :size="20" class="spin" />
-              <span>Loading your bookmarks…</span>
-            </div>
-
-            <!-- Bookmarks List -->
-            <div v-else-if="bookmarks.length > 0" class="bookmarks-list-wrap">
-              <!-- Bulk Actions Bar -->
-              <div class="modal-bulk-actions">
-                <div class="bulk-stats">
-                  <button class="bulk-toggle-btn" @click="toggleSelectAll">
-                    {{
-                      selectedBookmarks.length === bookmarks.length ? "Unselect All" : "Select All"
-                    }}
-                  </button>
-                  <span class="selection-count" v-if="selectedBookmarks.length > 0">
-                    {{ selectedBookmarks.length }} selected
-                  </span>
-                </div>
-                <button
-                  v-if="selectedBookmarks.length > 0"
-                  class="bulk-remove-btn"
-                  :disabled="removeLoading"
-                  @click="removeSelected"
-                >
-                  <X :size="14" />
-                  {{ removeLoading ? "Removing..." : "Remove Selected" }}
-                </button>
-              </div>
-
-              <div class="bookmarks-list">
-                <div v-for="(paper, idx) in bookmarks" :key="paper.id" class="bookmark-row">
-                  <label class="bookmark-check">
-                    <input type="checkbox" :value="paper.id" v-model="selectedBookmarks" />
-                    <span class="check-custom"></span>
-                  </label>
-                  <RouterLink
-                    :to="{ name: 'detail', params: { id: paper.id } }"
-                    class="bookmark-item"
-                  >
-                    <div class="bookmark-item-num">{{ String(idx + 1).padStart(2, "0") }}</div>
-                    <div class="bookmark-item-body">
-                      <span class="bookmark-item-title">{{ paper.title }}</span>
-                      <span class="bookmark-item-meta">
-                        {{ paper.author }}
-                        <span v-if="paper.year" class="bookmark-item-dot">·</span>
-                        {{ paper.year }}
-                      </span>
-                    </div>
-                    <ArrowUpRight :size="14" class="bookmark-item-arrow" />
+              <transition name="drawer-fade">
+                <div v-show="navSectionExpanded" class="drawer-section-content">
+                  <RouterLink :to="{ name: 'home' }" class="drawer-item">
+                    <Home :size="18" /> Home
+                  </RouterLink>
+                  <RouterLink :to="{ name: 'explore' }" class="drawer-item">
+                    <Compass :size="18" /> Explore
+                  </RouterLink>
+                  <RouterLink :to="{ name: 'about' }" class="drawer-item">
+                    <BookOpen :size="18" /> About
                   </RouterLink>
                 </div>
+              </transition>
+
+              <template v-if="isLoggedIn">
+                <button class="drawer-section" @click="accountSectionExpanded = !accountSectionExpanded" aria-label="Toggle Account Section">
+                  <span>Account & Actions</span>
+                  <ChevronDown :size="12" class="section-chevron" :class="{ collapsed: !accountSectionExpanded }" />
+                </button>
+                <transition name="drawer-fade">
+                  <div v-show="accountSectionExpanded" class="drawer-section-content">
+                    <RouterLink :to="{ name: 'profile' }" class="drawer-item">
+                      <UserCircle :size="18" /> My Profile
+                    </RouterLink>
+                    <RouterLink
+                      v-if="isStaff"
+                      :to="{ name: 'management' }"
+                      class="drawer-item drawer-item--mgmt"
+                    >
+                      <Settings :size="18" />
+                      Management
+                    </RouterLink>
+                    <button @click="logout" class="drawer-item logout-mobile">
+                      <LogOut :size="18" /> Sign Out
+                    </button>
+                  </div>
+                </transition>
+              </template>
+
+              <template v-else>
+                <button class="drawer-section" @click="accessSectionExpanded = !accessSectionExpanded" aria-label="Toggle Access Section">
+                  <span>Access</span>
+                  <ChevronDown :size="12" class="section-chevron" :class="{ collapsed: !accessSectionExpanded }" />
+                </button>
+                <transition name="drawer-fade">
+                  <div v-show="accessSectionExpanded" class="drawer-section-content">
+                    <RouterLink :to="{ name: 'login' }" class="drawer-item drawer-cta">
+                      Get Started
+                      <ArrowRight :size="16" />
+                    </RouterLink>
+                  </div>
+                </transition>
+              </template>
+            </div>
+
+            <!-- Drawer Footer (Sticky/Pinned) -->
+            <div class="drawer-footer">
+              <button class="drawer-item theme-toggle-drawer" @click="toggleTheme">
+                <Sun v-if="isDark" :size="18" />
+                <Moon v-else :size="18" />
+                <span>{{ isDark ? "Light Mode" : "Dark Mode" }}</span>
+              </button>
+            </div>
+          </aside>
+        </transition>
+
+        <!-- Mobile Search Overlay -->
+        <transition name="search-slide">
+          <div v-if="showMobileSearch" class="mobile-search-overlay">
+            <div class="mobile-search-container">
+              <Search :size="18" class="m-search-icon" />
+              <input
+                v-model="searchQuery"
+                type="text"
+                placeholder="Search publications..."
+                @keyup.enter="handleSearch"
+                @focus="showHistory = true"
+                autofocus
+              />
+              <button @click="showMobileSearch = false" class="close-search">
+                <X :size="20" />
+              </button>
+
+              <!-- Search History Popup (Mobile) -->
+              <div v-if="showHistory && searchHistory.length > 0" class="mobile-history-popup">
+                <div class="history-head">
+                  <span>Recent Searches</span>
+                  <button
+                    @click.stop="
+                      historyService.clearHistory();
+                      searchHistory = [];
+                    "
+                  >
+                    Clear All
+                  </button>
+                </div>
+                <div class="history-list">
+                  <div
+                    v-for="h in searchHistory"
+                    :key="h"
+                    class="history-item"
+                    @click.stop="
+                      searchQuery = h;
+                      handleSearch();
+                    "
+                  >
+                    <Search :size="12" />
+                    <span>{{ h }}</span>
+                    <button
+                      class="h-remove"
+                      @click.stop="
+                        historyService.removeQuery(h);
+                        searchHistory = historyService.getHistory();
+                      "
+                    >
+                      <X :size="10" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </transition>
+
+        <!-- Bookmarks Modal -->
+        <transition name="fade">
+          <div
+            v-if="showBookmarkModal"
+            class="bookmark-modal-overlay"
+            @click="closeBookmarkModal"
+          ></div>
+        </transition>
+
+        <transition name="modal-slide">
+          <div v-if="showBookmarkModal" class="bookmark-modal">
+            <!-- Modal Header -->
+            <div class="modal-header">
+              <div class="modal-title-section">
+                <Bookmark :size="20" class="modal-title-icon" />
+                <h2 class="modal-title">My Bookmarks</h2>
+              </div>
+              <button class="modal-close-btn" @click="closeBookmarkModal">
+                <X :size="20" />
+              </button>
+            </div>
+
+            <!-- Modal Content -->
+            <div class="modal-content">
+              <!-- Loading State -->
+              <div v-if="bookmarkLoading" class="modal-loading">
+                <Loader2 :size="20" class="spin" />
+                <span>Loading your bookmarks…</span>
+              </div>
+
+              <!-- Bookmarks List -->
+              <div v-else-if="bookmarks.length > 0" class="bookmarks-list-wrap">
+                <!-- Bulk Actions Bar -->
+                <div class="modal-bulk-actions">
+                  <div class="bulk-stats">
+                    <button class="bulk-toggle-btn" @click="toggleSelectAll">
+                      {{
+                        selectedBookmarks.length === bookmarks.length ? "Unselect All" : "Select All"
+                      }}
+                    </button>
+                    <span class="selection-count" v-if="selectedBookmarks.length > 0">
+                      {{ selectedBookmarks.length }} selected
+                    </span>
+                  </div>
+                  <button
+                    v-if="selectedBookmarks.length > 0"
+                    class="bulk-remove-btn"
+                    :disabled="removeLoading"
+                    @click="removeSelected"
+                  >
+                    <X :size="14" />
+                    {{ removeLoading ? "Removing..." : "Remove Selected" }}
+                  </button>
+                </div>
+
+                <div class="bookmarks-list">
+                  <div v-for="(paper, idx) in bookmarks" :key="paper.id" class="bookmark-row">
+                    <label class="bookmark-check">
+                      <input type="checkbox" :value="paper.id" v-model="selectedBookmarks" />
+                      <span class="check-custom"></span>
+                    </label>
+                    <RouterLink
+                      :to="{ name: 'detail', params: { id: paper.id } }"
+                      class="bookmark-item"
+                    >
+                      <div class="bookmark-item-num">{{ String(idx + 1).padStart(2, "0") }}</div>
+                      <div class="bookmark-item-body">
+                        <span class="bookmark-item-title">{{ paper.title }}</span>
+                        <span class="bookmark-item-meta">
+                          {{ paper.author }}
+                          <span v-if="paper.year" class="bookmark-item-dot">·</span>
+                          {{ paper.year }}
+                        </span>
+                      </div>
+                      <ArrowUpRight :size="14" class="bookmark-item-arrow" />
+                    </RouterLink>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Empty State -->
+              <div v-else class="modal-empty-state">
+                <div class="empty-icon">
+                  <Bookmark :size="32" />
+                </div>
+                <p class="empty-title">No bookmarks yet</p>
+                <p class="empty-message">Papers you bookmark will appear here for quick access.</p>
+                <RouterLink :to="{ name: 'home' }" class="empty-cta" @click="closeBookmarkModal">
+                  Browse Repository
+                </RouterLink>
+              </div>
+            </div>
+          </div>
+        </transition>
+
+        <!-- Logout Confirmation Modal -->
+        <transition name="fade">
+          <div
+            v-if="showLogoutModal"
+            class="bookmark-modal-overlay"
+            @click="showLogoutModal = false"
+          ></div>
+        </transition>
+
+        <transition name="modal-slide">
+          <div v-if="showLogoutModal" class="bookmark-modal logout-modal-sm">
+            <div class="modal-header">
+              <div class="modal-title-section">
+                <LogOut :size="20" class="modal-title-icon" />
+                <h2 class="modal-title">Sign Out</h2>
               </div>
             </div>
 
-            <!-- Empty State -->
-            <div v-else class="modal-empty-state">
-              <div class="empty-icon">
-                <Bookmark :size="32" />
+            <div class="modal-content logout-modal-body">
+              <p class="logout-text">Are you sure you want to sign out?</p>
+              <div class="logout-button-group">
+                <button class="btn-confirm" @click="confirmLogout">Sign Out</button>
+                <button class="btn-cancel" @click="showLogoutModal = false">Cancel</button>
               </div>
-              <p class="empty-title">No bookmarks yet</p>
-              <p class="empty-message">Papers you bookmark will appear here for quick access.</p>
-              <RouterLink :to="{ name: 'home' }" class="empty-cta" @click="closeBookmarkModal">
-                Browse Repository
-              </RouterLink>
             </div>
           </div>
-        </div>
-      </transition>
-
-      <!-- Logout Confirmation Modal -->
-      <transition name="fade">
-        <div
-          v-if="showLogoutModal"
-          class="bookmark-modal-overlay"
-          @click="showLogoutModal = false"
-        ></div>
-      </transition>
-
-      <transition name="modal-slide">
-        <div v-if="showLogoutModal" class="bookmark-modal logout-modal-sm">
-          <div class="modal-header">
-            <div class="modal-title-section">
-              <LogOut :size="20" class="modal-title-icon" />
-              <h2 class="modal-title">Sign Out</h2>
-            </div>
-          </div>
-
-          <div class="modal-content logout-modal-body">
-            <p class="logout-text">Are you sure you want to sign out?</p>
-            <div class="logout-button-group">
-              <button class="btn-confirm" @click="confirmLogout">Sign Out</button>
-              <button class="btn-cancel" @click="showLogoutModal = false">Cancel</button>
-            </div>
-          </div>
-        </div>
-      </transition>
+        </transition>
+      </Teleport>
     </div>
   </nav>
 </template>
@@ -1081,40 +1091,7 @@ const removeSelected = async () => {
   background: rgba(59, 130, 246, 0.04) !important;
 }
 
-/* ── Desktop Action Hub Card ── */
-.desktop-action-card {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
-  padding: 4px 12px 4px 6px;
-  border-radius: 50px;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: var(--shadow-sm);
-}
 
-.dark .desktop-action-card {
-  background: rgba(30, 30, 30, 0.5);
-  border-color: rgba(255, 255, 255, 0.08);
-}
-
-.desktop-action-card:hover {
-  border-color: var(--accent-primary);
-  box-shadow: 0 4px 12px rgba(0, 166, 81, 0.08);
-  background: var(--bg-secondary);
-}
-
-.dark .desktop-action-card:hover {
-  background: rgba(40, 40, 40, 0.6);
-}
-
-.card-divider {
-  width: 1px;
-  height: 20px;
-  background: var(--border-color);
-  margin: 0 4px;
-}
 
 .drawer-item--mgmt {
   color: var(--accent-secondary) !important;
@@ -1157,26 +1134,34 @@ const removeSelected = async () => {
 .nav-profile-trigger {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 6px;
   background: none;
   border: none;
   cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 8px;
-  transition: background 0.2s;
+  padding: 4px 6px;
+  border-radius: 9999px;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
 }
 
 .nav-profile-trigger:hover {
   background: var(--bg-tertiary);
+  border-color: var(--border-color);
+  box-shadow: var(--shadow-sm);
 }
 
 .profile-avatar {
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   overflow: hidden;
-  border: 1.5px solid var(--border-color);
+  border: 1.5px solid var(--accent-primary);
   background: var(--bg-secondary);
+  transition: all 0.2s ease;
+}
+
+.nav-profile-trigger:hover .profile-avatar {
+  transform: scale(1.05);
 }
 
 .profile-avatar img {
@@ -1185,30 +1170,17 @@ const removeSelected = async () => {
   object-fit: cover;
 }
 
-.profile-info {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  line-height: 1.2;
-}
-
-.profile-name {
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: var(--text-primary);
-}
-
-.profile-role {
-  font-size: 0.65rem;
-  font-weight: 500;
-  color: var(--text-tertiary);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
 .dropdown-arrow {
   color: var(--text-tertiary);
   transition: transform 0.2s;
+}
+
+.global-navbar:not(.is-scrolled) .dropdown-arrow {
+  color: rgba(24, 28, 24, 0.6);
+}
+
+.dark .global-navbar:not(.is-scrolled) .dropdown-arrow {
+  color: rgba(255, 255, 255, 0.6);
 }
 
 .dropdown-arrow.rotated {
@@ -1222,7 +1194,7 @@ const removeSelected = async () => {
   cursor: pointer;
   color: var(--text-secondary);
   padding: 8px;
-  border-radius: 8px;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1256,36 +1228,36 @@ const removeSelected = async () => {
   position: absolute;
   top: calc(100% + 12px);
   right: 0;
-  width: 260px;
+  width: 230px;
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: 12px;
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 16px -6px rgba(0, 0, 0, 0.05);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  padding: 12px;
+  padding: 8px;
   z-index: 1001;
   transform-origin: top right;
 }
 
 .dark .nav-dropdown {
-  background: rgba(30, 30, 30, 0.85);
+  background: rgba(30, 30, 30, 0.95);
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 16px -6px rgba(0, 0, 0, 0.2);
 }
 
 .dropdown-user-header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 4px 4px 10px;
+  gap: 10px;
+  padding: 6px 6px 8px;
 }
 
 .dropdown-user-avatar {
-  width: 38px;
-  height: 38px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   overflow: hidden;
-  border: 2px solid var(--accent-primary);
+  border: 1.5px solid var(--accent-primary);
   background: var(--bg-tertiary);
   flex-shrink: 0;
 }
@@ -1304,7 +1276,7 @@ const removeSelected = async () => {
 }
 
 .dropdown-user-name {
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   font-weight: 700;
   color: var(--text-primary);
   white-space: nowrap;
@@ -1314,13 +1286,13 @@ const removeSelected = async () => {
 }
 
 .dropdown-user-role-badge {
-  font-size: 0.6rem;
+  font-size: 0.55rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  padding: 2px 6px;
+  padding: 1.5px 5px;
   border-radius: 4px;
-  margin-top: 3px;
+  margin-top: 2px;
   background: rgba(37, 99, 235, 0.1);
   color: #3b82f6;
 }
@@ -1464,8 +1436,8 @@ const removeSelected = async () => {
 .mobile-drawer-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(2px);
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(4px);
   z-index: 2000;
 }
 
@@ -1475,26 +1447,40 @@ const removeSelected = async () => {
   right: 0;
   bottom: 0;
   width: 280px;
-  background: var(--bg-secondary);
+  background: #f8faf9;
   z-index: 2001;
   display: flex;
   flex-direction: column;
-  box-shadow: -10px 0 30px rgba(0, 0, 0, 0.2);
+  border-top-left-radius: 24px;
+  border-bottom-left-radius: 24px;
+  box-shadow: -15px 0 50px rgba(0, 0, 0, 0.05);
+  border-left: 1px solid rgba(0, 0, 0, 0.03);
+  overflow: hidden;
+}
+
+.dark .mobile-drawer {
+  background: #141714;
+  box-shadow: -15px 0 50px rgba(0, 0, 0, 0.3);
+  border-left-color: rgba(255, 255, 255, 0.03);
 }
 
 .drawer-user-card {
   position: relative;
   padding: 32px 24px 24px;
-  background: #181c18;
-  color: #fff;
+  background: linear-gradient(to bottom, rgba(16, 185, 129, 0.05) 0%, transparent 100%);
+  color: var(--text-primary);
   overflow: hidden;
+}
+
+.dark .drawer-user-card {
+  background: linear-gradient(to bottom, rgba(16, 185, 129, 0.08) 0%, transparent 100%);
 }
 
 .drawer-user-cover {
   position: absolute;
   inset: 0;
   background: linear-gradient(135deg, #00a651 0%, #007d3d 100%);
-  opacity: 0.1;
+  opacity: 0.03;
 }
 
 .drawer-user-info {
@@ -1509,8 +1495,8 @@ const removeSelected = async () => {
   height: 56px;
   border-radius: 12px;
   overflow: hidden;
-  border: 2px solid rgba(255, 255, 255, 0.2);
-  background: #fff;
+  border: 2px solid var(--border-color);
+  background: var(--bg-secondary);
 }
 
 .drawer-avatar img {
@@ -1522,21 +1508,32 @@ const removeSelected = async () => {
 .drawer-text {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
+  align-items: flex-start;
 }
 
 .drawer-name {
-  font-family: "Lora", serif;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
   font-size: 1.1rem;
-  font-weight: 600;
+  font-weight: 700;
+  color: var(--text-primary);
 }
 
 .drawer-role {
-  font-size: 0.65rem;
+  font-size: 10px;
   font-weight: 700;
+  color: #047857; /* text-emerald-700 */
+  background: #e6fbf2; /* bg-emerald-100 */
+  padding: 3px 10px;
+  border-radius: 9999px;
+  display: inline-block;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: var(--accent-primary);
-  letter-spacing: 0.1em;
+}
+
+.dark .drawer-role {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
 }
 
 .drawer-guest-card {
@@ -1544,11 +1541,15 @@ const removeSelected = async () => {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  background: var(--bg-tertiary);
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.dark .drawer-guest-card {
+  background: rgba(255, 255, 255, 0.02);
 }
 
 .drawer-guest-card p {
-  font-family: "Lora", serif;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -1560,44 +1561,130 @@ const removeSelected = async () => {
 }
 
 .drawer-section {
-  font-size: 0.65rem;
+  background: rgba(0, 0, 0, 0.02);
+  border: none;
+  border-left: 3px solid #d1d5db;
+  border-radius: 8px;
+  padding: 10px 14px;
+  width: 100%;
+  box-sizing: border-box;
+  outline: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  text-align: left;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.15em;
-  color: var(--text-tertiary);
+  color: #6b7280;
   margin: 24px 0 12px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.dark .drawer-section {
+  background: rgba(255, 255, 255, 0.02);
+  border-left-color: #4b5563;
+  color: #9ca3af;
 }
 
 .drawer-section:first-child {
   margin-top: 0;
 }
 
+.drawer-section:hover {
+  background: rgba(0, 166, 81, 0.05);
+  border-left-color: #00a651;
+  color: #00a651;
+}
+
+.dark .drawer-section:hover {
+  background: rgba(16, 185, 129, 0.08);
+  border-left-color: #34d399;
+  color: #34d399;
+}
+
+.section-chevron {
+  transition: transform 0.2s ease;
+  color: inherit;
+}
+
+.section-chevron.collapsed {
+  transform: rotate(-90deg);
+}
+
+/* Drawer Section Content Transition */
+.drawer-fade-enter-active,
+.drawer-fade-leave-active {
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  max-height: 250px;
+  opacity: 1;
+  overflow: hidden;
+}
+
+.drawer-fade-enter-from,
+.drawer-fade-leave-to {
+  max-height: 0;
+  opacity: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+  transform: translateY(-8px);
+}
+
 .drawer-item {
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 14px 16px;
-  color: var(--text-secondary);
+  padding: 12px 16px;
+  color: #4b5563; /* text-gray-600 */
   text-decoration: none;
   font-weight: 600;
   font-size: 0.95rem;
-  border-radius: 8px;
+  border-radius: 12px; /* rounded-xl */
   margin-bottom: 4px;
-  transition: all 0.2s;
+  transition: all 0.2s ease;
 }
 
-.drawer-item:hover,
+.dark .drawer-item {
+  color: #d1d5db; /* text-gray-300 */
+}
+
+.drawer-item:hover:not(.router-link-active):not(.logout-mobile) {
+  background: rgba(0, 0, 0, 0.03);
+  color: var(--text-primary);
+}
+
+.dark .drawer-item:hover:not(.router-link-active):not(.logout-mobile) {
+  background: rgba(255, 255, 255, 0.03);
+}
+
 .drawer-item.router-link-active {
-  background: var(--bg-tertiary);
-  color: var(--accent-primary);
+  background: #ecfdf5; /* bg-emerald-50 */
+  color: #065f46; /* text-emerald-800 */
 }
 
-.drawer-item.router-link-active svg {
-  color: var(--accent-primary);
+.dark .drawer-item.router-link-active {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
 }
 
 .drawer-item svg {
-  color: var(--text-tertiary);
+  color: #9ca3af; /* text-gray-400 equivalent for icons */
+  transition: color 0.2s ease;
+}
+
+.drawer-item:hover svg {
+  color: var(--text-primary);
+}
+
+.drawer-item.router-link-active svg {
+  color: #065f46;
+}
+
+.dark .drawer-item.router-link-active svg {
+  color: #34d399;
 }
 
 .drawer-cta {
@@ -1610,21 +1697,34 @@ const removeSelected = async () => {
   margin-top: 12px;
 }
 
+.drawer-cta svg {
+  color: #fff !important;
+}
+
 .logout-mobile {
   width: 100%;
-  background: rgba(239, 68, 68, 0.05);
-  border: 1px solid rgba(239, 68, 68, 0.1);
-  margin-top: 12px;
-  color: #ef4444 !important;
+  background: none;
+  border: none;
+  margin-top: 24px;
+  color: #4b5563 !important; /* Standard text color */
   justify-content: flex-start;
-  padding: 14px 16px;
+  padding: 12px 16px;
+}
+
+.dark .logout-mobile {
+  color: #d1d5db !important;
 }
 
 .logout-mobile:hover {
-  background: rgba(239, 68, 68, 0.1);
+  background: rgba(239, 68, 68, 0.05) !important;
+  color: #ef4444 !important;
 }
 
 .logout-mobile svg {
+  color: rgba(239, 68, 68, 0.7); /* soft red tint on icon */
+}
+
+.logout-mobile:hover svg {
   color: #ef4444;
 }
 
@@ -1635,6 +1735,22 @@ button.drawer-item {
   cursor: pointer;
   font-family: inherit;
   text-align: left;
+}
+
+/* ── Drawer Footer ── */
+.drawer-footer {
+  border-top: 1px solid var(--border-color);
+  padding: 16px 24px;
+  background: #f8faf9;
+}
+
+.dark .drawer-footer {
+  border-top-color: rgba(255, 255, 255, 0.06);
+  background: #141714;
+}
+
+.theme-toggle-drawer {
+  margin-bottom: 0;
 }
 
 /* ── Mobile Search Overlay ────────────────────────────────────── */

@@ -107,8 +107,8 @@ const getValidToken = (): string | null => {
 };
 
 const getAuthHeaders = (): Record<string, string> => {
-  const token = getValidToken();
-  return token ? { Authorization: `Bearer ${token}` } : {};
+  // Authorization is now handled automatically via secure HttpOnly cookies
+  return {};
 };
 
 import { useToastStore } from "../stores/toast";
@@ -125,8 +125,12 @@ const hasAuthHeader = (headers?: HeadersInit): boolean => {
 }
 
 async function fetchWithToast(input: RequestInfo, init?: RequestInit): Promise<Response> {
+  const newInit: RequestInit = {
+    ...init,
+    credentials: "include", // Required to send secure cookies cross-origin
+  };
   try {
-    const response = await fetch(input, init);
+    const response = await fetch(input, newInit);
     if (!response.ok) {
       const isAuthRequest = hasAuthHeader(init?.headers)
       // Only ignore 401 if it's an authenticated request (which will auto-redirect in apiFetch)
@@ -337,8 +341,15 @@ export const api = {
     return response.json();
   },
 
-  logout() {
+  async logout() {
     localStorage.removeItem("token");
+    try {
+      await fetchWithToast(`${BASE_URL}/auth/logout`, {
+        method: "POST",
+      });
+    } catch (e) {
+      console.error("Failed to clear cookie on backend logout:", e);
+    }
   },
 
   // Papers Search & Details

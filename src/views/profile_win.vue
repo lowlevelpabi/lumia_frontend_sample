@@ -4,7 +4,8 @@ import { RouterLink } from 'vue-router'
 import {
   Loader2, ArrowUpRight,
   User, KeyRound,
-  ShieldCheck, BookMarked, FileUp, AlertTriangle, Clock, Trash2, Camera
+  ShieldCheck, BookMarked, FileUp, AlertTriangle, Clock, Trash2, Camera,
+  Copy, Check
 } from 'lucide-vue-next'
 import { api, type Paper, BASE_URL } from '../services/api'
 import { useToastStore } from '../stores/toast'
@@ -188,6 +189,29 @@ const handleCancelRequest = async () => {
 
 const setSection = (s: Section) => { activeSection.value = s }
 
+const researcherIdCopied = ref(false)
+const accountIdCopied = ref(false)
+
+const copyToClipboard = async (text: string, type: 'researcher' | 'account') => {
+  try {
+    await navigator.clipboard.writeText(text)
+    if (type === 'researcher') {
+      researcherIdCopied.value = true
+      setTimeout(() => { researcherIdCopied.value = false }, 2000)
+    } else {
+      accountIdCopied.value = true
+      setTimeout(() => { accountIdCopied.value = false }, 2000)
+    }
+    toastStore.addToast({
+      title: 'Copied to Clipboard',
+      description: 'ID copied successfully.',
+      type: 'success'
+    })
+  } catch (err) {
+    console.error('Failed to copy text: ', err)
+  }
+}
+
 const roleColor = computed(() => {
   const r = user.value?.role
   if (r === 'Admin') return { bg: 'rgba(124, 58, 237, 0.1)', color: '#a78bfa', border: 'rgba(124, 58, 237, 0.3)' }
@@ -219,142 +243,132 @@ onMounted(fetchData)
 
     <!-- ── Main Layout ─────────────────────────────────────────── -->
     <div v-else-if="user" class="profile-container">
-
-      <!-- ── HERO SECTION ─────────────────────────────────────── -->
-      <header class="profile-hero">
-        <div class="hero-overlay"></div>
-        <div class="hero-bg-shapes">
-          <div class="floating-shape shape-1"></div>
-          <div class="floating-shape shape-2"></div>
-          <div class="floating-shape shape-3"></div>
-        </div>
-        
-        <div class="hero-inner">
-          <div class="hero-avatar-wrap">
-            <div class="hero-avatar">
-              <img v-if="user.avatar_url" :src="avatarSrc" class="avatar-img-element" alt="User Avatar" />
-              <span v-else>{{ avatarInitials }}</span>
-              
-              <label class="avatar-upload-overlay" title="Upload profile picture">
-                <Camera :size="22" class="camera-icon" />
-                <input type="file" ref="fileInput" @change="onAvatarFileSelected" accept="image/*" class="avatar-file-input" />
-              </label>
+      <div class="profile-grid">
+        <!-- Left: Sticky Sidebar -->
+        <aside class="profile-sidebar">
+          <!-- User Identity Card -->
+          <div class="profile-card identity-card">
+            <div class="identity-avatar-section">
+              <div class="hero-avatar-wrap">
+                <div class="hero-avatar">
+                  <img v-if="user.avatar_url" :src="avatarSrc" class="avatar-img-element" alt="User Avatar" />
+                  <span v-else>{{ avatarInitials }}</span>
+                  <label class="avatar-upload-overlay" title="Upload profile picture">
+                    <Camera :size="20" class="camera-icon" />
+                    <input type="file" ref="fileInput" @change="onAvatarFileSelected" accept="image/*" class="avatar-file-input" />
+                  </label>
+                </div>
+                <div v-if="avatarUploading" class="avatar-upload-spinner">
+                  <Loader2 :size="20" class="spin" />
+                </div>
+              </div>
             </div>
-            <div v-if="avatarUploading" class="avatar-upload-spinner">
-              <Loader2 :size="20" class="spin" />
-            </div>
-            <div class="hero-status-dot"></div>
-          </div>
-
-          <div class="hero-body">
-            <div class="hero-top-row">
-              <h1 class="hero-username">{{ user.username }}</h1>
-              <span class="hero-role-tag"
-                :style="{ background: roleColor.bg, color: roleColor.color, borderColor: roleColor.border }">
+            
+            <div class="identity-info-section">
+              <h2 class="identity-name">{{ user.username }}</h2>
+              <span class="identity-role-badge" :style="{ background: roleColor.bg, color: roleColor.color, borderColor: roleColor.border }">
                 <ShieldCheck :size="12" />
                 {{ user.role }}
               </span>
-            </div>
-            <div class="hero-meta">
-              <span class="hero-id">Researcher ID: <span class="mono">#{{ user.id }}</span></span>
-              <span class="hero-sep">·</span>
-              <span class="hero-stat"><strong>{{ citations.length }}</strong> Citations</span>
-              <span class="hero-sep">·</span>
-              <span class="hero-stat"><strong>{{ uploads.length }}</strong> Uploads</span>
+              <div class="identity-researcher-id">
+                <span class="id-label">Researcher ID:</span>
+                <span class="id-value mono">#{{ user.id }}</span>
+                <button class="copy-btn" @click="copyToClipboard(user.id, 'researcher')" title="Copy Researcher ID">
+                  <Check v-if="researcherIdCopied" :size="13" class="copy-success-icon" />
+                  <Copy v-else :size="13" />
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      </header>
 
-      <!-- ── HORIZONTAL NAV ───────────────────────────────────── -->
-      <nav class="profile-nav-bar">
-        <div class="nav-inner">
-          <button v-for="tab in [
-            { id: 'dashboard', icon: User, label: 'Overview' },
-            { id: 'cited', icon: BookMarked, label: 'Studies I Cited', count: citations.length },
-            { id: 'uploads', icon: FileUp, label: 'My Uploads', count: uploads.length },
-            { id: 'credentials', icon: KeyRound, label: 'Security' }
-          ]" :key="tab.id" class="nav-tab" :class="{ active: activeSection === tab.id }"
-            @click="setSection(tab.id as Section)">
-            <component :is="tab.icon" :size="16" class="nav-tab-icon" />
-            <span class="nav-tab-label">{{ tab.label }}</span>
-            <span v-if="tab.count !== undefined" class="nav-tab-count">{{ tab.count }}</span>
-          </button>
-        </div>
-      </nav>
-
-      <!-- ── CONTENT AREA ─────────────────────────────────────── -->
-      <main class="profile-main-content">
-
-        <!-- ══ Dashboard ════════════════════════════════════════ -->
-        <template v-if="activeSection === 'dashboard'">
-          <div class="content-grid">
-            <!-- Stats -->
-            <section class="dashboard-stats">
-              <div class="stat-card">
-                <div class="stat-icon-box green">
-                  <BookMarked :size="20" />
-                </div>
-                <div class="stat-info">
-                  <span class="stat-label">Total Citations</span>
-                  <span class="stat-value">{{ citations.length }}</span>
-                </div>
+          <!-- Account Information Card -->
+          <div class="profile-card account-card">
+            <h3 class="card-title">Account Information</h3>
+            <div class="info-list">
+              <div class="info-row">
+                <span class="info-label">Username</span>
+                <span class="info-value">{{ user.username }}</span>
               </div>
-              <div class="stat-card">
-                <div class="stat-icon-box blue">
-                  <FileUp :size="20" />
-                </div>
-                <div class="stat-info">
-                  <span class="stat-label">Indexed Papers</span>
-                  <span class="stat-value">{{ uploads.length }}</span>
-                </div>
+              <div class="info-row">
+                <span class="info-label">Assigned Role</span>
+                <span class="info-value">{{ user.role }}</span>
               </div>
-              <div class="stat-card">
-                <div class="stat-icon-box purple">
-                  <Clock :size="20" />
-                </div>
-                <div class="stat-info">
-                  <span class="stat-label">Pending Reviews</span>
-                  <span class="stat-value">{{uploads.filter(p => p.status === 'Pending').length}}</span>
-                </div>
+              <div class="info-row">
+                <span class="info-label">Account ID</span>
+                <span class="info-value mono flex-align-center">
+                  #{{ user.id }}
+                  <button class="copy-btn ml-2" @click="copyToClipboard(user.id, 'account')" title="Copy Account ID">
+                    <Check v-if="accountIdCopied" :size="13" class="copy-success-icon" />
+                    <Copy v-else :size="13" />
+                  </button>
+                </span>
               </div>
-            </section>
+              <div class="info-row">
+                <span class="info-label">Registration Date</span>
+                <span class="info-value">Member since {{ joinedDate }}</span>
+              </div>
+            </div>
+          </div>
+        </aside>
 
-            <!-- Main Panel -->
-            <div class="dashboard-main-panel">
-              <div class="panel-card">
-                <div class="panel-card-header">
-                  <h3>Account Information</h3>
-                </div>
-                <div class="panel-card-body">
-                  <div class="info-grid">
-                    <div class="info-item">
-                      <label>Username</label>
-                      <p>{{ user.username }}</p>
-                    </div>
-                    <div class="info-item">
-                      <label>Assigned Role</label>
-                      <p>{{ user.role }}</p>
-                    </div>
-                    <div class="info-item">
-                      <label>Account ID</label>
-                      <p class="mono">#{{ user.id }}</p>
-                    </div>
-                    <div class="info-item">
-                      <label>Registration Date</label>
-                      <p>Member since {{ joinedDate }}</p>
-                    </div>
+        <!-- Right: Primary Workspace -->
+        <main class="profile-workspace">
+          <!-- Navigation Tabs -->
+          <nav class="profile-nav-tabs">
+            <button v-for="tab in [
+              { id: 'dashboard', icon: User, label: 'Overview' },
+              { id: 'cited', icon: BookMarked, label: 'Studies I Cited', count: citations.length },
+              { id: 'uploads', icon: FileUp, label: 'My Uploads', count: uploads.length },
+              { id: 'credentials', icon: KeyRound, label: 'Security' }
+            ]" :key="tab.id" class="nav-tab" :class="{ active: activeSection === tab.id }"
+              @click="setSection(tab.id as Section)">
+              <component :is="tab.icon" :size="15" class="nav-tab-icon" />
+              <span class="nav-tab-label">{{ tab.label }}</span>
+              <span v-if="tab.count !== undefined" class="nav-tab-count">{{ tab.count }}</span>
+            </button>
+          </nav>
+
+          <!-- Tab Contents -->
+          <div class="workspace-content">
+            <!-- Overview/Dashboard tab -->
+            <template v-if="activeSection === 'dashboard'">
+              <!-- Stat Cards sub-grid -->
+              <section class="stat-subgrid">
+                <div class="stat-card">
+                  <div class="stat-content-left">
+                    <span class="stat-label">Total Citations</span>
+                    <span class="stat-value">{{ citations.length }}</span>
+                    <span v-if="citations.length === 0" class="stat-helper">No citations recorded</span>
                   </div>
+                  <BookMarked class="stat-watermark" />
                 </div>
-              </div>
+                
+                <div class="stat-card">
+                  <div class="stat-content-left">
+                    <span class="stat-label">Indexed Papers</span>
+                    <span class="stat-value">{{ uploads.length }}</span>
+                    <span v-if="uploads.length === 0" class="stat-helper">No indexed papers</span>
+                  </div>
+                  <FileUp class="stat-watermark" />
+                </div>
+                
+                <div class="stat-card">
+                  <div class="stat-content-left">
+                    <span class="stat-label">Pending Reviews</span>
+                    <span class="stat-value">{{ uploads.filter(p => p.status === 'Pending').length }}</span>
+                    <span v-if="uploads.filter(p => p.status === 'Pending').length === 0" class="stat-helper">No pending reviews</span>
+                  </div>
+                  <Clock class="stat-watermark" />
+                </div>
+              </section>
 
-              <!-- Recent activity -->
-              <div class="panel-card mt-6">
-                <div class="panel-card-header">
-                  <h3>Recently Cited</h3>
+              <!-- Recently Cited Card -->
+              <div class="profile-card recent-cited-card mt-6">
+                <div class="card-header-row">
+                  <h3 class="card-title">Recently Cited</h3>
                   <button class="text-link" @click="setSection('cited')">View all &rarr;</button>
                 </div>
-                <div class="panel-card-body p-0">
+                <div class="card-body-full">
                   <div v-if="citations.length > 0" class="activity-list">
                     <RouterLink v-for="paper in citations.slice(0, 3)" :key="paper.id"
                       :to="{ name: 'detail', params: { id: paper.id } }" class="activity-item">
@@ -373,158 +387,155 @@ onMounted(fetchData)
                   </div>
                 </div>
               </div>
-            </div>
-          </div>
-        </template>
+            </template>
 
-        <!-- ══ Credentials ═══════════════════════════════════════ -->
-        <template v-else-if="activeSection === 'credentials'">
-          <div class="centered-content">
-            <div class="security-card">
-              <div class="card-title-group">
-                <KeyRound :size="24" class="title-icon animate-pulse-slow" />
-                <div>
-                  <h3>Update Credentials</h3>
-                  <p>Keep your account secure by using a strong password.</p>
-                </div>
-              </div>
-
-              <div v-if="credMsg" class="cred-alert" :class="credMsg.type">
-                {{ credMsg.text }}
-              </div>
-
-              <div class="form-group">
-                <label>Current Password</label>
-                <input v-model="credForm.currentPassword" type="password" placeholder="••••••••"
-                  autocomplete="current-password" />
-              </div>
-
-              <div class="form-group">
-                <label>New Password</label>
-                <input v-model="credForm.newPassword" type="password" placeholder="At least 8 characters"
-                  autocomplete="new-password" />
-
-                <div v-if="credForm.newPassword" class="strength-indicator">
-                  <div class="strength-labels">
-                    <span>Password Strength:</span>
-                    <strong :style="{ color: strengthColor }">{{ strengthLabel }}</strong>
-                  </div>
-                  <div class="strength-meter">
-                    <div v-for="i in 4" :key="i" class="strength-segment"
-                      :style="{ background: i <= passwordStrength ? strengthColor : 'var(--border-color)' }" />
+            <!-- Other tabs (Credentials, Cited, Uploads) -->
+            <template v-else-if="activeSection === 'credentials'">
+              <div class="profile-card security-card animate-fade-in">
+                <div class="card-title-group">
+                  <KeyRound :size="24" class="title-icon animate-pulse-slow" />
+                  <div>
+                    <h3 class="card-title">Update Credentials</h3>
+                    <p class="card-subtitle">Keep your account secure by using a strong password.</p>
                   </div>
                 </div>
-              </div>
 
-              <div class="form-group">
-                <label>Confirm New Password</label>
-                <input v-model="credForm.confirmPassword" type="password" placeholder="Repeat new password"
-                  autocomplete="new-password" />
-              </div>
-
-              <button class="primary-btn full-width" @click="handleCredentialUpdate" :disabled="credSaving">
-                <Loader2 v-if="credSaving" :size="16" class="spin" />
-                <span>{{ credSaving ? 'Updating...' : 'Update Password' }}</span>
-              </button>
-            </div>
-          </div>
-        </template>
-
-        <!-- ══ Cited Studies ══════════════════════════════════════ -->
-        <template v-else-if="activeSection === 'cited'">
-          <div class="section-container">
-            <div v-if="citLoading" class="section-loader">
-              <Loader2 :size="20" class="spin" /> Loading your citations...
-            </div>
-
-            <div v-else-if="citations.length > 0" class="studies-list">
-              <RouterLink v-for="(paper, idx) in citations" :key="paper.id"
-                :to="{ name: 'detail', params: { id: paper.id } }" class="study-card animate-fade-in"
-                :style="{ animationDelay: `${idx * 0.05}s` }">
-                <div class="study-index">{{ String(idx + 1).padStart(2, '0') }}</div>
-                <div class="study-content">
-                  <h4 class="study-title">{{ paper.title }}</h4>
-                  <div class="study-meta">
-                    <span class="study-author">{{ paper.author }}</span>
-                    <span class="meta-dot"></span>
-                    <span class="study-year">{{ paper.year }}</span>
-                  </div>
-                  <div class="study-tags">
-                    <span v-if="paper.department && paper.department !== 'N/A'" class="tag">{{ paper.department
-                    }}</span>
-                    <span v-if="paper.project_type" class="tag type-tag">{{ paper.project_type }}</span>
-                  </div>
+                <div v-if="credMsg" class="cred-alert" :class="credMsg.type">
+                  {{ credMsg.text }}
                 </div>
-                <div class="study-action">
-                  <ArrowUpRight :size="16" />
+
+                <div class="form-group">
+                  <label>Current Password</label>
+                  <input v-model="credForm.currentPassword" type="password" placeholder="••••••••"
+                    autocomplete="current-password" />
                 </div>
-              </RouterLink>
-            </div>
 
-            <div v-else class="empty-state-full">
-              <BookMarked :size="48" class="empty-icon animate-float" />
-              <h3>No citations yet</h3>
-              <p>Research papers you cite will appear here. Start exploring the repository to build your list.</p>
-              <RouterLink :to="{ name: 'home' }" class="empty-cta-btn">Browse Repository</RouterLink>
-            </div>
-          </div>
-        </template>
+                <div class="form-group">
+                  <label>New Password</label>
+                  <input v-model="credForm.newPassword" type="password" placeholder="At least 8 characters"
+                    autocomplete="new-password" />
 
-        <!-- ══ My Uploads ════════════════════════════════════════ -->
-        <template v-else-if="activeSection === 'uploads'">
-          <div class="section-container">
-            <div v-if="uploadLoading" class="section-loader">
-              <Loader2 :size="20" class="spin" /> Loading your uploads...
-            </div>
-
-            <div v-else-if="uploads.length > 0" class="uploads-grid">
-              <div v-for="(paper, idx) in uploads" :key="paper.id" class="upload-item-card animate-fade-in"
-                :style="{ animationDelay: `${idx * 0.05}s` }">
-                <div class="upload-main">
-                  <h4 class="upload-title">{{ paper.title }}</h4>
-                  <p class="upload-author">{{ paper.author }} · {{ paper.year }}</p>
-
-                  <div class="upload-status-row">
-                    <div class="status-pill" :class="paper.status?.toLowerCase()">
-                      <Clock v-if="paper.status === 'Pending'" :size="12" />
-                      <ShieldCheck v-else :size="12" />
-                      {{ paper.status }}
+                  <div v-if="credForm.newPassword" class="strength-indicator">
+                    <div class="strength-labels">
+                      <span>Password Strength:</span>
+                      <strong :style="{ color: strengthColor }">{{ strengthLabel }}</strong>
                     </div>
-                    <span v-if="paper.status === 'Pending'" class="status-text">
-                      {{ canCancel(paper) ? 'Request pending > 2 days. Eligible for cancellation.' :
-                        'Awaiting Faculty verification.' }}
-                    </span>
+                    <div class="strength-meter">
+                      <div v-for="i in 4" :key="i" class="strength-segment"
+                        :style="{ background: i <= passwordStrength ? strengthColor : 'var(--border-color)' }" />
+                    </div>
                   </div>
                 </div>
 
-                <div class="upload-actions">
-                  <button v-if="paper.status === 'Pending' && canCancel(paper)" class="btn-outline-danger"
-                    @click="confirmCancel(paper)" :disabled="cancelLoading === paper.id">
-                    <Trash2 v-if="cancelLoading !== paper.id" :size="14" />
-                    <Loader2 v-else :size="14" class="spin" />
-                    Cancel Indexing
-                  </button>
-                  <RouterLink v-if="paper.status === 'Approved'" :to="{ name: 'detail', params: { id: paper.id } }"
-                    class="btn-primary-sm">
-                    View Paper
-                    <ArrowUpRight :size="14" />
+                <div class="form-group">
+                  <label>Confirm New Password</label>
+                  <input v-model="credForm.confirmPassword" type="password" placeholder="Repeat new password"
+                    autocomplete="new-password" />
+                </div>
+
+                <button class="primary-btn full-width" @click="handleCredentialUpdate" :disabled="credSaving">
+                  <Loader2 v-if="credSaving" :size="16" class="spin" />
+                  <span>{{ credSaving ? 'Updating...' : 'Update Password' }}</span>
+                </button>
+              </div>
+            </template>
+
+            <template v-else-if="activeSection === 'cited'">
+              <div class="profile-card tab-content-card animate-fade-in">
+                <h3 class="card-title">Studies I Cited</h3>
+                <div v-if="citLoading" class="section-loader">
+                  <Loader2 :size="20" class="spin" /> Loading your citations...
+                </div>
+
+                <div v-else-if="citations.length > 0" class="studies-list">
+                  <RouterLink v-for="(paper, idx) in citations" :key="paper.id"
+                    :to="{ name: 'detail', params: { id: paper.id } }" class="study-card"
+                    :style="{ animationDelay: `${idx * 0.05}s` }">
+                    <div class="study-index">{{ String(idx + 1).padStart(2, '0') }}</div>
+                    <div class="study-content">
+                      <h4 class="study-title">{{ paper.title }}</h4>
+                      <div class="study-meta">
+                        <span class="study-author">{{ paper.author }}</span>
+                        <span class="meta-dot"></span>
+                        <span class="study-year">{{ paper.year }}</span>
+                      </div>
+                      <div class="study-tags">
+                        <span v-if="paper.department && paper.department !== 'N/A'" class="tag">{{ paper.department }}</span>
+                        <span v-if="paper.project_type" class="tag type-tag">{{ paper.project_type }}</span>
+                      </div>
+                    </div>
+                    <div class="study-action">
+                      <ArrowUpRight :size="16" />
+                    </div>
                   </RouterLink>
-                  <div v-if="paper.status === 'Pending' && !canCancel(paper)" class="action-lock">
-                    <Clock :size="12" /> Cancellation locked
-                  </div>
+                </div>
+
+                <div v-else class="empty-state-full">
+                  <BookMarked :size="48" class="empty-icon animate-float" />
+                  <h3>No citations yet</h3>
+                  <p>Research papers you cite will appear here. Start exploring the repository to build your list.</p>
+                  <RouterLink :to="{ name: 'home' }" class="empty-cta-btn">Browse Repository</RouterLink>
                 </div>
               </div>
-            </div>
+            </template>
 
-            <div v-else class="empty-state-full">
-              <FileUp :size="48" class="empty-icon animate-float" />
-              <h3>No papers indexed</h3>
-              <p>Once you upload and index a paper, it will appear here for tracking and management.</p>
-              <RouterLink :to="{ name: 'upload' }" class="empty-cta-btn">Index Your First Paper</RouterLink>
-            </div>
+            <template v-else-if="activeSection === 'uploads'">
+              <div class="profile-card tab-content-card animate-fade-in">
+                <h3 class="card-title">My Uploaded Papers</h3>
+                <div v-if="uploadLoading" class="section-loader">
+                  <Loader2 :size="20" class="spin" /> Loading your uploads...
+                </div>
+
+                <div v-else-if="uploads.length > 0" class="uploads-grid">
+                  <div v-for="(paper, idx) in uploads" :key="paper.id" class="upload-item-card"
+                    :style="{ animationDelay: `${idx * 0.05}s` }">
+                    <div class="upload-main">
+                      <h4 class="upload-title">{{ paper.title }}</h4>
+                      <p class="upload-author">{{ paper.author }} · {{ paper.year }}</p>
+
+                      <div class="upload-status-row">
+                        <div class="status-pill" :class="paper.status?.toLowerCase()">
+                          <Clock v-if="paper.status === 'Pending'" :size="12" />
+                          <ShieldCheck v-else :size="12" />
+                          {{ paper.status }}
+                        </div>
+                        <span v-if="paper.status === 'Pending'" class="status-text">
+                          {{ canCancel(paper) ? 'Request pending > 2 days. Eligible for cancellation.' :
+                            'Awaiting Faculty verification.' }}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div class="upload-actions">
+                      <button v-if="paper.status === 'Pending' && canCancel(paper)" class="btn-outline-danger"
+                        @click="confirmCancel(paper)" :disabled="cancelLoading === paper.id">
+                        <Trash2 v-if="cancelLoading !== paper.id" :size="14" />
+                        <Loader2 v-else :size="14" class="spin" />
+                        Cancel Indexing
+                      </button>
+                      <RouterLink v-if="paper.status === 'Approved'" :to="{ name: 'detail', params: { id: paper.id } }"
+                        class="btn-primary-sm">
+                        View Paper
+                        <ArrowUpRight :size="14" />
+                      </RouterLink>
+                      <div v-if="paper.status === 'Pending' && !canCancel(paper)" class="action-lock">
+                        <Clock :size="12" /> Cancellation locked
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div v-else class="empty-state-full">
+                  <FileUp :size="48" class="empty-icon animate-float" />
+                  <h3>No papers indexed</h3>
+                  <p>Once you upload and index a paper, it will appear here for tracking and management.</p>
+                  <RouterLink :to="{ name: 'upload' }" class="empty-cta-btn">Index Your First Paper</RouterLink>
+                </div>
+              </div>
+            </template>
           </div>
-        </template>
-      </main>
+        </main>
+      </div>
     </div>
   </div>
 
@@ -535,11 +546,8 @@ onMounted(fetchData)
         <div class="cancel-icon">
           <AlertTriangle :size="48" color="#ef4444" />
         </div>
-        <h2 class="cancel-title">Cancel Indexing Request?</h2>
-        <p class="cancel-desc">
-          Are you sure you want to cancel the indexing request for:
-          <strong>{{ paperToCancel?.title }}</strong>?
-        </p>
+        <h3>Cancel Indexing Request?</h3>
+        <p class="cancel-warning">Are you sure you want to cancel the indexing request for <strong>{{ paperToCancel?.title }}</strong>?</p>
         <p class="cancel-hint">This action cannot be undone.</p>
         <div class="cancel-footer">
           <button class="modal-btn-secondary" @click="showCancelModal = false">Keep Request</button>
@@ -568,120 +576,114 @@ onMounted(fetchData)
 
   min-height: 100vh;
   background: var(--surface);
-  padding-bottom: 5rem;
   color: var(--ink);
   font-family: 'Source Sans 3', sans-serif;
-  position: relative;
-  overflow: hidden;
-}
-
-.full-loader {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 1rem;
-  min-height: 80vh;
-  color: var(--ink-3);
-  font-size: 0.95rem;
 }
 
 .profile-container {
-  max-width: 1200px;
+  max-width: 1280px;
   margin: 0 auto;
-  position: relative;
-  z-index: 10;
+  padding: 2rem 1.5rem;
+  box-sizing: border-box;
 }
 
-/* ── HERO SECTION ─────────────────────────────────────────────── */
-.profile-hero {
-  position: relative;
-  padding: 120px 2rem 4rem;
-  background: linear-gradient(to bottom, rgba(0, 166, 81, 0.03) 0%, transparent 100%);
-  border-bottom: 1px solid var(--rule);
-  overflow: hidden;
+@media (max-width: 640px) {
+  .profile-container {
+    padding: 2rem 1rem;
+  }
 }
 
-.hero-overlay {
-  position: absolute;
-  inset: 0;
-  background-image:
-    radial-gradient(at 0% 0%, rgba(0, 166, 81, 0.04) 0px, transparent 50%),
-    radial-gradient(at 100% 0%, rgba(37, 99, 235, 0.04) 0px, transparent 50%);
-  pointer-events: none;
+.profile-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2rem;
 }
 
-/* Background Glowing Shapes */
-.hero-bg-shapes {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
+@media (min-width: 1024px) {
+  .profile-grid {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+  }
 }
 
-.floating-shape {
-  position: absolute;
-  background: linear-gradient(135deg, var(--green) 0%, transparent 80%);
-  border-radius: 50%;
-  filter: blur(100px);
-  opacity: 0.04;
-  pointer-events: none;
-}
-
-.dark .floating-shape {
-  opacity: 0.08;
-}
-
-.shape-1 {
-  width: 400px;
-  height: 400px;
-  top: -10%;
-  left: 5%;
-  animation: float-shape-1 12s ease-in-out infinite alternate;
-}
-.shape-2 {
-  width: 350px;
-  height: 350px;
-  bottom: -10%;
-  right: 5%;
-  animation: float-shape-2 15s ease-in-out infinite alternate;
-}
-.shape-3 {
-  width: 250px;
-  height: 250px;
-  top: 30%;
-  left: 45%;
-  animation: float-shape-3 10s ease-in-out infinite alternate;
-}
-
-@keyframes float-shape-1 {
-  0% { transform: translate(0, 0) scale(1); }
-  100% { transform: translate(20px, -20px) scale(1.05); }
-}
-
-@keyframes float-shape-2 {
-  0% { transform: translate(0, 0) scale(1); }
-  100% { transform: translate(-15px, 15px) scale(0.95); }
-}
-
-@keyframes float-shape-3 {
-  0% { transform: translate(0, 0) scale(1); }
-  100% { transform: translate(15px, 10px) scale(1.06); }
-}
-
-.hero-inner {
-  position: relative;
-  z-index: 1;
+/* Left Sticky Sidebar */
+.profile-sidebar {
+  grid-column: span 1;
   display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+@media (min-width: 1024px) {
+  .profile-sidebar {
+    grid-column: span 4;
+    position: sticky;
+    top: 2rem;
+    align-self: start;
+  }
+}
+
+/* Right Primary Workspace */
+.profile-workspace {
+  grid-column: span 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  min-width: 0;
+}
+
+@media (min-width: 1024px) {
+  .profile-workspace {
+    grid-column: span 8;
+  }
+}
+
+/* ── Surface Styling ── */
+.profile-card {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  box-sizing: border-box;
+  position: relative;
+}
+
+.dark .profile-card {
+  background: var(--paper);
+  border-color: rgba(255, 255, 255, 0.06);
+}
+
+.profile-card:hover {
+  border-color: rgba(0, 166, 81, 0.2);
+  box-shadow: var(--shadow-md);
+}
+
+.card-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 0 0 1.25rem 0;
+  font-family: 'Source Sans 3', sans-serif;
+}
+
+/* ── Identity Block ── */
+.identity-card {
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 2.5rem;
-  max-width: 1000px;
-  margin: 0 auto;
+  text-align: center;
+  gap: 1.5rem;
+}
+
+.identity-avatar-section {
+  display: flex;
+  justify-content: center;
 }
 
 .hero-avatar-wrap {
   position: relative;
-  flex-shrink: 0;
+  cursor: pointer;
 }
 
 .hero-avatar {
@@ -692,15 +694,19 @@ onMounted(fetchData)
   border-radius: 50%;
   background: var(--green);
   color: #fff;
-  font-family: 'Lora', serif;
+  font-family: 'Source Sans 3', sans-serif;
   font-size: 2.5rem;
   font-weight: 700;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 10px 30px -5px rgba(0, 166, 81, 0.4);
-  border: 4px solid var(--surface);
+  box-shadow: 0 10px 25px -5px rgba(0, 166, 81, 0.2);
   transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.hero-avatar-wrap:hover .hero-avatar {
+  transform: scale(1.03);
+  box-shadow: 0 12px 30px -5px rgba(0, 166, 81, 0.3);
 }
 
 .avatar-img-element {
@@ -713,7 +719,7 @@ onMounted(fetchData)
 .avatar-upload-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.45);
+  background: rgba(0, 0, 0, 0.5);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -744,131 +750,140 @@ onMounted(fetchData)
   z-index: 5;
 }
 
-.hero-avatar-wrap:hover .hero-avatar {
-  transform: scale(1.03);
-  box-shadow: 0 12px 35px -5px rgba(0, 166, 81, 0.5);
-}
-
-.hero-status-dot {
-  position: absolute;
-  bottom: 8px;
-  right: 8px;
-  width: 20px;
-  height: 20px;
-  background: #10b981;
-  border: 4px solid var(--surface);
-  border-radius: 50%;
-  box-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
-  animation: pulse-dot 2s infinite;
-}
-
-@keyframes pulse-dot {
-  0%, 100% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(0.9); opacity: 0.8; }
-}
-
-.hero-body {
-  flex: 1;
-}
-
-.hero-top-row {
+.identity-info-section {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 1rem;
-  margin-bottom: 0.5rem;
+  gap: 0.5rem;
 }
 
-.hero-username {
-  font-family: 'Lora', serif;
-  font-size: 2.2rem;
-  font-weight: 700;
-  color: var(--ink);
+.identity-name {
   margin: 0;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--ink);
+  font-family: 'Source Sans 3', sans-serif;
 }
 
-.dark .hero-username {
-  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-}
-
-.hero-role-tag {
+.identity-role-badge {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
   padding: 0.25rem 0.75rem;
   border-radius: 999px;
   border: 1px solid;
-  backdrop-filter: blur(10px);
+  letter-spacing: 0.05em;
 }
 
-.hero-meta {
+.identity-researcher-id {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  font-size: 0.9rem;
-  color: var(--ink-2);
+  gap: 6px;
+  font-size: 0.8rem;
+  color: var(--ink-3);
+  margin-top: 0.5rem;
 }
 
-.hero-sep {
-  opacity: 0.3;
-}
-
-.hero-stat strong {
-  color: var(--ink);
-}
-
-/* ── NAVIGATION BAR ───────────────────────────────────────────── */
-.profile-nav-bar {
-  background: rgba(var(--bg-secondary-rgb, 255, 255, 255), 0.75);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-bottom: 1px solid var(--rule);
-  position: sticky;
-  top: 0;
-  z-index: 100;
-  padding: 0 2rem;
-  transition: all 0.3s ease;
-}
-
-.dark .profile-nav-bar {
-  background: rgba(15, 15, 15, 0.75);
-}
-
-.nav-inner {
-  max-width: 1000px;
-  margin: 0 auto;
-  display: flex;
-  gap: 2rem;
-}
-
-.nav-tab {
+/* ── Clipboard UI ── */
+.copy-btn {
   background: none;
   border: none;
-  padding: 1.25rem 0.25rem;
+  color: var(--ink-3);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.copy-btn:hover {
+  color: var(--green);
+  background: rgba(0, 166, 81, 0.08);
+}
+
+.copy-success-icon {
+  color: var(--green) !important;
+}
+
+/* ── Account Info List ── */
+.account-card .info-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.88rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.info-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.info-label {
+  color: var(--ink-3);
+  font-weight: 500;
+}
+
+.info-value {
+  color: var(--ink);
+  font-weight: 600;
+  text-align: right;
+}
+
+.flex-align-center {
+  display: inline-flex;
+  align-items: center;
+}
+
+.ml-2 {
+  margin-left: 0.5rem;
+}
+
+/* ── Navigation ── */
+.profile-nav-tabs {
+  display: flex;
+  gap: 1.5rem;
+  border-bottom: 1px solid var(--rule);
+  overflow-x: auto;
+  padding-bottom: 1px;
+}
+
+.profile-nav-tabs .nav-tab {
+  background: none;
+  border: none;
+  padding: 1rem 0.25rem;
   font-size: 0.9rem;
   font-weight: 600;
   color: var(--ink-3);
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0.5rem;
   position: relative;
-  transition: color 0.2s, transform 0.2s;
+  transition: color 0.2s;
+  white-space: nowrap;
 }
 
-.nav-tab:hover {
+.profile-nav-tabs .nav-tab:hover {
   color: var(--ink);
 }
 
-.nav-tab.active {
+.profile-nav-tabs .nav-tab.active {
   color: var(--green-dk);
 }
 
-.nav-tab::after {
+.profile-nav-tabs .nav-tab::after {
   content: '';
   position: absolute;
   bottom: -1px;
@@ -880,7 +895,7 @@ onMounted(fetchData)
   transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.nav-tab.active::after {
+.profile-nav-tabs .nav-tab.active::after {
   transform: scaleX(1);
 }
 
@@ -891,175 +906,112 @@ onMounted(fetchData)
   padding: 0.1rem 0.4rem;
   border-radius: 6px;
   font-weight: 700;
-  transition: background 0.2s, color 0.2s;
 }
 
-.nav-tab:hover .nav-tab-count {
-  background: rgba(0, 166, 81, 0.15);
-  color: var(--green);
-}
-
-/* ── MAIN CONTENT AREA ────────────────────────────────────────── */
-.profile-main-content {
-  padding: 3rem 2rem;
-  max-width: 1040px;
-  margin: 0 auto;
-  position: relative;
-  z-index: 1;
-}
-
-/* ══ DASHBOARD ══════════════════════════════════════════════════ */
-.dashboard-stats {
+/* ── Stats Subgrid ── */
+.stat-subgrid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 1.5rem;
-  margin-bottom: 2.5rem;
+  gap: 1.25rem;
 }
 
-.stat-card {
+.stat-subgrid .stat-card {
   background: rgba(var(--bg-secondary-rgb, 255, 255, 255), 0.55);
   backdrop-filter: blur(15px);
   -webkit-backdrop-filter: blur(15px);
   border: 1px solid rgba(0, 166, 81, 0.15);
-  border-radius: 14px;
-  padding: 1.5rem;
-  display: flex;
-  align-items: center;
-  gap: 1.25rem;
-  box-shadow: 0 4px 15px -3px rgba(0, 0, 0, 0.02);
-  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.3s, box-shadow 0.3s;
+  border-radius: 16px;
+  padding: 24px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  box-sizing: border-box;
 }
 
-.dark .stat-card {
-  background: rgba(30, 30, 30, 0.45);
+.dark .stat-subgrid .stat-card {
+  background: var(--paper);
   border-color: rgba(255, 255, 255, 0.06);
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
 }
 
-.stat-card:hover {
+.stat-subgrid .stat-card:hover {
   transform: translateY(-4px);
-  border-color: var(--green);
-  box-shadow: 0 10px 25px -10px rgba(0, 166, 81, 0.15);
+  border-color: rgba(0, 166, 81, 0.25);
+  box-shadow: var(--shadow-md);
 }
 
-.dark .stat-card:hover {
-  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.4);
-}
-
-.stat-icon-box {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
+.stat-content-left {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: transform 0.3s ease;
-}
-
-.stat-card:hover .stat-icon-box {
-  transform: scale(1.08) rotate(3deg);
-}
-
-.stat-icon-box.green {
-  background: rgba(0, 166, 81, 0.1);
-  color: #10b981;
-}
-
-.stat-icon-box.blue {
-  background: rgba(37, 99, 235, 0.1);
-  color: #3b82f6;
-}
-
-.stat-icon-box.purple {
-  background: rgba(124, 58, 237, 0.1);
-  color: #a78bfa;
+  flex-direction: column;
+  position: relative;
+  z-index: 2;
 }
 
 .stat-label {
-  display: block;
   font-size: 0.75rem;
   font-weight: 700;
   color: var(--ink-3);
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.5rem;
 }
 
 .stat-value {
-  font-size: 1.75rem;
+  font-size: 2rem;
   font-weight: 800;
   color: var(--ink);
   line-height: 1;
 }
 
-.panel-card {
-  background: rgba(var(--bg-secondary-rgb, 255, 255, 255), 0.5);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--rule);
-  border-radius: 14px;
-  overflow: hidden;
-  box-shadow: 0 4px 20px -5px rgba(0, 0, 0, 0.03);
-  transition: border-color 0.3s, box-shadow 0.3s;
+.stat-helper {
+  font-size: 0.75rem;
+  color: var(--ink-3);
+  margin-top: 0.5rem;
+  font-style: italic;
 }
 
-.dark .panel-card {
-  background: rgba(22, 22, 22, 0.45);
-  border-color: rgba(255, 255, 255, 0.06);
+.stat-watermark {
+  position: absolute;
+  right: 12px;
+  bottom: 8px;
+  opacity: 0.05;
+  width: 56px;
+  height: 56px;
+  color: var(--green);
+  pointer-events: none;
+  z-index: 1;
 }
 
-.panel-card:hover {
-  border-color: rgba(0, 166, 81, 0.2);
-  box-shadow: 0 8px 30px -5px rgba(0, 166, 81, 0.05);
+/* ── Recently Cited Card ── */
+.recent-cited-card {
+  margin-top: 1.5rem;
 }
 
-.panel-card-header {
-  padding: 1.25rem 1.75rem;
-  border-bottom: 1px solid var(--rule);
+.card-header-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: rgba(var(--bg-secondary-rgb, 255, 255, 255), 0.3);
+  margin-bottom: 1.25rem;
 }
 
-.dark .panel-card-header {
-  border-bottom-color: rgba(255, 255, 255, 0.06);
-  background: rgba(0, 0, 0, 0.2);
-}
-
-.panel-card-header h3 {
-  font-family: 'Lora', serif;
-  font-size: 1.1rem;
-  font-weight: 700;
+.card-header-row .card-title {
   margin: 0;
-  color: var(--ink);
 }
 
-.panel-card-body {
-  padding: 1.75rem;
-}
-
-.info-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 2rem;
-}
-
-.info-item label {
-  display: block;
-  font-size: 0.7rem;
+.text-link {
+  background: none;
+  border: none;
+  color: var(--green-dk);
   font-weight: 700;
-  text-transform: uppercase;
-  color: var(--ink-3);
-  margin-bottom: 0.4rem;
-  letter-spacing: 0.05em;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  font-family: 'Source Sans 3', sans-serif;
 }
 
-.info-item p {
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--ink);
-  margin: 0;
+.text-link:hover {
+  opacity: 0.8;
+  text-decoration: underline;
 }
 
 .activity-list {
@@ -1071,22 +1023,19 @@ onMounted(fetchData)
   display: flex;
   align-items: center;
   gap: 1rem;
-  padding: 1.25rem 1.75rem;
+  padding: 1rem 0;
   border-bottom: 1px solid var(--rule);
   text-decoration: none;
   transition: all 0.2s ease;
 }
 
-.dark .activity-item {
-  border-bottom-color: rgba(255, 255, 255, 0.05);
-}
-
 .activity-item:last-child {
   border-bottom: none;
+  padding-bottom: 0;
 }
 
 .activity-item:hover {
-  background: rgba(0, 166, 81, 0.03);
+  background: rgba(0, 166, 81, 0.02);
 }
 
 .activity-icon {
@@ -1098,11 +1047,7 @@ onMounted(fetchData)
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.2s ease;
-}
-
-.activity-item:hover .activity-icon {
-  transform: scale(1.1);
+  flex-shrink: 0;
 }
 
 .activity-text {
@@ -1118,11 +1063,16 @@ onMounted(fetchData)
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  font-family: 'Source Sans 3', sans-serif;
 }
 
 .activity-meta {
+  display: block;
   font-size: 0.75rem;
   color: var(--ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .activity-arrow {
@@ -1130,6 +1080,7 @@ onMounted(fetchData)
   opacity: 0;
   transform: translateX(-4px);
   transition: all 0.2s ease;
+  flex-shrink: 0;
 }
 
 .activity-item:hover .activity-arrow {
@@ -1137,31 +1088,23 @@ onMounted(fetchData)
   transform: translate(0, 0);
 }
 
-/* ══ SECURITY ═══════════════════════════════════════════════════ */
-.centered-content {
-  max-width: 500px;
-  margin: 0 auto;
+.empty-mini {
+  padding: 1.5rem 0;
+  text-align: center;
+  color: var(--ink-3);
+  font-size: 0.9rem;
 }
 
+/* ── Update Credentials Form ── */
 .security-card {
-  background: rgba(var(--bg-secondary-rgb, 255, 255, 255), 0.5);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--rule);
-  border-radius: 14px;
   padding: 2.5rem;
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.03);
-}
-
-.dark .security-card {
-  background: rgba(22, 22, 22, 0.45);
-  border-color: rgba(255, 255, 255, 0.06);
 }
 
 .card-title-group {
   display: flex;
   gap: 1.25rem;
   margin-bottom: 2rem;
+  align-items: flex-start;
 }
 
 .card-title-group .title-icon {
@@ -1171,12 +1114,13 @@ onMounted(fetchData)
 
 .card-title-group h3 {
   font-size: 1.25rem;
-  font-family: 'Lora', serif;
+  font-weight: 700;
   margin: 0 0 0.25rem;
   color: var(--ink);
+  font-family: 'Source Sans 3', sans-serif;
 }
 
-.card-title-group p {
+.card-subtitle {
   font-size: 0.88rem;
   color: var(--ink-3);
   margin: 0;
@@ -1291,7 +1235,21 @@ onMounted(fetchData)
   width: 100%;
 }
 
-/* ── STUDIES & UPLOADS ══════════════════════════════════════════ */
+/* ── Studies I Cited ── */
+.tab-content-card {
+  padding: 24px;
+}
+
+.section-loader {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 3rem 0;
+  color: var(--ink-3);
+  font-size: 0.95rem;
+}
+
 .studies-list {
   display: grid;
   grid-template-columns: 1fr;
@@ -1324,15 +1282,16 @@ onMounted(fetchData)
 }
 
 .study-index {
-  font-family: 'Lora', serif;
   font-size: 1.2rem;
   color: var(--green-dk);
   opacity: 0.6;
   font-weight: 700;
+  font-family: 'Source Sans 3', sans-serif;
 }
 
 .study-content {
   flex: 1;
+  min-width: 0;
 }
 
 .study-title {
@@ -1341,7 +1300,7 @@ onMounted(fetchData)
   color: var(--ink);
   margin: 0 0 0.25rem;
   line-height: 1.4;
-  font-family: 'Lora', serif;
+  font-family: 'Source Sans 3', sans-serif;
 }
 
 .study-meta {
@@ -1392,6 +1351,7 @@ onMounted(fetchData)
   opacity: 0.5;
   transform: translateX(-4px);
   transition: all 0.2s ease;
+  flex-shrink: 0;
 }
 
 .study-card:hover .study-action {
@@ -1399,6 +1359,7 @@ onMounted(fetchData)
   transform: translate(2px, -2px);
 }
 
+/* ── My Uploaded Papers ── */
 .uploads-grid {
   display: flex;
   flex-direction: column;
@@ -1431,13 +1392,14 @@ onMounted(fetchData)
 
 .upload-main {
   flex: 1;
+  min-width: 0;
 }
 
 .upload-title {
   font-size: 1.08rem;
   font-weight: 700;
   margin: 0 0 0.25rem;
-  font-family: 'Lora', serif;
+  font-family: 'Source Sans 3', sans-serif;
   color: var(--ink);
   line-height: 1.4;
 }
@@ -1452,6 +1414,7 @@ onMounted(fetchData)
   display: flex;
   align-items: center;
   gap: 1rem;
+  flex-wrap: wrap;
 }
 
 .status-pill {
@@ -1544,43 +1507,7 @@ onMounted(fetchData)
   border: 1px solid var(--rule);
 }
 
-/* ── Generic Utils ────────────────────────────────────────────── */
-.mono {
-  font-family: 'JetBrains Mono', monospace;
-}
-
-.mt-6 {
-  margin-top: 1.5rem;
-}
-
-.p-0 {
-  padding: 0;
-}
-
-.text-link {
-  background: none;
-  border: none;
-  color: var(--green-dk);
-  font-weight: 700;
-  font-size: 0.8rem;
-  cursor: pointer;
-  transition: opacity 0.2s;
-}
-
-.text-link:hover {
-  opacity: 0.8;
-  text-decoration: underline;
-}
-
-.spin {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from { transform: rotate(0); }
-  to { transform: rotate(360deg); }
-}
-
+/* ── Empty States ── */
 .empty-state-full {
   padding: 5rem 2rem;
   text-align: center;
@@ -1597,7 +1524,7 @@ onMounted(fetchData)
 }
 
 .empty-state-full h3 {
-  font-family: 'Lora', serif;
+  font-family: 'Source Sans 3', sans-serif;
   font-size: 1.5rem;
   margin: 0;
   color: var(--ink);
@@ -1627,7 +1554,7 @@ onMounted(fetchData)
   box-shadow: 0 4px 15px rgba(0, 166, 81, 0.3);
 }
 
-/* ── Animation classes ── */
+/* ── Animations ── */
 .animate-fade-in {
   animation: fadeIn 0.4s ease-out both;
 }
@@ -1655,51 +1582,106 @@ onMounted(fetchData)
   50% { transform: translateY(-6px); }
 }
 
-/* ── Responsive ───────────────────────────────────────────────── */
+/* ── Utilities ── */
+.mono {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0); }
+  to { transform: rotate(360deg); }
+}
+
+.full-loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  min-height: 50vh;
+  color: var(--ink-3);
+}
+
+/* ── Cancel Modal ── */
+.zoom-modal.cancel-modal {
+  max-width: 480px;
+}
+
+.cancel-warning {
+  font-size: 0.95rem;
+  color: var(--ink);
+  line-height: 1.5;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.cancel-hint {
+  font-size: 0.8rem;
+  color: var(--ink-3);
+  font-style: italic;
+  margin-bottom: 2rem;
+}
+
+.cancel-footer {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+}
+
+.modal-btn-secondary {
+  background: transparent;
+  border: 1px solid var(--rule);
+  color: var(--ink);
+  padding: 0.6rem 1.2rem;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.modal-btn-secondary:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.dark .modal-btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.modal-btn-danger {
+  background: #ef4444;
+  color: #fff;
+  border: none;
+  padding: 0.6rem 1.2rem;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.modal-btn-danger:hover {
+  background: #dc2626;
+}
+
+/* ── Responsive Styles ── */
+@media (max-width: 1023px) {
+  .profile-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 768px) {
-  .hero-inner {
-    flex-direction: column;
-    text-align: center;
-    gap: 1.5rem;
-  }
-
-  .hero-top-row {
-    justify-content: center;
-    flex-direction: column;
-  }
-
-  .hero-meta {
-    flex-direction: column;
-    gap: 0.4rem;
-  }
-
-  .hero-sep {
-    display: none;
-  }
-
-  .nav-inner {
-    gap: 1rem;
-    overflow-x: auto;
-    padding-bottom: 0.5rem;
-  }
-
-  .nav-tab {
-    white-space: nowrap;
-  }
-
-  .dashboard-stats {
+  .stat-subgrid {
     grid-template-columns: 1fr;
   }
-
-  .info-grid {
-    grid-template-columns: 1fr;
-    gap: 1rem;
-  }
-
+  
   .upload-item-card {
     flex-direction: column;
-    gap: 1.5rem;
     align-items: flex-start;
+    gap: 1.25rem;
   }
 
   .upload-actions {
@@ -1707,9 +1689,11 @@ onMounted(fetchData)
   }
 
   .upload-actions button,
-  .upload-actions a {
+  .upload-actions a,
+  .action-lock {
     width: 100%;
     justify-content: center;
+    box-sizing: border-box;
   }
 }
 </style>

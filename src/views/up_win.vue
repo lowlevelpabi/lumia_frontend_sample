@@ -3,8 +3,9 @@ import { ref, reactive, computed, watch, nextTick, onMounted, onUnmounted } from
 import { useRouter } from 'vue-router'
 import {
   FileUp, Loader2, CheckCircle, AlertCircle,
-  FileText, Check, Plus, Trash2, X,
-  Eye, RefreshCw, ShieldAlert, AlertTriangle, ShieldCheck
+  FileText, Check, Plus, X,
+  Eye, RefreshCw, ShieldAlert, AlertTriangle, ShieldCheck,
+  ChevronDown, CheckSquare
 } from 'lucide-vue-next'
 import { api, type PartialPaperMetadata, type SampleDocument } from '../services/api'
 import { useAuth } from '../composables/useAuth'
@@ -91,7 +92,7 @@ const uploadMetadata = reactive<PartialPaperMetadata>({
   media: {} as Record<string, string>
 })
 
-const activeImradTab = ref<'introduction' | 'methods' | 'results' | 'discussion' | 'references'>('introduction')
+const activeImradTab = ref<'abstract' | 'introduction' | 'methods' | 'results' | 'discussion' | 'references'>('abstract')
 
 const METHODOLOGY_SUBHEADING_LABELS = [
   'Research Design', 'Research Approach', 'Research Settings', 'Business Process',
@@ -136,7 +137,8 @@ const rawImradSections = reactive({
   references: ''
 })
 
-const availableImradTabs = computed<ImradKey[]>(() => {
+const availableImradTabs = computed<Array<'abstract' | ImradKey>>(() => {
+  const tabs: Array<'abstract' | ImradKey> = ['abstract']
   const all = ALL_IMRAD_TABS.filter(t => imradSections[t])
   const hasResults = all.includes('results')
   const hasDiscussion = all.includes('discussion')
@@ -144,9 +146,11 @@ const availableImradTabs = computed<ImradKey[]>(() => {
     const merged: ImradKey[] = all.filter(t => t !== 'results' && t !== 'discussion' && t !== 'references')
     merged.push('results')
     if (all.includes('references')) merged.push('references')
-    return merged
+    tabs.push(...merged)
+  } else {
+    tabs.push(...all)
   }
-  return all
+  return tabs
 })
 
 const imradTextarea = ref<HTMLTextAreaElement | null>(null)
@@ -207,7 +211,61 @@ const linkifyReferences = (raw: string): string => {
   return linkify(escapedRaw)
 }
 
-const authors = ref<string[]>([''])
+const authors = ref<string[]>([])
+const newAuthorInput = ref('')
+
+const addAuthorChip = () => {
+  const raw = newAuthorInput.value.trim()
+  if (!raw) return
+  const parts = raw.split(/[,;|]+/).map(p => p.trim()).filter(p => p.length > 0)
+  parts.forEach(p => {
+    if (!authors.value.includes(p)) {
+      authors.value.push(p)
+    }
+  })
+  newAuthorInput.value = ''
+}
+
+const removeAuthorChip = (index: number) => {
+  authors.value.splice(index, 1)
+}
+
+const handleAuthorBackspace = () => {
+  if (newAuthorInput.value === '' && authors.value.length > 0) {
+    authors.value.pop()
+  }
+}
+
+// Keywords chip input support
+const keywordChips = ref<string[]>([])
+const newKeywordInput = ref('')
+
+const addKeywordChip = () => {
+  const raw = newKeywordInput.value.trim()
+  if (!raw) return
+  const parts = raw.split(/[,;|]+/).map(p => p.trim()).filter(p => p.length > 0)
+  parts.forEach(p => {
+    if (!keywordChips.value.includes(p)) {
+      keywordChips.value.push(p)
+    }
+  })
+  newKeywordInput.value = ''
+  uploadMetadata.keywords = keywordChips.value.join(', ')
+}
+
+const removeKeywordChip = (index: number) => {
+  keywordChips.value.splice(index, 1)
+  uploadMetadata.keywords = keywordChips.value.join(', ')
+}
+
+const handleKeywordBackspace = () => {
+  if (newKeywordInput.value === '' && keywordChips.value.length > 0) {
+    keywordChips.value.pop()
+    uploadMetadata.keywords = keywordChips.value.join(', ')
+  }
+}
+
+const showDetectedComponents = ref(false)
 const selectedPages = ref<number[]>([])
 const sectionPages = ref<Record<string, number[]>>({})
 const isManuscript = ref(false)
@@ -326,8 +384,14 @@ const startInitialExtraction = async (autoExtract: boolean = true) => {
     Object.assign(uploadMetadata, preview.metadata)
     if (preview.metadata.author) {
       const splitAuthors = preview.metadata.author.split(/\s*\|\s*/).map((a: string) => a.trim()).filter((a: string) => a.length > 0)
-      authors.value = splitAuthors.length > 0 ? splitAuthors : ['']
-    } else { authors.value = [''] }
+      authors.value = splitAuthors.length > 0 ? splitAuthors : []
+    } else { authors.value = [] }
+
+    if (preview.metadata.keywords) {
+      keywordChips.value = preview.metadata.keywords.split(/\s*,\s*/).map((k: string) => k.trim()).filter((k: string) => k.length > 0)
+    } else {
+      keywordChips.value = []
+    }
 
     pages.value = preview.pages
     selectedPages.value = preview.pages.map((p: PageData) => p.page_num)
@@ -451,11 +515,7 @@ const getSectionsForPage = (pageNum: number) => {
 
 const selectAll = () => { selectedPages.value = pages.value.map(p => p.page_num) }
 const deselectAll = () => { selectedPages.value = [] }
-const addAuthor = () => { authors.value.push('') }
-const removeAuthor = (index: number) => {
-  if (authors.value.length > 1) authors.value.splice(index, 1)
-  else authors.value[0] = ''
-}
+
 
 // ── Confirm upload ───────────────────────────────────────────────────
 const handleFinalConfirm = () => {
@@ -590,7 +650,8 @@ onMounted(loadSampleDocs)
             <AlertCircle v-else :size="16" />
           </div>
           <div class="notif-body">
-            <strong>{{ uploadNotification.includes('Upload Terminated') ? 'Upload Rejected' : 'Error Detected' }}</strong>
+            <strong>{{ uploadNotification.includes('Upload Terminated') ? 'Upload Rejected' : 'Error Detected'
+              }}</strong>
             <p>{{ uploadNotification }}</p>
           </div>
           <button class="notif-close" @click="closeUploadMessage">
@@ -598,7 +659,7 @@ onMounted(loadSampleDocs)
           </button>
         </div>
       </div>
-      
+
       <!-- Step 1 & 3: Centered card -->
       <div v-if="step !== 2" class="upload-center">
 
@@ -616,7 +677,7 @@ onMounted(loadSampleDocs)
             <h1 class="upload-card-title">Upload Your Research</h1>
             <p>Upload a PDF to index your thesis or capstone into the repository.</p>
           </div>
-          
+
           <div class="notice-banner amber" style="margin-bottom: 1.5rem">
             <div class="notice-icon">
               <AlertTriangle :size="18" color="#f59e0b" />
@@ -702,18 +763,6 @@ onMounted(loadSampleDocs)
               <p class="review-bar-sub">Verify extracted info and select indexable pages.</p>
             </div>
           </div>
-          <div class="review-bar-right">
-            <div class="file-pill">
-              <span class="file-pill-label">FILE</span>
-              <span class="file-pill-name">{{ file?.name }}</span>
-              <span class="file-pill-count"><strong>{{ selectedPages.length }}</strong>/{{ pages.length }} pages</span>
-            </div>
-            <button @click="handleFinalConfirm" class="confirm-btn" :disabled="uploadingPaper">
-              <Loader2 v-if="uploadingPaper" :size="15" class="spin" />
-              <Check v-else :size="15" />
-              Confirm Indexing
-            </button>
-          </div>
         </header>
 
         <!-- Manuscript notice -->
@@ -748,29 +797,42 @@ onMounted(loadSampleDocs)
         <div class="review-grid">
           <!-- Left: Metadata -->
           <section class="meta-panel">
+            <div class="file-pill" style="margin-bottom: 1.25rem; width: fit-content;">
+              <span class="file-pill-label">FILE:&nbsp;</span>
+              <span class="file-pill-name" :title="file?.name">{{ file?.name }}</span>
+            </div>
             <div class="meta-panel-head">
               <span class="step-badge">1</span>
               <h4>Verify Metadata</h4>
             </div>
-            <div class="fg"><label>Title</label><textarea v-model="uploadMetadata.title" placeholder="Research Title" />
-            </div>
             <div class="fg">
-              <label>Author(s)</label>
-              <div class="authors-stack">
-                <div v-for="(author, index) in authors" :key="index" class="author-row">
-                  <input v-model="authors[index]" type="text" placeholder="Full Name of Author" />
-                  <button @click="removeAuthor(index)" class="icon-btn red">
-                    <Trash2 :size="14" />
+              <label>Title</label>
+              <textarea v-model="uploadMetadata.title" placeholder="Research Title" />
+            </div>
+
+            <!-- Authors Chip Input -->
+            <div class="fg">
+              <label>Author(s) <span class="fg-label-hint">(press Enter or Comma to add)</span></label>
+              <div class="chips-input-wrap">
+                <div v-for="(author, index) in authors" :key="index" class="chip-item">
+                  <span>{{ author }}</span>
+                  <button type="button" class="chip-close" @click="removeAuthorChip(index)">
+                    <X :size="10" />
                   </button>
                 </div>
-                <button @click="addAuthor" class="add-btn">
-                  <Plus :size="13" /> Add Author
-                </button>
+                <input v-model="newAuthorInput" type="text" placeholder="Add author..."
+                  @keydown.enter.prevent="addAuthorChip"
+                  @keydown="(e) => { if (e.key === ',') { e.preventDefault(); addAuthorChip(); } }"
+                  @blur="addAuthorChip"
+                  @keydown.backspace="handleAuthorBackspace" />
               </div>
             </div>
+
             <div class="fg-row">
-              <div class="fg"><label>Year</label><input v-model="uploadMetadata.year" type="text"
-                  placeholder="e.g., 2025" /></div>
+              <div class="fg">
+                <label>Year</label>
+                <input v-model="uploadMetadata.year" type="text" placeholder="e.g., 2025" />
+              </div>
               <div class="fg">
                 <label>Type</label>
                 <select v-model="uploadMetadata.project_type">
@@ -780,102 +842,142 @@ onMounted(loadSampleDocs)
                 </select>
               </div>
             </div>
-            
-            <div class="fg">
-              <label>Department</label>
-              <select v-model="uploadMetadata.department">
-                <option>N/A</option>
-                <option>Department of Computer Science</option>
-                <option>Department of Information Technology</option>
-                <option>Department of Information Systems</option>
-                <option>Department of Computer Engineering</option>
-                <option>College of Computer Science</option>
-                <option>College of Engineering</option>
-                <option>College of Information Technology</option>
-              </select>
+
+            <div class="fg-row">
+              <div class="fg">
+                <label>Department</label>
+                <select v-model="uploadMetadata.department">
+                  <option>N/A</option>
+                  <option>Department of Computer Science</option>
+                  <option>Department of Information Technology</option>
+                  <option>Department of Information Systems</option>
+                  <option>Department of Computer Engineering</option>
+                  <option>College of Computer Science</option>
+                  <option>College of Engineering</option>
+                  <option>College of Information Technology</option>
+                </select>
+              </div>
+
+              <div class="fg">
+                <label>Degree Program</label>
+                <select v-model="uploadMetadata.degree_program">
+                  <option>N/A</option>
+                  <option>BSCS</option>
+                  <option>BSIT</option>
+                  <option>BSIS</option>
+                  <option>BSCpE</option>
+                </select>
+              </div>
             </div>
-            
+
+            <!-- Keywords Chip Input -->
             <div class="fg">
-              <label>Degree Program</label>
-              <select v-model="uploadMetadata.degree_program">
-                <option>N/A</option>
-                <option>BSCS</option>
-                <option>BSIT</option>
-                <option>BSIS</option>
-                <option>BSCpE</option>
-              </select>
-            </div>
-            <div class="fg"><label>Keywords</label>
-              <input v-model="uploadMetadata.keywords" type="text"
-                placeholder="e.g. machine learning, NLP, deep learning" />
+              <label>Keywords <span class="fg-label-hint">(press Enter or Comma to add)</span></label>
+              <div class="chips-input-wrap">
+                <div v-for="(keyword, index) in keywordChips" :key="index" class="chip-item">
+                  <span>{{ keyword }}</span>
+                  <button type="button" class="chip-close" @click="removeKeywordChip(index)">
+                    <X :size="10" />
+                  </button>
+                </div>
+                <input v-model="newKeywordInput" type="text" placeholder="Add keyword..."
+                  @keydown.enter.prevent="addKeywordChip"
+                  @keydown="(e) => { if (e.key === ',') { e.preventDefault(); addKeywordChip(); } }"
+                  @blur="addKeywordChip"
+                  @keydown.backspace="handleKeywordBackspace" />
+              </div>
             </div>
           </section>
 
           <div class="review-main">
             <!-- IMRAD panel -->
             <section class="imrad-panel">
-              <div class="meta-panel-head" style="margin-bottom:1.5rem">
-                <span class="step-badge">2</span>
-                <h4>Refine IMRAD Sections</h4>
-              </div>
-
-              <div v-if="uploadMetadata.detected_subheadings && uploadMetadata.detected_subheadings.length > 0"
-                class="subheadings-preview">
-                <div class="fg" style="margin-bottom:0.85rem">
-                  <label>Abstract</label>
-                  <textarea v-model="uploadMetadata.abstract" class="abstract-area" placeholder="Enter abstract…" />
-                </div>
-                <template
-                  v-if="uploadMetadata.detected_subheadings.some(s => INTRODUCTION_SUBHEADING_LABELS.includes(s))">
-                  <label class="fg-label">Detected Introduction Components:</label>
-                  <div class="sub-tags" style="margin-bottom:0.75rem">
-                    <span
-                      v-for="sub in uploadMetadata.detected_subheadings.filter(s => INTRODUCTION_SUBHEADING_LABELS.includes(s))"
-                      :key="sub" class="sub-tag sub-tag-intro">
-                      <Check :size="12" /> {{ sub }}
-                    </span>
-                  </div>
-                </template>
-                <template
-                  v-if="uploadMetadata.detected_subheadings.some(s => METHODOLOGY_SUBHEADING_LABELS.includes(s))">
-                  <label class="fg-label">Detected Methodology Components:</label>
-                  <div class="sub-tags" style="margin-bottom:0.75rem">
-                    <span
-                      v-for="sub in uploadMetadata.detected_subheadings.filter(s => METHODOLOGY_SUBHEADING_LABELS.includes(s))"
-                      :key="sub" class="sub-tag">
-                      <Check :size="12" /> {{ sub }}
-                    </span>
-                  </div>
-                </template>
-                <template
-                  v-if="uploadMetadata.detected_subheadings.some(s => !METHODOLOGY_SUBHEADING_LABELS.includes(s) && !INTRODUCTION_SUBHEADING_LABELS.includes(s))">
-                  <label class="fg-label">Detected Results Components:</label>
-                  <div class="sub-tags">
-                    <span
-                      v-for="sub in uploadMetadata.detected_subheadings.filter(s => !METHODOLOGY_SUBHEADING_LABELS.includes(s) && !INTRODUCTION_SUBHEADING_LABELS.includes(s))"
-                      :key="sub" class="sub-tag sub-tag-results">
-                      <Check :size="12" /> {{ sub }}
-                    </span>
-                  </div>
-                </template>
-              </div>
-
               <div class="imrad-tabs">
                 <button v-for="tab in availableImradTabs" :key="tab" type="button" class="imrad-tab-btn"
-                  :class="{ active: activeImradTab === tab }" @click="activeImradTab = tab as ImradKey">
-                  {{ tab === 'results' ? 'Results and Discussion' : tab === 'methods' ? 'Methodology' : tab.charAt(0).toUpperCase() + tab.slice(1) }}
+                  :class="{ active: activeImradTab === tab }" @click="activeImradTab = tab">
+                  {{ tab === 'abstract' ? 'Abstract' : tab === 'results' ? 'Results and Discussion' : tab === 'methods'
+                    ? 'Methodology' : tab.charAt(0).toUpperCase() + tab.slice(1) }}
                 </button>
               </div>
 
+              <!-- Collapsible Detected Components accordion panel -->
+              <div v-if="uploadMetadata.detected_subheadings && uploadMetadata.detected_subheadings.length > 0"
+                class="detected-components-accordion">
+                <button type="button" class="accordion-trigger"
+                  @click="showDetectedComponents = !showDetectedComponents">
+                  <div class="accordion-trigger-left">
+                    <CheckSquare :size="15" />
+                    <span>Detected Components</span>
+                    <span class="components-count-badge">{{ uploadMetadata.detected_subheadings.length }} found</span>
+                  </div>
+                  <ChevronDown :size="15" class="accordion-arrow" :class="{ rotated: showDetectedComponents }" />
+                </button>
+
+                <transition name="slide-fade">
+                  <div v-if="showDetectedComponents" class="accordion-content">
+                    <template
+                      v-if="uploadMetadata.detected_subheadings.some(s => INTRODUCTION_SUBHEADING_LABELS.includes(s))">
+                      <div class="component-group">
+                        <span class="group-label">Introduction:</span>
+                        <div class="sub-tags">
+                          <span
+                            v-for="sub in uploadMetadata.detected_subheadings.filter(s => INTRODUCTION_SUBHEADING_LABELS.includes(s))"
+                            :key="sub" class="sub-tag sub-tag-intro">
+                            <Check :size="10" /> {{ sub }}
+                          </span>
+                        </div>
+                      </div>
+                    </template>
+
+                    <template
+                      v-if="uploadMetadata.detected_subheadings.some(s => METHODOLOGY_SUBHEADING_LABELS.includes(s))">
+                      <div class="component-group">
+                        <span class="group-label">Methodology:</span>
+                        <div class="sub-tags">
+                          <span
+                            v-for="sub in uploadMetadata.detected_subheadings.filter(s => METHODOLOGY_SUBHEADING_LABELS.includes(s))"
+                            :key="sub" class="sub-tag">
+                            <Check :size="10" /> {{ sub }}
+                          </span>
+                        </div>
+                      </div>
+                    </template>
+
+                    <template
+                      v-if="uploadMetadata.detected_subheadings.some(s => !METHODOLOGY_SUBHEADING_LABELS.includes(s) && !INTRODUCTION_SUBHEADING_LABELS.includes(s))">
+                      <div class="component-group">
+                        <span class="group-label">Results &amp; Discussion:</span>
+                        <div class="sub-tags">
+                          <span
+                            v-for="sub in uploadMetadata.detected_subheadings.filter(s => !METHODOLOGY_SUBHEADING_LABELS.includes(s) && !INTRODUCTION_SUBHEADING_LABELS.includes(s))"
+                            :key="sub" class="sub-tag sub-tag-results">
+                            <Check :size="10" /> {{ sub }}
+                          </span>
+                        </div>
+                      </div>
+                    </template>
+                  </div>
+                </transition>
+              </div>
+
               <div class="imrad-content">
-                <div v-if="uploadMetadata.trim_points && uploadMetadata.trim_points[activeImradTab]" class="trim-alert">
+                <div
+                  v-if="activeImradTab !== 'abstract' && uploadMetadata.trim_points && uploadMetadata.trim_points[activeImradTab as ImradKey]"
+                  class="trim-alert">
                   <AlertCircle :size="16" />
                   <span><strong>Auto-Trimmed:</strong> This section was trimmed at
-                    <strong>"{{ uploadMetadata.trim_points[activeImradTab] }}"</strong></span>
+                    <strong>"{{ uploadMetadata.trim_points[activeImradTab as ImradKey] }}"</strong></span>
                 </div>
 
+                <!-- Abstract Tab content -->
+                <template v-if="activeImradTab === 'abstract'">
+                  <textarea ref="imradTextarea" v-model="uploadMetadata.abstract"
+                    class="imrad-textarea abstract-textarea-tab" @input="autoResizeTextarea"
+                    placeholder="Enter abstract…" />
+                </template>
+
                 <!-- References: split pane -->
-                <template v-if="activeImradTab === 'references'">
+                <template v-else-if="activeImradTab === 'references'">
                   <div class="ref-split-wrap">
                     <div class="ref-preview-pane">
                       <div class="ref-pane-label">
@@ -893,7 +995,7 @@ onMounted(loadSampleDocs)
                       <div class="ref-pane-label">
                         <span>Raw Text <span class="ref-pane-hint">(editable)</span></span>
                       </div>
-                      <textarea ref="imradTextarea" v-model="imradSections[activeImradTab]"
+                      <textarea ref="imradTextarea" v-model="imradSections[activeImradTab as ImradKey]"
                         class="imrad-textarea ref-textarea" @input="autoResizeTextarea"
                         placeholder="No references extracted for this section…" />
                     </div>
@@ -901,7 +1003,7 @@ onMounted(loadSampleDocs)
                 </template>
 
                 <!-- All other tabs -->
-                <textarea v-else ref="imradTextarea" v-model="imradSections[activeImradTab]"
+                <textarea v-else ref="imradTextarea" v-model="imradSections[activeImradTab as ImradKey]"
                   class="imrad-textarea maximized" @input="autoResizeTextarea"
                   placeholder="No text extracted for this section…"></textarea>
               </div>
@@ -946,6 +1048,31 @@ onMounted(loadSampleDocs)
                 </div>
               </div>
             </section>
+          </div>
+        </div>
+
+        <!-- Sticky Bottom Bar -->
+        <div class="review-sticky-footer">
+          <div class="sticky-footer-inner">
+            <div class="footer-info">
+              <div class="file-pill">
+                <span class="file-pill-label">FILE:&nbsp;</span>
+                <span class="file-pill-name">{{ file?.name || 'Academic Document' }}</span>
+                <span class="file-pill-count">:&nbsp;<strong>{{ selectedPages.length }}</strong>/{{ pages.length }}
+                  pages
+                  selected</span>
+              </div>
+            </div>
+            <div class="footer-actions">
+              <button @click="cancelUpload" class="btn-cancel-flat">
+                Cancel
+              </button>
+              <button @click="handleFinalConfirm" class="confirm-btn" :disabled="uploadingPaper">
+                <Loader2 v-if="uploadingPaper" :size="15" class="spin" />
+                <Check v-else :size="15" />
+                Confirm Indexing
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -1004,7 +1131,7 @@ onMounted(loadSampleDocs)
         </div>
       </div>
     </Teleport>
-    
+
     <!-- Pending Request Warning Modal -->
     <Teleport to="body">
       <div v-if="showPendingWarningModal" class="modal-overlay" @click.self="showPendingWarningModal = false">
@@ -1025,18 +1152,22 @@ onMounted(loadSampleDocs)
             <p>Our system has detected that this study (ID: <strong>{{ pendingPaperId }}</strong>) has already been
               uploaded and is currently in the <strong>Pending Request</strong> queue.</p>
             <div class="ack-notice">
-              <div class="ack-check amber" style="background: rgba(245, 158, 11, 0.1); color: #f59e0b; border-radius: 50%; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;">
+              <div class="ack-check amber"
+                style="background: rgba(245, 158, 11, 0.1); color: #f59e0b; border-radius: 50%; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;">
                 <AlertTriangle :size="14" />
               </div>
               <span>Duplicate uploads for the same research are not permitted to ensure repository integrity.</span>
             </div>
-            <div class="ack-warning" style="background: rgba(245, 158, 11, 0.08); border-color: rgba(245, 158, 11, 0.2); color: #d97706; margin-top: 1rem; padding: 0.75rem; border-radius: 6px; display: flex; align-items: center; gap: 0.75rem;">
+            <div class="ack-warning"
+              style="background: rgba(245, 158, 11, 0.08); border-color: rgba(245, 158, 11, 0.2); color: #d97706; margin-top: 1rem; padding: 0.75rem; border-radius: 6px; display: flex; align-items: center; gap: 0.75rem;">
               <ShieldAlert :size="16" />
-              <span>Please wait for the administrator or faculty to approve the existing request before trying again.</span>
+              <span>Please wait for the administrator or faculty to approve the existing request before trying
+                again.</span>
             </div>
           </div>
           <div class="modal-foot">
-            <button @click="showPendingWarningModal = false" class="save-btn amber" style="background: #f59e0b; color: white; border: none; padding: 0.6rem 1.4rem; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 0.5rem; font-weight: 600;">
+            <button @click="showPendingWarningModal = false" class="save-btn amber"
+              style="background: #f59e0b; color: white; border: none; padding: 0.6rem 1.4rem; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 0.5rem; font-weight: 600;">
               <Check :size="14" />
               <span>I Understand</span>
             </button>
@@ -1242,8 +1373,13 @@ onMounted(loadSampleDocs)
 }
 
 @keyframes step-line-sweep {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+  0% {
+    background-position: 200% 0;
+  }
+
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 /* ── Main content ────────────────────────────────────────────── */
@@ -1602,23 +1738,20 @@ onMounted(loadSampleDocs)
 }
 
 .review-bar {
-  background: rgba(var(--bg-secondary-rgb, 255, 255, 255), 0.55);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--rule);
-  border-radius: 12px;
-  padding: 1rem 1.25rem;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  flex-wrap: wrap;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.02);
+  border: none;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
+  padding: 1rem 0;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--rule);
+  border-radius: 0;
 }
 
 .dark .review-bar {
-  background: rgba(22, 22, 22, 0.45);
-  border-color: rgba(255, 255, 255, 0.06);
+  background: transparent;
+  border-bottom-color: rgba(255, 255, 255, 0.06);
 }
 
 .review-bar-left {
@@ -1833,11 +1966,21 @@ onMounted(loadSampleDocs)
 }
 
 /* ── Review grid ─────────────────────────────────────────────── */
-.review-grid {
-  display: grid;
-  grid-template-columns: 480px 1fr;
-  gap: 1.25rem;
-  align-items: start;
+@media (min-width: 1024px) {
+  .review-grid {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: 2.5rem;
+    align-items: start;
+  }
+
+  .meta-panel {
+    grid-column: span 4;
+  }
+
+  .review-main {
+    grid-column: span 8;
+  }
 }
 
 .review-main {
@@ -1863,14 +2006,22 @@ onMounted(loadSampleDocs)
   color: var(--ink-3);
 }
 
+.fg label .fg-label-hint {
+  font-size: 0.62rem;
+  font-weight: 500;
+  text-transform: none;
+  opacity: 0.75;
+  letter-spacing: 0;
+}
+
 .fg input,
 .fg select,
 .fg textarea {
   width: 100%;
   padding: 0.65rem 0.8rem;
-  border: 1.5px solid var(--rule);
+  border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: 8px;
-  background: var(--surface);
+  background: rgba(0, 0, 0, 0.02);
   color: var(--ink);
   font-family: 'Source Sans 3', sans-serif;
   font-size: 0.9rem;
@@ -1878,12 +2029,20 @@ onMounted(loadSampleDocs)
   box-sizing: border-box;
 }
 
+.dark .fg input,
+.dark .fg select,
+.dark .fg textarea {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
 .fg input:focus,
 .fg select:focus,
 .fg textarea:focus {
   outline: none;
   border-color: var(--green);
-  box-shadow: 0 0 0 3px rgba(0, 166, 81, 0.15);
+  background: var(--bg-secondary);
+  box-shadow: 0 0 0 3px rgba(0, 166, 81, 0.1);
 }
 
 .fg textarea {
@@ -1982,8 +2141,6 @@ onMounted(loadSampleDocs)
 }
 
 /* ── Panels ──────────────────────────────────────────────────── */
-.meta-panel,
-.imrad-panel,
 .page-panel {
   background: rgba(var(--bg-secondary-rgb, 255, 255, 255), 0.5);
   backdrop-filter: blur(20px);
@@ -1994,11 +2151,180 @@ onMounted(loadSampleDocs)
   box-shadow: 0 4px 25px rgba(0, 0, 0, 0.02);
 }
 
-.dark .meta-panel,
-.dark .imrad-panel,
 .dark .page-panel {
   background: rgba(22, 22, 22, 0.45);
   border-color: rgba(255, 255, 255, 0.06);
+}
+
+.meta-panel,
+.imrad-panel {
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+}
+
+/* ── Chip Inputs ─────────────────────────────────────────────── */
+.chips-input-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.02);
+  min-height: 42px;
+  box-sizing: border-box;
+  transition: all 0.2s ease;
+}
+
+.dark .chips-input-wrap {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.chips-input-wrap:focus-within {
+  border-color: var(--green);
+  background: var(--bg-secondary);
+  box-shadow: 0 0 0 3px rgba(0, 166, 81, 0.1);
+}
+
+.chip-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: rgba(0, 166, 81, 0.08);
+  color: var(--green);
+  border: 1px solid rgba(0, 166, 81, 0.15);
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.chip-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--green);
+  cursor: pointer;
+  border-radius: 50%;
+  opacity: 0.7;
+  transition: opacity 0.2s, background 0.2s;
+}
+
+.chip-close:hover {
+  opacity: 1;
+  background: rgba(0, 166, 81, 0.15);
+}
+
+.chips-input-wrap input {
+  flex: 1;
+  min-width: 120px;
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  padding: 0.2rem 0.3rem !important;
+  font-size: 0.88rem !important;
+  color: var(--ink) !important;
+  box-shadow: none !important;
+}
+
+/* ── Collapsible Detected Components Accordion ───────────────── */
+.detected-components-accordion {
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(var(--bg-secondary-rgb, 255, 255, 255), 0.3);
+  margin-bottom: 1rem;
+}
+
+.dark .detected-components-accordion {
+  background: rgba(22, 22, 22, 0.2);
+  border-color: rgba(255, 255, 255, 0.06);
+}
+
+.accordion-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  background: transparent;
+  border: none;
+  color: var(--ink-2);
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 600;
+  transition: background 0.2s;
+}
+
+.accordion-trigger:hover {
+  background: rgba(0, 0, 0, 0.02);
+  color: var(--ink);
+}
+
+.dark .accordion-trigger:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.accordion-trigger-left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.components-count-badge {
+  background: var(--green-dim);
+  color: var(--green);
+  font-size: 0.7rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 10px;
+  font-weight: 700;
+}
+
+.accordion-arrow {
+  transition: transform 0.2s ease;
+}
+
+.accordion-arrow.rotated {
+  transform: rotate(180deg);
+}
+
+.accordion-content {
+  padding: 0.25rem 1rem 1rem;
+  border-top: 1px dashed var(--rule);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.dark .accordion-content {
+  border-top-color: rgba(255, 255, 255, 0.06);
+}
+
+.component-group {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.component-group .sub-tags {
+  margin-bottom: 0 !important;
+}
+
+.group-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--ink-3);
+  min-width: 140px;
 }
 
 .meta-panel-head {
@@ -2158,8 +2484,8 @@ onMounted(loadSampleDocs)
   border: 1.5px solid var(--rule);
   border-radius: 10px;
   padding: 16px 20px;
-  font-size: 0.85rem;
-  line-height: 1.6;
+  font-size: 0.88rem;
+  line-height: 1.75;
   font-family: 'Lora', Georgia, serif;
   resize: vertical;
   overflow-y: auto;
@@ -2167,6 +2493,66 @@ onMounted(loadSampleDocs)
   box-sizing: border-box;
   letter-spacing: 0.01em;
   text-align: justify;
+}
+
+.abstract-textarea-tab {
+  min-height: 250px !important;
+}
+
+/* ── Sticky Bottom Footer ────────────────────────────────────── */
+.review-sticky-footer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--rule);
+  padding: 1rem 2rem;
+  z-index: 999;
+  box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.03);
+}
+
+.dark .review-sticky-footer {
+  background: #0a0a0a;
+  border-top-color: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.25);
+}
+
+.sticky-footer-inner {
+  max-width: 1440px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.btn-cancel-flat {
+  background: transparent;
+  border: 1px solid var(--rule);
+  color: var(--ink-2);
+  padding: 0.6rem 1.25rem;
+  border-radius: 8px;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-cancel-flat:hover {
+  background: rgba(0, 0, 0, 0.03);
+  color: var(--ink);
+}
+
+.dark .btn-cancel-flat:hover {
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .imrad-textarea:focus {
@@ -2624,7 +3010,9 @@ onMounted(loadSampleDocs)
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* ── Animation classes ── */
@@ -2641,28 +3029,73 @@ onMounted(loadSampleDocs)
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes pulse-slow {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.7; }
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.7;
+  }
 }
 
 @keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-6px); }
+
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-6px);
+  }
 }
 
 /* ── Responsive ──────────────────────────────────────────────── */
 @media (max-width: 1024px) {
   .review-grid {
-    grid-template-columns: 1fr;
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
   }
 
   .up-content {
-    padding: 1.5rem 1rem 4rem;
+    padding: 1.5rem 1rem 8rem;
+  }
+
+  .review-sticky-footer {
+    padding: 1rem;
+  }
+
+  .sticky-footer-inner {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: stretch;
+  }
+
+  .footer-info {
+    text-align: center;
+  }
+
+  .footer-actions {
+    justify-content: space-between;
+  }
+
+  .footer-actions button {
+    flex: 1;
   }
 }
 
@@ -2820,6 +3253,7 @@ onMounted(loadSampleDocs)
     opacity: 0;
     transform: scale(0.95) translateY(10px);
   }
+
   to {
     opacity: 1;
     transform: scale(1) translateY(0);
