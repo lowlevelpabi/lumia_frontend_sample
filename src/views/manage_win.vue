@@ -6513,12 +6513,14 @@ page-panel-title h4 {
   pointer-events: auto;
   transform: translateY(20px);
   opacity: 0;
+  visibility: hidden;
   transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .upload-notification.show {
   transform: translateY(0);
   opacity: 1;
+  visibility: visible;
 }
 
 .notif-ico {

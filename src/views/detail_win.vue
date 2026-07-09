@@ -429,7 +429,27 @@ const hasStructured = (key: string): boolean => getStructuredBlocks(key).length 
 // Strip any [[TABLE_IMAGE:X]] or [TABLE_IMAGE:X] markers from raw text
 const stripMarkers = (text: string): string => {
   if (!text) return ''
-  return text
+  
+  // Truncate at Appendix/Annex/Curriculum Vitae / back-matter headers
+  const lines = text.split('\n')
+  const cleaned: string[] = []
+  for (const line of lines) {
+    const trimmed = line.trim()
+    const lower = trimmed.toLowerCase()
+    if (
+      lower.startsWith('appendix') ||
+      lower.startsWith('annex') ||
+      lower.startsWith('curriculum vitae') ||
+      lower.startsWith('about the author') ||
+      lower.startsWith('biographical data')
+    ) {
+      break
+    }
+    cleaned.push(line)
+  }
+  const cleanedText = cleaned.join('\n').trim()
+
+  return cleanedText
     .replace(/\[{1,2}(?:TABLE|FIGURE)_IMAGE:.*?\]{1,2}/gi, '')
     .replace(/[^\S\n]{2,}/g, ' ')
     .replace(/\n{3,}/g, '\n\n')
@@ -644,131 +664,153 @@ const pyramidTitleLines = computed((): string[] => {
               <span class="bc-active">{{ paper.title.length > 55 ? paper.title.substring(0, 55) + '…' : paper.title }}</span>
             </nav>
 
-            <article class="imrad-journal-page">
+            <div class="imrad-journal-page">
 
-              <!-- ── Journal Header (Title / Authors / Abstract) ── -->
-              <header class="journal-header">
-
-                <div class="journal-meta-top">
-                  <span class="journal-badge">{{ paper.department }}</span>
-                  <span class="journal-badge journal-badge-type">{{ paper.project_type }}</span>
-                  <span v-if="paper.degree_program !== 'N/A'" class="journal-badge journal-badge-degree">{{
-                    paper.degree_program }}</span>
-                </div>
-
-                <h1 class="journal-title">
-                  <span v-for="(line, i) in pyramidTitleLines" :key="i" class="journal-title-line">{{ line }}</span>
-                </h1>
-
-                <div class="journal-authors">
-                  <span v-for="(author, idx) in authorList" :key="idx" class="journal-author">
-                    {{ author }}<span class="author-sep"> · </span>
-                  </span>
-                  <span class="journal-author">Year: {{ paper.year }}</span>
-                </div>
-
-                <div class="journal-stats">
-                  <span class="j-stat">
-                    <Eye :size="12" /> {{ viewCount.toLocaleString() }} views
-                  </span>
-                  <span class="j-stat">
-                    <Award :size="12" /> {{ citationCount.toLocaleString() }} citations
-                  </span>
-
-                  <button v-if="isLoggedIn" class="j-cite-btn" :class="{ cited: hasCited }" :disabled="citeLoading"
-                    @click="handleCite">
-                    <CheckCircle v-if="hasCited" :size="13" />
-                    <Award v-else :size="13" />
-                    {{ hasCited ? 'Cited (Get Ref)' : citeLoading ? 'Citing…' : 'Cite this study' }}
-                  </button>
-                  <span v-else class="j-login-hint">Sign in to cite this study</span>
-
-                  <button v-if="isLoggedIn" class="j-bookmark-btn" :class="{ bookmarked: isBookmarked }"
-                    :disabled="bookmarkLoading" @click="handleBookmark">
-                    <Loader2 v-if="bookmarkLoading" :size="13" class="spin" />
-                    <Bookmark v-else :size="13" :fill="isBookmarked ? 'currentColor' : 'none'" />
-                    {{ isBookmarked ? 'Bookmarked' : 'Bookmark' }}
-                  </button>
-
-                  <button class="j-download-btn" :disabled="exportLoading" @click="handleDownloadPDF">
-                    <Loader2 v-if="exportLoading" :size="13" class="spin" />
-                    <FileDown v-else :size="13" />
-                    {{ exportLoading ? 'Generating PDF…' : 'Download PDF' }}
-                  </button>
-                </div>
-
-                <!-- Plain Abstract -->
-                <div id="abstract-section" class="journal-abstract-plain">
-                  <span class="journal-abstract-label">Abstract</span>
-                  <p class="journal-abstract-text">{{ paper.abstract }}</p>
-                  <div v-if="paper.keywords" class="journal-keywords">
-                    <strong>Keywords: </strong>
-                    <span>{{ paper.keywords }}</span>
-                  </div>
-                </div>
-
-                <hr class="journal-divider" />
-              </header>
-
-              <!-- ── 2-Column IMRAD Body ── -->
-              <div class="journal-body">
-                <template v-for="cfg in IMRAD_SECTION_CONFIGS" :key="cfg.key">
-                  <div :id="cfg.key + '-section'" class="journal-section-heading">
-                    <span>{{ cfg.label }}</span>
+              <!-- Sheet 1: Cover / Abstract -->
+              <article class="journal-paper-sheet">
+                <header class="journal-header">
+                  <div class="journal-meta-top">
+                    <span class="journal-badge">{{ paper.department }}</span>
+                    <span class="journal-badge journal-badge-type">{{ paper.project_type }}</span>
+                    <span v-if="paper.degree_program !== 'N/A'" class="journal-badge journal-badge-degree">{{
+                      paper.degree_program }}</span>
                   </div>
 
-                  <!-- Section Wrapper -->
-                  <div class="journal-section-content">
-                    <template v-if="cfg.key === 'introduction'">
-                      <template v-if="paper.introduction_summary">
-                        <div v-for="(block, idx) in parseSummaryBlocks(paper.introduction_summary as string)"
-                          :key="idx">
-                          <p v-if="block.heading" class="journal-subheading">{{ block.heading }}</p>
-                          <p class="journal-para">{{ block.body }}</p>
-                        </div>
-                      </template>
-                      <div v-else-if="paper.introduction">
-                        <p class="journal-para">{{ stripMarkers(paper.introduction) }}</p>
-                      </div>
-                      <p v-else class="journal-para journal-no-content">No introduction available.</p>
-                    </template>
+                  <h1 class="journal-title">
+                    <span v-for="(line, i) in pyramidTitleLines" :key="i" class="journal-title-line">{{ line }}</span>
+                  </h1>
 
-                    <template v-else>
-                      <div v-if="hasStructured(cfg.key)">
-                        <template v-for="(block, i) in getStructuredBlocks(cfg.key)" :key="i">
-                          <div v-if="block.type === 'subheading'" class="journal-subheading">{{ block.text }}</div>
-                          <div v-else-if="block.type === 'table-image'" class="journal-figure">
-                            <img :src="block.text" :alt="block.id" class="journal-figure-img"
-                              @click="openZoomModal(block.text)" />
-                          </div>
-                          <p v-else-if="block.type === 'table-label'" class="journal-figure-caption">{{ block.text }}</p>
-                          <p v-else class="journal-para">{{ block.text }}</p>
-                        </template>
+                  <div class="journal-authors">
+                    <span v-for="(author, idx) in authorList" :key="idx" class="journal-author">
+                      {{ author }}<span class="author-sep"> · </span>
+                    </span>
+                    <span class="journal-author">Year: {{ paper.year }}</span>
+                  </div>
+
+                  <div class="journal-stats">
+                    <span class="j-stat">
+                      <Eye :size="12" /> {{ viewCount.toLocaleString() }} views
+                    </span>
+                    <span class="j-stat">
+                      <Award :size="12" /> {{ citationCount.toLocaleString() }} citations
+                    </span>
+
+                    <button v-if="isLoggedIn" class="j-cite-btn" :class="{ cited: hasCited }" :disabled="citeLoading"
+                      @click="handleCite">
+                      <CheckCircle v-if="hasCited" :size="13" />
+                      <Award v-else :size="13" />
+                      {{ hasCited ? 'Cited (Get Ref)' : citeLoading ? 'Citing…' : 'Cite this study' }}
+                    </button>
+                    <span v-else class="j-login-hint">Sign in to cite this study</span>
+
+                    <button v-if="isLoggedIn" class="j-bookmark-btn" :class="{ bookmarked: isBookmarked }"
+                      :disabled="bookmarkLoading" @click="handleBookmark">
+                      <Loader2 v-if="bookmarkLoading" :size="13" class="spin" />
+                      <Bookmark v-else :size="13" :fill="isBookmarked ? 'currentColor' : 'none'" />
+                      {{ isBookmarked ? 'Bookmarked' : 'Bookmark' }}
+                    </button>
+
+                    <button class="j-download-btn" :disabled="exportLoading" @click="handleDownloadPDF">
+                      <Loader2 v-if="exportLoading" :size="13" class="spin" />
+                      <FileDown v-else :size="13" />
+                      {{ exportLoading ? 'Generating PDF…' : 'Download PDF' }}
+                    </button>
+                  </div>
+
+                  <!-- Plain Abstract -->
+                  <div id="abstract-section" class="journal-abstract-plain">
+                    <span class="journal-abstract-label">Abstract</span>
+                    <p class="journal-abstract-text">{{ paper.abstract }}</p>
+                    <div v-if="paper.keywords" class="journal-keywords">
+                      <strong>Keywords: </strong>
+                      <span>{{ paper.keywords }}</span>
+                    </div>
+                  </div>
+                </header>
+              </article>
+
+              <!-- Sheet 2: Introduction -->
+              <article v-if="paper.introduction || paper.introduction_summary" class="journal-paper-sheet" id="introduction-section">
+                <div class="journal-section-heading">
+                  <span>INTRODUCTION</span>
+                </div>
+                <div class="journal-body">
+                  <template v-if="paper.introduction_summary">
+                    <div v-for="(block, idx) in parseSummaryBlocks(paper.introduction_summary as string)"
+                      :key="idx">
+                      <p v-if="block.heading" class="journal-subheading">{{ block.heading }}</p>
+                      <p class="journal-para">{{ block.body }}</p>
+                    </div>
+                  </template>
+                  <div v-else-if="paper.introduction">
+                    <p class="journal-para">{{ stripMarkers(paper.introduction) }}</p>
+                  </div>
+                </div>
+              </article>
+
+              <!-- Sheet 3: Methodology -->
+              <article v-if="hasStructured('methods') || paper.methods" class="journal-paper-sheet" id="methods-section">
+                <div class="journal-section-heading">
+                  <span>METHODOLOGY</span>
+                </div>
+                <div class="journal-body">
+                  <div v-if="hasStructured('methods')">
+                    <template v-for="(block, i) in getStructuredBlocks('methods')" :key="i">
+                      <div v-if="block.type === 'subheading'" class="journal-subheading">{{ block.text }}</div>
+                      <div v-else-if="block.type === 'table-image'" class="journal-figure">
+                        <img :src="block.text" :alt="block.id" class="journal-figure-img"
+                          @click="openZoomModal(block.text)" />
                       </div>
-                      <div v-else-if="paper[resolveKey(cfg.key)]">
-                        <p class="journal-para">{{ stripMarkers(paper[resolveKey(cfg.key)] as string) }}</p>
-                        <template v-if="cfg.key === 'rad' && paper.discussion && !isRadCombined">
-                          <p class="journal-para">{{ stripMarkers(paper.discussion as string) }}</p>
-                        </template>
-                      </div>
-                      <p v-else class="journal-para journal-no-content">No extracted text available for this section.</p>
+                      <p v-else-if="block.type === 'table-label'" class="journal-figure-caption">{{ block.text }}</p>
+                      <p v-else class="journal-para">{{ block.text }}</p>
                     </template>
                   </div>
-                </template>
-              </div>
-
-              <!-- ── References ── -->
-              <section v-if="parsedReferences.length > 0" id="references-section" class="journal-references-section">
-                <div class="journal-references-heading">
-                  <span>References</span>
+                  <div v-else-if="paper.methods">
+                    <p class="journal-para">{{ stripMarkers(paper.methods) }}</p>
+                  </div>
                 </div>
-                <ol class="journal-references-list">
-                  <li v-for="(entry, idx) in parsedReferences" :key="idx" class="journal-reference-entry"
-                    v-html="formatReferenceEntry(entry)" />
-                </ol>
-              </section>
+              </article>
 
-            </article>
+              <!-- Sheet 4: Results & Discussion -->
+              <article v-if="hasStructured('rad') || paper.results || (paper.discussion && !isRadCombined)" class="journal-paper-sheet" id="rad-section">
+                <div class="journal-section-heading">
+                  <span>RESULTS AND DISCUSSION</span>
+                </div>
+                <div class="journal-body">
+                  <div v-if="hasStructured('rad')">
+                    <template v-for="(block, i) in getStructuredBlocks('rad')" :key="i">
+                      <div v-if="block.type === 'subheading'" class="journal-subheading">{{ block.text }}</div>
+                      <div v-else-if="block.type === 'table-image'" class="journal-figure">
+                        <img :src="block.text" :alt="block.id" class="journal-figure-img"
+                          @click="openZoomModal(block.text)" />
+                      </div>
+                      <p v-else-if="block.type === 'table-label'" class="journal-figure-caption">{{ block.text }}</p>
+                      <p v-else class="journal-para">{{ block.text }}</p>
+                    </template>
+                  </div>
+                  <div v-else-if="paper.results">
+                    <p class="journal-para">{{ stripMarkers(paper.results as string) }}</p>
+                    <template v-if="paper.discussion && !isRadCombined">
+                      <p class="journal-para">{{ stripMarkers(paper.discussion as string) }}</p>
+                    </template>
+                  </div>
+                </div>
+              </article>
+
+              <!-- Sheet 5: References -->
+              <article v-if="parsedReferences.length > 0" class="journal-paper-sheet" id="references-section">
+                <section class="journal-references-section">
+                  <div class="journal-references-heading">
+                    <span>References</span>
+                  </div>
+                  <ol class="journal-references-list">
+                    <li v-for="(entry, idx) in parsedReferences" :key="idx" class="journal-reference-entry"
+                      v-html="formatReferenceEntry(entry)" />
+                  </ol>
+                </section>
+              </article>
+
+            </div>
           </div>
 
           <!-- ── Authors List View ── -->
@@ -1258,20 +1300,32 @@ const pyramidTitleLines = computed((): string[] => {
 
 /* Main Academic Paper Card */
 .imrad-journal-page {
-  background: rgba(255, 255, 255, 0.7);
+  display: flex;
+  flex-direction: column;
+  gap: 2.5rem;
+  width: 100%;
+}
+
+.journal-paper-sheet {
+  background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(25px);
   -webkit-backdrop-filter: blur(25px);
   border: 1px solid rgba(0, 166, 81, 0.15);
-  border-radius: 20px;
-  padding: 2.5rem 2.25rem;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.02);
+  border-radius: 16px;
+  padding: 4rem 3.5rem;
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.03);
   transition: background-color 0.3s, border-color 0.3s, box-shadow 0.3s;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+  min-height: 800px;
 }
 
-.dark .imrad-journal-page {
-  background: rgba(12, 12, 12, 0.65);
-  border-color: rgba(255, 255, 255, 0.08);
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
+.dark .journal-paper-sheet {
+  background: rgba(15, 15, 15, 0.95);
+  border-color: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.25);
 }
 
 /* Header inside paper */

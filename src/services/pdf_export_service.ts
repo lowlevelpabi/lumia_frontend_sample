@@ -28,11 +28,31 @@ function parseSummaryBlocks(text: string): { heading: string; body: string }[] {
   return blocks.filter((b) => b.body.trim())
 }
 
-// ── Strip [[TABLE_IMAGE:X]] / [TABLE_IMAGE:X] markers from raw fallback text ──
+// ── Strip [[TABLE_IMAGE:X]] / [TABLE_IMAGE:X] markers and trailing back-matter ──
 function stripMarkers(text: string): string {
   if (!text) return ''
+  
+  // Truncate at Appendix/Annex/Curriculum Vitae / back-matter headers
+  const lines = text.split('\n')
+  const cleaned: string[] = []
+  for (const line of lines) {
+    const trimmed = line.trim()
+    const lower = trimmed.toLowerCase()
+    if (
+      lower.startsWith('appendix') ||
+      lower.startsWith('annex') ||
+      lower.startsWith('curriculum vitae') ||
+      lower.startsWith('about the author') ||
+      lower.startsWith('biographical data')
+    ) {
+      break
+    }
+    cleaned.push(line)
+  }
+  const cleanedText = cleaned.join('\n').trim()
+
   return (
-    text
+    cleanedText
       .replace(/\[{1,2}(?:TABLE|FIGURE)_IMAGE:.*?\]{1,2}/gi, '')
       // Collapse multiple horizontal spaces but PRESERVE newlines
       .replace(/[^\S\n]{2,}/g, ' ')
@@ -310,8 +330,8 @@ export const pdfExportService = {
 
         if (lineAlign === 'center') {
           const totalW = doc.getTextWidth(txt)
-          const pageCenter = (MARGIN_LEFT + (A4_WIDTH - MARGIN_RIGHT)) / 2
-          let currX = pageCenter - totalW / 2
+          const centerOfLine = startX + (lineWidth / 2)
+          let currX = centerOfLine - totalW / 2
           for (const p of parts) {
             const isSymbol = /[\u0100-\uffff]/.test(p)
             doc.setFont(isSymbol ? FONT_UNICODE : FONT_MAIN, fontStyle)

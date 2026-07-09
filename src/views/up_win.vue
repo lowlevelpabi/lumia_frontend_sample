@@ -3183,6 +3183,7 @@ onMounted(loadSampleDocs)
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.06);
   max-width: 100%;
   opacity: 0;
+  visibility: hidden;
   transform: translateY(-8px) scale(0.995);
   transition: all 260ms cubic-bezier(.2, .9, .25, 1);
   backdrop-filter: blur(10px);
@@ -3190,6 +3191,7 @@ onMounted(loadSampleDocs)
 
 .upload-notification.show {
   opacity: 1;
+  visibility: visible;
   transform: translateY(0) scale(1);
 }
 

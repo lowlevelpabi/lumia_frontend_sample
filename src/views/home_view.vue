@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, onUnmounted } from 'vue'
 import { useRouter, RouterLink } from 'vue-router'
-import { User, Clock, Search, X, ArrowRight } from 'lucide-vue-next'
+import { User, Clock, Search, X, ArrowRight, ArrowUpDown } from 'lucide-vue-next'
 import { api, type Paper } from '../services/api'
 import { historyService } from '../services/history'
 import { useAuth } from '../composables/useAuth'
@@ -14,6 +14,49 @@ const router = useRouter()
 const searchQuery = ref('')
 const recentPapers = ref<Paper[]>([])
 const loading = ref(true)
+
+const sortBy = ref<'recent' | 'year' | 'title'>('recent')
+const showSortDropdown = ref(false)
+const sortBtnRef = ref<HTMLElement | null>(null)
+
+const sortLabel = computed(() => {
+  if (sortBy.value === 'recent') return 'Recent'
+  if (sortBy.value === 'year') return 'Year'
+  if (sortBy.value === 'title') return 'Title'
+  return ''
+})
+
+const toggleSortDropdown = () => {
+  showSortDropdown.value = !showSortDropdown.value
+}
+
+const selectSort = (mode: 'recent' | 'year' | 'title') => {
+  sortBy.value = mode
+  showSortDropdown.value = false
+}
+
+const sortedPapers = computed(() => {
+  const papers = [...recentPapers.value]
+  if (sortBy.value === 'recent') {
+    papers.sort((a, b) => {
+      const dateA = a.created_at || ''
+      const dateB = b.created_at || ''
+      return dateB.localeCompare(dateA)
+    })
+  } else if (sortBy.value === 'year') {
+    papers.sort((a, b) => {
+      const yA = a.year || '0'
+      const yB = b.year || '0'
+      if (yA !== yB) return yB.localeCompare(yA)
+      const dateA = a.created_at || ''
+      const dateB = b.created_at || ''
+      return dateB.localeCompare(dateA)
+    })
+  } else if (sortBy.value === 'title') {
+    papers.sort((a, b) => a.title.localeCompare(b.title))
+  }
+  return papers.slice(0, 4)
+})
 
 const { fullName, isAdmin, isFaculty } = useAuth()
 const scrollY = ref(0)
@@ -45,8 +88,6 @@ onMounted(async () => {
   try {
     const allPapers = await api.listAllPapers()
     recentPapers.value = allPapers
-      .sort((a, b) => String(b.id).localeCompare(String(a.id)))
-      .slice(0, 4)
   } catch (e) {
     console.error('Failed to fetch recent papers:', e)
   } finally {
@@ -56,6 +97,9 @@ onMounted(async () => {
   document.addEventListener('click', (e) => {
     if (historyRef.value && !historyRef.value.contains(e.target as Node)) {
       showHistory.value = false
+    }
+    if (sortBtnRef.value && !sortBtnRef.value.contains(e.target as Node)) {
+      showSortDropdown.value = false
     }
   })
 })
@@ -162,6 +206,17 @@ const handleSearch = () => {
             <div class="feed-head-left">
               <Clock :size="14" />
               <span>Recent Contributions</span>
+              <div class="sort-container" ref="sortBtnRef">
+                <button class="btn-sort" @click="toggleSortDropdown" aria-label="Sort options">
+                  <ArrowUpDown :size="12" />
+                  <span>Sort: {{ sortLabel }}</span>
+                </button>
+                <div v-if="showSortDropdown" class="sort-dropdown">
+                  <button :class="{ active: sortBy === 'recent' }" @click="selectSort('recent')">Recent Upload</button>
+                  <button :class="{ active: sortBy === 'year' }" @click="selectSort('year')">Publish Year</button>
+                  <button :class="{ active: sortBy === 'title' }" @click="selectSort('title')">Title (A-Z)</button>
+                </div>
+              </div>
             </div>
             <RouterLink :to="{ name: 'explore' }" class="text-link">
               View Archive 
@@ -181,8 +236,8 @@ const handleSearch = () => {
             </div>
           </div>
 
-          <ol v-else-if="recentPapers.length > 0" class="paper-list">
-            <li v-for="paper in recentPapers" :key="paper.id" class="paper-item">
+          <ol v-else-if="sortedPapers.length > 0" class="paper-list">
+            <li v-for="paper in sortedPapers" :key="paper.id" class="paper-item">
               <div class="item-body">
                 <div class="item-tags">
                   <span class="type-tag">{{ paper.project_type || 'Research' }}</span>
@@ -756,6 +811,75 @@ const handleSearch = () => {
   letter-spacing: 0.1em;
   font-size: 0.85rem;
   color: var(--ink-2);
+}
+
+.sort-container {
+  position: relative;
+  margin-left: 0.5rem;
+  text-transform: none; /* Reset uppercase */
+  letter-spacing: normal;
+  font-family: 'Inter', sans-serif;
+  font-weight: 500;
+}
+
+.btn-sort {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg);
+  border: 1px solid var(--rule);
+  border-radius: 20px;
+  padding: 4px 12px;
+  font-size: 12px;
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-sort:hover {
+  border-color: var(--green);
+  color: var(--green);
+}
+
+.sort-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  background: var(--paper);
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  padding: 4px 0;
+  z-index: 50;
+  min-width: 120px;
+  display: flex;
+  flex-direction: column;
+}
+
+.dark .sort-dropdown {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.sort-dropdown button {
+  background: none;
+  border: none;
+  text-align: left;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--ink-2);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.sort-dropdown button:hover {
+  background: var(--bg);
+  color: var(--green);
+}
+
+.sort-dropdown button.active {
+  color: var(--green);
+  font-weight: 600;
+  background: var(--bg);
 }
 
 .text-link {
